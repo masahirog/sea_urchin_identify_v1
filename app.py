@@ -7,6 +7,9 @@ from werkzeug.utils import secure_filename
 import threading
 import queue
 import json
+import cv2
+import numpy as np
+
 
 # モデルのインポート
 from models.analyzer import UrchinPapillaeAnalyzer
@@ -404,6 +407,24 @@ def analyze_sample():
             
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         
+        # 生殖乳頭の検出
+        analyzer = UrchinPapillaeAnalyzer()
+        papillae_contours, processed = analyzer.detect_papillae_improved(
+            img, 
+            min_area=500, 
+            max_area=5000,
+            circularity_threshold=0.3
+        )
+        
+        # 検出結果を可視化した画像を作成
+        detection_result = img.copy()
+        cv2.drawContours(detection_result, papillae_contours, -1, (0, 255, 0), 2)
+        
+        # 一時ファイルとして保存
+        detection_filename = f"detection_{uuid.uuid4().hex}.jpg"
+        detection_path = os.path.join('uploads', detection_filename)
+        cv2.imwrite(detection_path, detection_result)
+        
         # 基本統計
         mean_val = np.mean(gray)
         std_val = np.std(gray)
@@ -412,25 +433,34 @@ def analyze_sample():
         edges = cv2.Canny(gray, 50, 150)
         edge_count = np.sum(edges > 0)
         
-        # テクスチャ解析 - 簡易版
+        # テクスチャ解析
         texture_features = {
             "contrast": float(cv2.Laplacian(gray, cv2.CV_64F).var()),
             "uniformity": float(np.sum(np.square(np.histogram(gray, 256, (0, 256))[0] / gray.size)))
         }
         
-        # 形状解析（輪郭が指定されている場合）
-        shape_features = {}
-        if 'contour' in data:
-            contour = np.array(data['contour']).reshape(-1, 2)
-            area = cv2.contourArea(contour)
-            perimeter = cv2.arcLength(contour, True)
+        # 検出した生殖乳頭の情報
+        papillae_info = []
+        for i, cnt in enumerate(papillae_contours):
+            area = cv2.contourArea(cnt)
+            perimeter = cv2.arcLength(cnt, True)
             circularity = 4 * np.pi * area / (perimeter * perimeter) if perimeter > 0 else 0
             
-            shape_features = {
+            # 輪郭の中心座標
+            M = cv2.moments(cnt)
+            if M["m00"] > 0:
+                cx = int(M["m10"] / M["m00"])
+                cy = int(M["m01"] / M["m00"])
+            else:
+                cx, cy = 0, 0
+                
+            papillae_info.append({
+                "id": i+1,
                 "area": float(area),
                 "perimeter": float(perimeter),
-                "circularity": float(circularity)
-            }
+                "circularity": float(circularity),
+                "center": [cx, cy]
+            })
         
         return jsonify({
             'basic_stats': {
@@ -443,10 +473,16 @@ def analyze_sample():
                 'edge_density': float(edge_count / (img.shape[0] * img.shape[1]))
             },
             'texture_features': texture_features,
-            'shape_features': shape_features
+            'detection_result': {
+                'image_path': f"/uploads/{detection_filename}",
+                'papillae_count': len(papillae_contours),
+                'papillae_details': papillae_info
+            }
         })
     except Exception as e:
-        return jsonify({"error": f"分析中にエラーが発生しました: {str(e)}"}), 500
+        import traceback
+        return jsonify({"error": f"分析中にエラーが発生しました: {str(e)}\n{traceback.format_exc()}"}), 500
+
 
 # サンプル画像のアップロード
 @app.route('/upload-sample', methods=['POST'])
@@ -487,6 +523,46 @@ def upload_sample():
 @app.route('/sample/<path:path>')
 def get_sample(path):
     return send_from_directory(app.config['SAMPLES_FOLDER'], path)
+
+
+
+@app.route('/save-annotation', methods=['POST'])
+def save_annotation():
+    """アノテーション画像の保存"""
+    data = request.json
+    
+    try:
+        # Base64データの抽出
+        image_data = data['image_data'].split(',')[1]
+        image_bytes = base64.b64decode(image_data)
+        
+        # 元画像のパスから保存用のパスを生成
+        original_path = data['original_path']
+        filename = os.path.basename(original_path)
+        basename, ext = os.path.splitext(filename)
+        
+        # アノテーション画像の保存先
+        annotation_filename = f"{basename}_annotated{ext}"
+        save_path = os.path.join(app.config['SAMPLES_FOLDER'], 'annotations', annotation_filename)
+        
+        # ディレクトリが存在しなければ作成
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        
+        # 画像を保存
+        with open(save_path, 'wb') as f:
+            f.write(image_bytes)
+        
+        return jsonify({
+            "success": True,
+            "message": "アノテーションを保存しました",
+            "path": save_path
+        })
+        
+    except Exception as e:
+        import traceback
+        return jsonify({"error": f"アノテーション保存中にエラーが発生しました: {str(e)}\n{traceback.format_exc()}"}), 500
+
+
 
 
 # アプリケーション起動
