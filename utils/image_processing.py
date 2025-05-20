@@ -173,3 +173,63 @@ def enhance_image(image):
     sharpened = cv2.filter2D(enhanced, -1, kernel)
     
     return sharpened
+
+def enhance_sea_urchin_image(image):
+    """ウニの生殖乳頭が見えやすくなるように画像を前処理"""
+    # グレースケール変換
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image.copy()
+    
+    # コントラスト強調（CLAHE）
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    enhanced = clahe.apply(gray)
+    
+    # エッジ強調（アンシャープマスク）
+    blur = cv2.GaussianBlur(enhanced, (0, 0), 3)
+    sharp = cv2.addWeighted(enhanced, 1.5, blur, -0.5, 0)
+    
+    # 小さな構造を強調（モルフォロジー演算）
+    kernel = np.ones((2, 2), np.uint8)
+    morph = cv2.morphologyEx(sharp, cv2.MORPH_TOPHAT, kernel)
+    
+    # 元の強調画像と組み合わせ
+    result = cv2.addWeighted(sharp, 0.7, morph, 0.3, 0)
+    
+    return result
+
+def detect_papillae_improved(frame, min_area=100, max_area=1000, circularity_threshold=0.4):
+    """生殖乳頭らしき構造を検出する改良版"""
+    # 画像の前処理
+    processed = enhance_sea_urchin_image(frame)
+    
+    # 適応的二値化
+    binary = cv2.adaptiveThreshold(
+        processed, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+        cv2.THRESH_BINARY_INV, 11, 2
+    )
+    
+    # 小さなノイズを除去
+    clean = cv2.morphologyEx(binary, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    
+    # 輪郭検出
+    contours, _ = cv2.findContours(clean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # 面積と円形度に基づいてフィルタリング
+    papillae_contours = []
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if min_area < area < max_area:
+            perimeter = cv2.arcLength(cnt, True)
+            if perimeter > 0:
+                circularity = 4 * np.pi * area / (perimeter * perimeter)
+                # 生殖乳頭は比較的円に近い形状
+                if circularity_threshold < circularity < 0.9:
+                    # 追加のフィルタリング: アスペクト比
+                    x, y, w, h = cv2.boundingRect(cnt)
+                    aspect_ratio = float(w) / h
+                    if 0.5 < aspect_ratio < 2.0:
+                        papillae_contours.append(cnt)
+    
+    return papillae_contours, processed

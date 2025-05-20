@@ -10,6 +10,8 @@ import joblib
 
 # ユーティリティ関数のインポート
 from utils.image_processing import variance_of_laplacian, detect_papillae, is_similar_to_previous, extract_features
+from utils.image_processing import enhance_sea_urchin_image, detect_papillae_improved
+
 
 class UrchinPapillaeAnalyzer:
     def __init__(self):
@@ -91,11 +93,11 @@ class UrchinPapillaeAnalyzer:
                 break
                 
             # 進捗状況の更新
-            progress = (frame_idx / frame_count) * 100
+            progress = (frame_idx / max(frame_count, 1)) * 100  # 0除算を避ける
             elapsed_time = time.time() - start_time
             if elapsed_time > 0:
                 frames_per_second = frame_idx / elapsed_time
-                remaining_time = (frame_count - frame_idx) / frames_per_second
+                remaining_time = (frame_count - frame_idx) / max(frames_per_second, 0.001)  # 0除算を避ける
                 if global_status:
                     processing_status[task_id] = {
                         "status": "processing", 
@@ -107,7 +109,13 @@ class UrchinPapillaeAnalyzer:
             # 一定間隔でフレームを処理
             if frame_idx % self.frame_interval == 0:
                 # 生殖乳頭の検出
-                papillae_contours, gray_frame = detect_papillae(frame, self.min_contour_area)
+                papillae_contours, processed_frame = detect_papillae_improved(
+                    frame, 
+                    min_area=self.min_contour_area, 
+                    max_area=5000,  # 生殖乳頭の最大サイズを調整
+                    circularity_threshold=0.3  # 円形度の閾値を調整
+                )
+                gray_frame = processed_frame  # 処理済みの画像を使用
                 
                 # 生殖乳頭が検出された場合
                 if len(papillae_contours) > 0:
@@ -196,7 +204,13 @@ class UrchinPapillaeAnalyzer:
                 return {"error": f"画像 '{image_path}' の読み込みに失敗しました"}
             
             # 生殖乳頭の検出
-            papillae_contours, gray = detect_papillae(image, self.min_contour_area)
+            papillae_contours, processed = detect_papillae_improved(
+                image, 
+                min_area=self.min_contour_area, 
+                max_area=5000,
+                circularity_threshold=0.3
+            )
+            gray = processed 
             
             if not papillae_contours:
                 return {"error": "生殖乳頭が検出されませんでした"}
@@ -421,3 +435,33 @@ class UrchinPapillaeAnalyzer:
                 }
             print(f"エラー: {error_msg}")
             return False
+
+
+
+    def visualize_detection(self, image, contours=None, title="検出結果"):
+        """検出結果を視覚化する"""
+        # 入力画像のコピー
+        if len(image.shape) == 2:
+            # グレースケール画像をRGBに変換
+            vis_img = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        else:
+            vis_img = image.copy()
+        
+        # 検出された輪郭を描画
+        if contours is not None:
+            cv2.drawContours(vis_img, contours, -1, (0, 255, 0), 2)
+            
+            # 各輪郭の中心に番号を描画
+            for i, cnt in enumerate(contours):
+                M = cv2.moments(cnt)
+                if M["m00"] > 0:
+                    cx = int(M["m10"] / M["m00"])
+                    cy = int(M["m01"] / M["m00"])
+                    cv2.putText(vis_img, str(i+1), (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 
+                               0.5, (255, 0, 0), 1, cv2.LINE_AA)
+        
+        # タイトルと検出された輪郭数を描画
+        cv2.putText(vis_img, f"{title}: {len(contours) if contours else 0} 個", (10, 30), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
+        
+        return vis_img

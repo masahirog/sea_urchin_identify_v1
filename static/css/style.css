@@ -70,3 +70,126 @@ body {
     color: white;
     font-size: 24px;
 }
+
+
+
+
+/* マーキングキャンバス用のスタイル */
+#markingCanvas {
+    cursor: crosshair;
+    max-height: 70vh;
+    object-fit: contain;
+}
+
+/* ツールボタンのアクティブ状態 */
+.btn.active {
+    color: #fff;
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+#eraserTool.active {
+    color: #fff;
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+/* 履歴画像カード */
+.history-card {
+    width: 220px;
+    position: relative;
+    margin-bottom: 15px;
+}
+
+/* ツールバーコンテナ */
+.toolbar-container {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    border: 1px solid #dee2e6;
+}
+
+/* タスク履歴テーブル */
+#taskHistoryTable {
+    margin-bottom: 0;
+}
+
+#taskHistoryTable th {
+    background-color: #f8f9fa;
+}
+
+#taskHistoryTable .view-history-btn {
+    white-space: nowrap;
+}
+
+/* 高度なコントロール */
+.advanced-controls {
+    margin-top: 15px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    border: 1px solid #dee2e6;
+}
+
+.advanced-controls h6 {
+    margin-bottom: 15px;
+    font-weight: 600;
+}
+
+/* 画像カードの拡張スタイル */
+.image-card {
+    transition: transform 0.2s;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    padding: 5px;
+    position: relative;
+}
+
+.image-card:hover {
+    transform: scale(1.02);
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+.image-controls {
+    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.delete-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background-color: rgba(255, 255, 255, 0.8);
+    border-radius: 50%;
+    width: 25px;
+    height: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #dee2e6;
+    color: #dc3545;
+    cursor: pointer;
+    opacity: 0.7;
+}
+
+.delete-btn:hover {
+    opacity: 1;
+    background-color: #fff;
+}
+
+/* 画像情報バッジ */
+.image-info {
+    position: absolute;
+    bottom: 5px;
+    left: 5px;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
+    padding: 2px 5px;
+    font-size: 0.8rem;
+    border-radius: 3px;
+}

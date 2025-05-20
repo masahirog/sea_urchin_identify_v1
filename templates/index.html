@@ -11,7 +11,11 @@
 <body>
     <div class="container">
         <h1 class="text-center mb-4">ウニ生殖乳頭分析システム</h1>
-        
+        <div class="mb-3 d-flex justify-content-end">
+            <a href="{{ url_for('analyze_samples_page') }}" class="btn btn-outline-primary">
+                <i class="fas fa-microscope"></i> 生殖乳頭サンプル分析
+            </a>
+        </div>
         <ul class="nav nav-tabs" id="myTab" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active" id="extract-tab" data-bs-toggle="tab" data-bs-target="#extract" type="button" role="tab" aria-controls="extract" aria-selected="true">
@@ -26,6 +30,11 @@
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="train-tab" data-bs-toggle="tab" data-bs-target="#train" type="button" role="tab" aria-controls="train" aria-selected="false">
                     <i class="fas fa-brain"></i> モデル訓練
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab" aria-controls="history" aria-selected="false">
+                    <i class="fas fa-history"></i> 履歴
                 </button>
             </li>
         </ul>
@@ -247,6 +256,63 @@
                     </div>
                 </div>
             </div>
+
+
+            <!-- 履歴タブ -->
+            <div class="tab-pane fade" id="history" role="tabpanel" aria-labelledby="history-tab">
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-history"></i> 処理履歴</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover" id="taskHistoryTable">
+                                        <thead>
+                                            <tr>
+                                                <th>処理日時</th>
+                                                <th>タスクID</th>
+                                                <th>画像数</th>
+                                                <th>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td colspan="4" class="text-center">
+                                                    <div class="spinner-border text-primary" role="status">
+                                                        <span class="visually-hidden">読み込み中...</span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5><i class="fas fa-images"></i> 履歴画像</h5>
+                                <span id="historyImageCount" class="badge bg-secondary">0/0</span>
+                            </div>
+                            <div class="card-body">
+                                <div id="historyImagesContainer" class="image-container">
+                                    <div class="text-center text-muted py-5 w-100">
+                                        <i class="fas fa-photo-video fa-3x mb-3"></i>
+                                        <p>履歴から項目を選択すると、画像がここに表示されます</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
     
@@ -276,7 +342,59 @@
             </div>
         </div>
     </div>
-    
+
+
+    <!-- 生殖乳頭マーキングモーダル -->
+    <div class="modal fade" id="markingModal" tabindex="-1" aria-labelledby="markingModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="markingModalLabel">生殖乳頭マーキング</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="text-center mb-3">
+                        <canvas id="markingCanvas" style="max-width: 100%; border: 1px solid #ddd;"></canvas>
+                    </div>
+                    <div class="d-flex justify-content-center mb-3">
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-outline-primary" id="markerTool">
+                                <i class="fas fa-pen"></i> マーカー
+                            </button>
+                            <button type="button" class="btn btn-outline-danger" id="eraserTool">
+                                <i class="fas fa-eraser"></i> 消しゴム
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="clearCanvas">
+                                <i class="fas fa-trash-alt"></i> クリア
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="markerSize" class="form-label">マーカーサイズ: <span id="markerSizeValue">5</span>px</label>
+                        <input type="range" class="form-range" id="markerSize" min="1" max="20" value="5">
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="markerOpacity" class="form-label">マーカー不透明度: <span id="markerOpacityValue">0.5</span></label>
+                        <input type="range" class="form-range" id="markerOpacity" min="0.1" max="1" step="0.1" value="0.5">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="button" class="btn btn-primary" id="saveMarkedImage">マーキングを保存</button>
+                    <div class="btn-group" id="saveToDatasetGroup">
+                        <button type="button" class="btn btn-success" id="saveMarkedMale">
+                            <i class="fas fa-mars"></i> オスとして保存
+                        </button>
+                        <button type="button" class="btn btn-danger" id="saveMarkedFemale">
+                            <i class="fas fa-venus"></i> メスとして保存
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
     <!-- ローディングオーバーレイ -->
     <div id="loadingOverlay" class="d-none">
         <div class="spinner-border text-light me-3" role="status"></div>

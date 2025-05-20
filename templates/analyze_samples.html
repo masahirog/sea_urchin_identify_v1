@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ウニ生殖乳頭サンプル分析</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .sample-card {
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .sample-card:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+        .sample-image {
+            height: 120px;
+            object-fit: cover;
+        }
+        .selected-sample {
+            border: 3px solid #0d6efd;
+        }
+        .annotation-canvas {
+            cursor: crosshair;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-3">
+        <h1 class="text-center mb-4">ウニ生殖乳頭サンプル分析</h1>
+        
+        <div class="mb-3">
+            <a href="/" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> メインページに戻る
+            </a>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5><i class="fas fa-upload"></i> 新規サンプルのアップロード</h5>
+            </div>
+            <div class="card-body">
+                <form id="uploadSampleForm" class="row g-3">
+                    <div class="col-md-6">
+                        <label for="sampleFile" class="form-label">サンプル画像</label>
+                        <input class="form-control" type="file" id="sampleFile" accept=".jpg,.jpeg,.png">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="sampleGender" class="form-label">性別</label>
+                        <select class="form-select" id="sampleGender">
+                            <option value="male">オス</option>
+                            <option value="female">メス</option>
+                            <option value="unknown">不明</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-upload"></i> アップロード
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5><i class="fas fa-mars"></i> オスの生殖乳頭サンプル ({{ male_samples|length }}枚)</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for sample in male_samples %}
+                            <div class="col-md-4 mb-3">
+                                <div class="card sample-card" data-path="papillae/male/{{ sample }}">
+                                    <img src="{{ url_for('sample', path='papillae/male/' + sample) }}" 
+                                        class="card-img-top sample-image" alt="{{ sample }}">
+                                    <div class="card-body p-2">
+                                        <p class="card-text small text-truncate">{{ sample }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                            
+                            {% if male_samples|length == 0 %}
+                            <div class="col-12 text-center text-muted py-4">
+                                <i class="fas fa-info-circle fa-2x mb-2"></i>
+                                <p>オスのサンプルがありません</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-danger text-white">
+                        <h5><i class="fas fa-venus"></i> メスの生殖乳頭サンプル ({{ female_samples|length }}枚)</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for sample in female_samples %}
+                            <div class="col-md-4 mb-3">
+                                <div class="card sample-card" data-path="papillae/female/{{ sample }}">
+                                    <img src="{{ url_for('sample', path='papillae/female/' + sample) }}" 
+                                        class="card-img-top sample-image" alt="{{ sample }}">
+                                    <div class="card-body p-2">
+                                        <p class="card-text small text-truncate">{{ sample }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                            
+                            {% if female_samples|length == 0 %}
+                            <div class="col-12 text-center text-muted py-4">
+                                <i class="fas fa-info-circle fa-2x mb-2"></i>
+                                <p>メスのサンプルがありません</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-microscope"></i> サンプル分析</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="analysisPlaceholder" class="text-center text-muted py-5">
+                            <i class="fas fa-hand-pointer fa-3x mb-3"></i>
+                            <p>サンプル画像をクリックすると分析結果が表示されます</p>
+                        </div>
+                        
+                        <div id="analysisResult" class="d-none">
+                            <!-- 分析結果がここに表示されます -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ローディングオーバーレイ -->
+    <div id="loadingOverlay" class="d-none">
+        <div class="spinner-border text-light me-3" role="status"></div>
+        処理中...
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // ユーティリティ関数
+        function showLoading() {
+            document.getElementById('loadingOverlay').classList.remove('d-none');
+        }
+        
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.add('d-none');
+        }
+        
+        // DOMが読み込まれたら実行
+        document.addEventListener('DOMContentLoaded', function() {
+            // サンプルカードの選択
+            document.querySelectorAll('.sample-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    // 選択状態の更新
+                    document.querySelectorAll('.sample-card').forEach(c => {
+                        c.classList.remove('selected-sample');
+                    });
+                    this.classList.add('selected-sample');
+                    
+                    // サンプル分析
+                    analyzeSample(this.dataset.path);
+                });
+            });
+            
+            // サンプル画像アップロードフォーム
+            document.getElementById('uploadSampleForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const sampleFile = document.getElementById('sampleFile').files[0];
+                const gender = document.getElementById('sampleGender').value;
+                
+                if (!sampleFile) {
+                    alert('サンプル画像を選択してください');
+                    return;
+                }
+                
+                // フォームデータの作成
+                const formData = new FormData();
+                formData.append('image', sampleFile);
+                formData.append('gender', gender);
+                
+                // ローディング表示
+                showLoading();
+                
+                // AJAX送信
+                fetch('/upload-sample', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    hideLoading();
+                    
+                    if (data.error) {
+                        alert('エラー: ' + data.error);
+                        return;
+                    }
+                    
+                    // 成功メッセージと画面更新
+                    alert(data.message);
+                    location.reload(); // 画面を更新してサンプル一覧を更新
+                })
+                .catch(error => {
+                    hideLoading();
+                    alert('エラー: ' + error);
+                });
+            });
+        });
+        
+        // サンプル分析
+        function analyzeSample(imagePath) {
+            // プレースホルダーを非表示、分析結果を表示
+            document.getElementById('analysisPlaceholder').classList.add('d-none');
+            const resultElement = document.getElementById('analysisResult');
+            resultElement.classList.remove('d-none');
+            
+            // ローディング表示
+            resultElement.innerHTML = `
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2">サンプルを分析しています...</p>
+                </div>
+            `;
+            
+            // 分析リクエスト
+            fetch('/analyze-sample', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    'image_path': 'samples/' + imagePath
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    resultElement.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-circle me-2"></i> ${data.error}
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // 分析結果の表示
+                displayAnalysisResult(imagePath, data);
+            })
+            .catch(error => {
+                resultElement.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-circle me-2"></i> 分析中にエラーが発生しました: ${error}
+                    </div>
+                `;
+            });
+        }
+        
+        // 分析結果の表示
+        function displayAnalysisResult(imagePath, data) {
+            const resultElement = document.getElementById('analysisResult');
+            
+            // 基本情報
+            let html = `
+                <div class="row">
+                    <div class="col-md-5">
+                        <div class="text-center mb-3">
+                            <img src="/sample/${imagePath}" class="img-fluid" style="max-height: 300px;" alt="サンプル画像">
+                        </div>
+                        <div class="card">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">画像情報</h6>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-sm">
+                                    <tr>
+                                        <th style="width: 130px;">ファイル</th>
+                                        <td>${imagePath.split('/').pop()}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>サイズ</th>
+                                        <td>${data.basic_stats.size[1]} x ${data.basic_stats.size[0]} ピクセル</td>
+                                    </tr>
+                                    <tr>
+                                        <th>平均輝度</th>
+                                        <td>${data.basic_stats.mean.toFixed(2)}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>標準偏差</th>
+                                        <td>${data.basic_stats.std.toFixed(2)}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-7">
+                        <div class="card">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">特徴分析</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-4">
+                                    <h6>エッジ特性</h6>
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <th style="width: 130px;">エッジ密度</th>
+                                            <td>${(data.edge_features.edge_density * 100).toFixed(2)}%</td>
+                                        </tr>
+                                        <tr>
+                                            <th>エッジ数</th>
+                                            <td>${data.edge_features.edge_count.toLocaleString()}</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <h6>テクスチャ特性</h6>
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <th style="width: 130px;">コントラスト</th>
+                                            <td>${data.texture_features.contrast.toFixed(2)}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>均一性</th>
+                                            <td>${data.texture_features.uniformity.toExponential(4)}</td>
+                                        </tr>
+                                    </table>
+                                </div>
+            `;
+            
+            // 形状特性（存在する場合）
+            if (Object.keys(data.shape_features).length > 0) {
+                html += `
+                    <div>
+                        <h6>形状特性</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <th style="width: 130px;">面積</th>
+                                <td>${data.shape_features.area.toFixed(2)} px²</td>
+                            </tr>
+                            <tr>
+                                <th>周囲長</th>
+                                <td>${data.shape_features.perimeter.toFixed(2)} px</td>
+                            </tr>
+                            <tr>
+                                <th>円形度</th>
+                                <td>${data.shape_features.circularity.toFixed(4)}</td>
+                            </tr>
+                        </table>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div>
+                        <h6>輪郭情報</h6>
+                        <p class="text-muted">アノテーションが必要です</p>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="startAnnotationBtn">
+                            <i class="fas fa-pen"></i> アノテーション開始
+                        </button>
+                    </div>
+                `;
+            }
+            
+            html += `
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            resultElement.innerHTML = html;
+        }
+    </script>
+</body>
+</html>

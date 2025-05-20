@@ -1,5 +1,7 @@
 import os
 import uuid
+from datetime import datetime
+import base64
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 import threading
@@ -21,6 +23,8 @@ app.config['EXTRACTED_FOLDER'] = 'extracted_images'
 app.config['DATASET_FOLDER'] = 'dataset'
 app.config['MODEL_FOLDER'] = 'models/saved'
 app.config['ALLOWED_EXTENSIONS'] = {'mp4', 'avi', 'mov', 'mkv', 'jpg', 'jpeg', 'png'}
+app.config['SAMPLES_FOLDER'] = 'samples'
+
 
 # 必要なディレクトリの作成
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -28,6 +32,9 @@ os.makedirs(app.config['EXTRACTED_FOLDER'], exist_ok=True)
 os.makedirs(os.path.join(app.config['DATASET_FOLDER'], 'male'), exist_ok=True)
 os.makedirs(os.path.join(app.config['DATASET_FOLDER'], 'female'), exist_ok=True)
 os.makedirs(app.config['MODEL_FOLDER'], exist_ok=True)
+os.makedirs(os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', 'male'), exist_ok=True)
+os.makedirs(os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', 'female'), exist_ok=True)
+
 
 # 処理ワーカー
 def processing_worker():
@@ -258,6 +265,230 @@ def train_model():
     
     return jsonify({"success": True, "task_id": task_id, "message": "モデル訓練を開始しました"})
 
+
+# タスク履歴の取得
+@app.route('/task-history', methods=['GET'])
+def get_task_history():
+    # 抽出された画像のディレクトリを探索
+    extracted_dirs = []
+    
+    base_dir = app.config['EXTRACTED_FOLDER']
+    if os.path.exists(base_dir):
+        # ディレクトリ内のサブディレクトリ（タスクID）を取得
+        for task_id in os.listdir(base_dir):
+            task_dir = os.path.join(base_dir, task_id)
+            if os.path.isdir(task_dir):
+                # 各タスクディレクトリ内の画像数をカウント
+                images = [f for f in os.listdir(task_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+                
+                if images:  # 画像が存在する場合のみ追加
+                    # タスク情報を作成
+                    creation_time = os.path.getctime(task_dir)
+                    task_info = {
+                        "task_id": task_id,
+                        "image_count": len(images),
+                        "date": datetime.fromtimestamp(creation_time).strftime("%Y-%m-%d %H:%M:%S"),
+                        "timestamp": creation_time  # ソート用
+                    }
+                    
+                    extracted_dirs.append(task_info)
+    
+    # 日付でソート（新しい順）
+    extracted_dirs.sort(key=lambda x: x["timestamp"], reverse=True)
+    
+    return jsonify({"tasks": extracted_dirs})
+
+# 画像の削除
+@app.route('/delete-image', methods=['POST'])
+
+
+def delete_image():
+    data = request.json
+    
+    if not data or 'image_path' not in data:
+        return jsonify({"error": "画像パスが指定されていません"}), 400
+    
+    image_path = data['image_path']
+    
+    # パスの検証（不正なパスでないことを確認）
+    if not image_path.startswith('/'):
+        image_path = os.path.join(app.config['EXTRACTED_FOLDER'], image_path)
+    else:
+        # URLパスからファイルパスに変換
+        image_path = image_path.replace('/image/', '')
+        image_path = os.path.join(app.config['EXTRACTED_FOLDER'], image_path)
+    
+    if not os.path.exists(image_path):
+        return jsonify({"error": "指定された画像が見つかりません"}), 404
+    
+    try:
+        # 画像の削除
+        os.remove(image_path)
+        return jsonify({"success": True, "message": "画像を削除しました"})
+    except Exception as e:
+        return jsonify({"error": f"画像の削除中にエラーが発生しました: {str(e)}"}), 500
+
+# 手動マーキング画像の保存
+@app.route('/save-marked-image', methods=['POST'])
+def save_marked_image():
+    data = request.json
+    
+    if not data or 'image_data' not in data or 'original_image_path' not in data:
+        return jsonify({"error": "必要なパラメータが不足しています"}), 400
+    
+    image_data = data['image_data'].split(',')[1]  # Base64データ部分を取得
+    original_path = data['original_image_path']
+    
+    try:
+        # Base64デコード
+        image_bytes = base64.b64decode(image_data)
+        
+        # 元の画像からファイル名を取得
+        filename = os.path.basename(original_path)
+        basename, ext = os.path.splitext(filename)
+        
+        # 新しいファイル名（元の名前に_marked付加）
+        new_filename = f"{basename}_marked{ext}"
+        
+        # 保存先ディレクトリ
+        save_dir = os.path.dirname(original_path)
+        if not os.path.exists(save_dir):
+            save_dir = app.config['UPLOAD_FOLDER']
+        
+        # 保存先パス
+        save_path = os.path.join(save_dir, new_filename)
+        
+        # 画像の保存
+        with open(save_path, 'wb') as f:
+            f.write(image_bytes)
+        
+        return jsonify({
+            "success": True, 
+            "message": "マーキング画像を保存しました",
+            "image_path": save_path
+        })
+        
+    except Exception as e:
+        return jsonify({"error": f"画像の保存中にエラーが発生しました: {str(e)}"}), 500
+
+
+@app.route('/analyze-samples', methods=['GET'])
+def analyze_samples_page():
+    """サンプル分析ページを表示"""
+    male_dir = os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', 'male')
+    female_dir = os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', 'female')
+    
+    male_samples = [f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))] if os.path.exists(male_dir) else []
+    female_samples = [f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))] if os.path.exists(female_dir) else []
+    
+    return render_template('analyze_samples.html', 
+                          male_samples=male_samples,
+                          female_samples=female_samples)
+
+# サンプル画像の分析
+@app.route('/analyze-sample', methods=['POST'])
+def analyze_sample():
+    """単一サンプルの特徴を分析"""
+    data = request.json
+    image_path = data['image_path']
+    
+    # パスの検証
+    if not image_path.startswith(app.config['SAMPLES_FOLDER']):
+        return jsonify({"error": "無効な画像パスです"}), 400
+    
+    # 画像読み込み
+    try:
+        img = cv2.imread(image_path)
+        if img is None:
+            return jsonify({"error": "画像を読み込めませんでした"}), 400
+            
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        
+        # 基本統計
+        mean_val = np.mean(gray)
+        std_val = np.std(gray)
+        
+        # エッジ検出
+        edges = cv2.Canny(gray, 50, 150)
+        edge_count = np.sum(edges > 0)
+        
+        # テクスチャ解析 - 簡易版
+        texture_features = {
+            "contrast": float(cv2.Laplacian(gray, cv2.CV_64F).var()),
+            "uniformity": float(np.sum(np.square(np.histogram(gray, 256, (0, 256))[0] / gray.size)))
+        }
+        
+        # 形状解析（輪郭が指定されている場合）
+        shape_features = {}
+        if 'contour' in data:
+            contour = np.array(data['contour']).reshape(-1, 2)
+            area = cv2.contourArea(contour)
+            perimeter = cv2.arcLength(contour, True)
+            circularity = 4 * np.pi * area / (perimeter * perimeter) if perimeter > 0 else 0
+            
+            shape_features = {
+                "area": float(area),
+                "perimeter": float(perimeter),
+                "circularity": float(circularity)
+            }
+        
+        return jsonify({
+            'basic_stats': {
+                'mean': float(mean_val),
+                'std': float(std_val),
+                'size': img.shape[:2]  # height, width
+            },
+            'edge_features': {
+                'edge_count': int(edge_count),
+                'edge_density': float(edge_count / (img.shape[0] * img.shape[1]))
+            },
+            'texture_features': texture_features,
+            'shape_features': shape_features
+        })
+    except Exception as e:
+        return jsonify({"error": f"分析中にエラーが発生しました: {str(e)}"}), 500
+
+# サンプル画像のアップロード
+@app.route('/upload-sample', methods=['POST'])
+def upload_sample():
+    if 'image' not in request.files:
+        return jsonify({"error": "画像ファイルがありません"}), 400
+        
+    file = request.files['image']
+    gender = request.form.get('gender', 'unknown')
+    
+    if file.filename == '':
+        return jsonify({"error": "ファイルが選択されていません"}), 400
+    
+    if file and allowed_file(file.filename) and is_image_file(file.filename):
+        filename = secure_filename(file.filename)
+        
+        # 保存先ディレクトリ
+        if gender in ['male', 'female']:
+            target_dir = os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', gender)
+        else:
+            target_dir = os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', 'unknown')
+            
+        os.makedirs(target_dir, exist_ok=True)
+        
+        # 保存先パス
+        target_path = os.path.join(target_dir, filename)
+        file.save(target_path)
+        
+        return jsonify({
+            "success": True, 
+            "message": "サンプル画像をアップロードしました",
+            "path": target_path
+        })
+    
+    return jsonify({"error": "無効なファイル形式です"}), 400
+
+# サンプル画像の取得
+@app.route('/sample/<path:path>')
+def get_sample(path):
+    return send_from_directory(app.config['SAMPLES_FOLDER'], path)
+
+
 # アプリケーション起動
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=True)
