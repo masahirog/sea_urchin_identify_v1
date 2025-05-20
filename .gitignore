@@ -1,0 +1,40 @@
+__pycache__/
+*.py[cod]
+*.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 仮想環境
+venv/
+ENV/
+
+# モデルと画像ファイル
+models/saved/*.pkl
+uploads/*
+extracted_images/*
+dataset/*
+
+# IDEとエディタのファイル
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OSファイル
+.DS_Store
+Thumbs.db
