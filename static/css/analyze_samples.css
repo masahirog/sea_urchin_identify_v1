@@ -1,0 +1,39 @@
+.sample-card {
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+.sample-card:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 10px rgba(0,0,0,0.2);
+}
+.sample-image {
+    height: 120px;
+    object-fit: cover;
+}
+.selected-sample {
+    border: 3px solid #0d6efd;
+}
+.annotation-canvas {
+    cursor: crosshair;
+    border: 1px solid #ddd;
+}
+.step-number {
+    display: inline-block;
+    width: 30px;
+    height: 30px;
+    line-height: 30px;
+    text-align: center;
+    background-color: #0d6efd;
+    color: white;
+    border-radius: 50%;
+    margin-right: 10px;
+}
+.workflow-step {
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 5px;
+    background-color: #f8f9fa;
+}
+.workflow-step:hover {
+    background-color: #e9ecef;
+}

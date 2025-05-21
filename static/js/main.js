@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', function() {
         showLoading();
         
         // AJAX送信
-        fetch('/upload-video', {
+        fetch('/video/upload', {
             method: 'POST',
             body: formData
         })
@@ -118,7 +118,7 @@ document.addEventListener('DOMContentLoaded', function() {
         showLoading();
         
         // AJAX送信
-        fetch('/upload-image', {
+        fetch('/image/upload', {
             method: 'POST',
             body: formData
         })
@@ -305,7 +305,7 @@ function updateTaskStatus(data) {
 function loadExtractedImages() {
     if (!currentTaskId) return;
     
-    fetch('/extracted-images/' + currentTaskId)
+    fetch('/video/extracted-images/' + currentTaskId)
     .then(response => response.json())
     .then(data => {
         if (data.error) {
@@ -454,7 +454,7 @@ function saveImageToDataset(gender, imagePath) {
     showLoading();
     
     // リクエスト送信
-    fetch('/save-to-dataset', {
+    fetch('/image/save-to-dataset', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -748,7 +748,7 @@ function loadHistoryImages(taskId) {
         </div>
     `;
     
-    fetch('/extracted-images/' + taskId)
+    fetch('/video/extracted-images/' + taskId)
     .then(response => response.json())
     .then(data => {
         if (data.error) {
@@ -900,7 +900,7 @@ function deleteImage(imagePath, callback) {
     // ローディング表示
     showLoading();
     
-    fetch('/delete-image', {
+    fetch('/image/delete', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -1090,7 +1090,7 @@ function saveMarkedImage() {
     showLoading();
     
     // サーバーに送信
-    fetch('/save-marked-image', {
+    fetch('/image/save-marked-image', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -1138,7 +1138,7 @@ function saveMarkedImageToDataset(gender) {
     showLoading();
     
     // まずサーバーに画像を保存
-    fetch('/save-marked-image', {
+    fetch('/image/save-marked-image', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -1157,7 +1157,7 @@ function saveMarkedImageToDataset(gender) {
         }
         
         // 保存された画像をデータセットに追加
-        return fetch('/save-to-dataset', {
+        return fetch('/image/save-to-dataset', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
