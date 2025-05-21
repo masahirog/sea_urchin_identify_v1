@@ -23,7 +23,7 @@ def analyze_samples_page():
                           female_samples=female_samples)
 
 
-@sample_bp.route('/sample/analyze-sample', methods=['POST'])
+@sample_bp.route('/analyze-sample', methods=['POST'])
 def analyze_sample():
     from app import app
     from utils.image_analysis import analyze_basic_stats, analyze_edge_features, analyze_texture_features, detect_papillae, analyze_shape_features
@@ -70,10 +70,11 @@ def analyze_sample():
             'texture_features': texture_features
         }
         
-        # アノテーション情報があれば追加
-        if shape_features:
-            result['shape_features'] = shape_features
-        
+        if annotation_path and os.path.exists(annotation_path):
+            result['annotation_path'] = annotation_path.replace('static/', '')
+            if shape_features:
+                result['shape_features'] = shape_features
+
         return jsonify(result)
     
     except Exception as e:
@@ -226,3 +227,44 @@ def debug_mapping():
     except Exception as e:
         traceback.print_exc()  # スタックトレースを出力
         return jsonify({'error': f'マッピング読み込みエラー: {str(e)}'})
+
+@sample_bp.route('/debug-paths', methods=['GET'])
+def debug_paths():
+    """パス変換デバッグ用"""
+    # テスト用のパスサンプル
+    test_paths = [
+        "papillae/male/2__1.png",
+        "illae/male/2__1.png",
+        "/sample/papillae/male/2__1.png"
+    ]
+    
+    # マッピングファイルの読み込み
+    mapping_file = os.path.join('static', 'annotation_mapping.json')
+    mapping = {}
+    
+    if os.path.exists(mapping_file):
+        try:
+            with open(mapping_file, 'r') as f:
+                mapping = json.load(f)
+        except:
+            mapping = {"error": "ファイル読み込みエラー"}
+    
+    # analyze_sample 関数でのパス処理シミュレーション
+    analysis_results = []
+    for path in test_paths:
+        relative_path = path.replace('samples/', '')
+        if relative_path.startswith('/sample/'):
+            relative_path = relative_path.lstrip('/sample/')
+        
+        has_annotation = relative_path in mapping
+        analysis_results.append({
+            "original": path,
+            "processed": relative_path,
+            "has_annotation": has_annotation,
+            "annotation_path": mapping.get(relative_path, None)
+        })
+    
+    return jsonify({
+        "mapping": mapping,
+        "analysis_results": analysis_results
+    })

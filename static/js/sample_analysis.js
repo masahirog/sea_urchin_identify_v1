@@ -133,6 +133,14 @@ function displayAnalysisResult(imagePath, data) {
                     </tr>
                 </table>
             </div>
+
+            <div class="mb-3">
+                <h6>アノテーション結果</h6>
+                <div class="text-center p-2 border rounded">
+                    <img src="/static/${data.annotation_path}" class="img-fluid" style="max-height: 300px;" alt="アノテーション画像">
+                </div>
+            </div>
+        
             <button type="button" class="btn btn-outline-primary" id="startAnnotationBtn">
                 <i class="fas fa-edit me-1"></i> アノテーションを編集
             </button>

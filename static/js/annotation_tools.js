@@ -225,8 +225,8 @@ function initAnnotationTools(canvas, ctx, img) {
                 },
                 body: JSON.stringify({
                     image_data: annotationData,
-                    // フルパスを相対パスに変換して一致するようにする
                     original_path: selectedCard.dataset.path
+
                 })
             })
             .then(response => {

@@ -1,0 +1,57 @@
+2025-05-21 15:47:56,690 - __main__ - INFO - 起動時クリーンアップ: 0ファイルを削除しました
+2025-05-21 15:47:56,690 - utils.file_cleanup - WARNING - APSchedulerがインストールされていないため、定期クリーンアップはスケジュールされません
+2025-05-21 15:47:56,690 - utils.file_cleanup - WARNING - pip install apscheduler を実行してインストールしてください
+2025-05-21 15:47:56,694 - __main__ - INFO - 初期化時クリーンアップ: 0ファイルを削除しました
+2025-05-21 15:47:56,712 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://192.168.11.4:8080
+2025-05-21 15:47:56,712 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-05-21 15:47:56,713 - werkzeug - INFO -  * Restarting with stat
+2025-05-21 15:47:57,243 - __main__ - INFO - 起動時クリーンアップ: 0ファイルを削除しました
+2025-05-21 15:47:57,243 - utils.file_cleanup - WARNING - APSchedulerがインストールされていないため、定期クリーンアップはスケジュールされません
+2025-05-21 15:47:57,243 - utils.file_cleanup - WARNING - pip install apscheduler を実行してインストールしてください
+2025-05-21 15:47:57,246 - __main__ - INFO - 初期化時クリーンアップ: 0ファイルを削除しました
+2025-05-21 15:47:57,258 - werkzeug - WARNING -  * Debugger is active!
+2025-05-21 15:47:57,263 - werkzeug - INFO -  * Debugger PIN: 100-568-560
+2025-05-21 15:49:08,751 - __main__ - INFO - 起動時クリーンアップ: 0ファイルを削除しました
+2025-05-21 15:49:08,946 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-21 15:49:08,946 - apscheduler.scheduler - INFO - Added job "Temporary files cleanup" to job store "default"
+2025-05-21 15:49:08,946 - apscheduler.scheduler - INFO - Scheduler started
+2025-05-21 15:49:08,946 - utils.file_cleanup - INFO - 一時ファイルの定期クリーンアップをスケジュール（6時間ごと）
+2025-05-21 15:49:08,951 - __main__ - INFO - 初期化時クリーンアップ: 0ファイルを削除しました
+2025-05-21 15:49:08,973 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://192.168.11.4:8080
+2025-05-21 15:49:08,973 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-05-21 15:49:08,973 - werkzeug - INFO -  * Restarting with stat
+2025-05-21 15:49:09,504 - __main__ - INFO - 起動時クリーンアップ: 0ファイルを削除しました
+2025-05-21 15:49:09,515 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-21 15:49:09,515 - apscheduler.scheduler - INFO - Added job "Temporary files cleanup" to job store "default"
+2025-05-21 15:49:09,515 - apscheduler.scheduler - INFO - Scheduler started
+2025-05-21 15:49:09,515 - utils.file_cleanup - INFO - 一時ファイルの定期クリーンアップをスケジュール（6時間ごと）
+2025-05-21 15:49:09,518 - __main__ - INFO - 初期化時クリーンアップ: 0ファイルを削除しました
+2025-05-21 15:49:09,530 - werkzeug - WARNING -  * Debugger is active!
+2025-05-21 15:49:09,536 - werkzeug - INFO -  * Debugger PIN: 100-568-560
+2025-05-21 15:49:24,789 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 15:49:24] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-05-21 15:49:32,324 - app - INFO - 起動時クリーンアップ: 0ファイルを削除しました
+2025-05-21 15:49:32,325 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-21 15:49:32,325 - apscheduler.scheduler - INFO - Added job "Temporary files cleanup" to job store "default"
+2025-05-21 15:49:32,325 - apscheduler.scheduler - INFO - Scheduler started
+2025-05-21 15:49:32,325 - utils.file_cleanup - INFO - 一時ファイルの定期クリーンアップをスケジュール（6時間ごと）
+2025-05-21 15:49:32,337 - app - INFO - 初期化時クリーンアップ: 0ファイルを削除しました
+2025-05-21 15:49:32,348 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 15:49:32] "GET /sample/sample/analyze-samples HTTP/1.1" 200 -
+2025-05-21 15:49:32,366 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 15:49:32] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-05-21 15:49:32,370 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 15:49:32] "[36mGET /static/js/annotation_tools.js HTTP/1.1[0m" 304 -
+2025-05-21 15:49:32,370 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 15:49:32] "[36mGET /static/css/analyze_samples.css HTTP/1.1[0m" 304 -
+2025-05-21 15:49:32,371 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 15:49:32] "[36mGET /static/js/sample_analysis.js HTTP/1.1[0m" 304 -
+2025-05-21 15:49:32,371 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 15:49:32] "[36mGET /sample/papillae/male/2__1.png HTTP/1.1[0m" 304 -
+2025-05-21 15:49:32,372 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 15:49:32] "[36mGET /static/js/utilities.js HTTP/1.1[0m" 304 -
+2025-05-21 15:49:35,423 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 15:49:35] "POST /sample/analyze-sample HTTP/1.1" 200 -
+2025-05-21 15:49:35,427 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 15:49:35] "[36mGET /static/annotations/2__1_annotation.png HTTP/1.1[0m" 304 -
+2025-05-21 16:08:20,844 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 16:08:20] "GET / HTTP/1.1" 200 -
+2025-05-21 16:08:20,858 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 16:08:20] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-05-21 16:08:20,860 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 16:08:20] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
+2025-05-21 16:08:20,865 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 16:08:20] "GET /dataset-info HTTP/1.1" 200 -
+2025-05-21 16:08:20,899 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 16:08:20] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
