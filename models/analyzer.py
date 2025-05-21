@@ -465,3 +465,8 @@ class UrchinPapillaeAnalyzer:
                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
         
         return vis_img
+
+    def detect_papillae_improved(self, image, min_area=500, max_area=5000, circularity_threshold=0.3):
+        """クラスメソッドとしてdetect_papillae_improvedを実装"""
+        from utils.image_processing import detect_papillae_improved
+        return detect_papillae_improved(image, min_area, max_area, circularity_threshold)

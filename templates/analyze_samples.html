@@ -158,87 +158,15 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        // 現在選択されている画像のパスを取得
-        const selectedCard = document.querySelector('.sample-card.selected-sample');
-        if (!selectedCard) {
-            alert('先にサンプル画像を選択してください');
-            return;
+        // ユーティリティ関数
+        function showLoading() {
+            document.getElementById('loadingOverlay').classList.remove('d-none');
         }
         
-        const imagePath = 'samples/' + selectedCard.dataset.path;
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.add('d-none');
+        }
         
-        // モーダルを作成
-        const modalHTML = `
-        <div class="modal fade" id="annotationModal" tabindex="-1" aria-labelledby="annotationModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="annotationModalLabel">生殖乳頭アノテーション</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="text-center mb-3">
-                            <canvas id="annotationCanvas" style="max-width: 100%; border: 1px solid #ddd;"></canvas>
-                        </div>
-                        <div class="d-flex justify-content-center mb-3">
-                            <div class="btn-group" role="group">
-                                <button type="button" class="btn btn-outline-primary" id="penTool">
-                                    <i class="fas fa-pen"></i> ペン
-                                </button>
-                                <button type="button" class="btn btn-outline-danger" id="eraserTool">
-                                    <i class="fas fa-eraser"></i> 消しゴム
-                                </button>
-                                <button type="button" class="btn btn-outline-success" id="circleTool">
-                                    <i class="fas fa-circle"></i> 円形
-                                </button>
-                            </div>
-                        </div>
-                        <div class="form-group mb-3">
-                            <label for="toolSize" class="form-label">ツールサイズ: <span id="toolSizeValue">5</span>px</label>
-                            <input type="range" class="form-range" id="toolSize" min="1" max="20" value="5">
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
-                        <button type="button" class="btn btn-primary" id="saveAnnotation">保存</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        `;
-        
-        // モーダルをDOMに追加
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-        
-        // Bootstrapモーダルを初期化
-        const annotationModal = new bootstrap.Modal(document.getElementById('annotationModal'));
-        annotationModal.show();
-        
-        // キャンバスの設定
-        const canvas = document.getElementById('annotationCanvas');
-        const ctx = canvas.getContext('2d');
-        
-        // 画像の読み込み
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = function() {
-            // キャンバスのサイズを画像に合わせる
-            canvas.width = img.width;
-            canvas.height = img.height;
-            
-            // 画像を描画
-            ctx.drawImage(img, 0, 0);
-            
-            // アノテーションツールの初期化
-            initAnnotationTools(canvas, ctx, img);
-        };
-        img.src = '/sample/' + selectedCard.dataset.path;
-        
-        // モーダルが閉じられたときの処理
-        document.getElementById('annotationModal').addEventListener('hidden.bs.modal', function () {
-            document.getElementById('annotationModal').remove();
-        });
-
         // アノテーションツールの初期化
         function initAnnotationTools(canvas, ctx, img) {
             let isDrawing = false;
@@ -390,75 +318,90 @@
             // 初期状態のボタン更新
             updateToolButtons();
         }
-        // ユーティリティ関数
-        function showLoading() {
-            document.getElementById('loadingOverlay').classList.remove('d-none');
-        }
-        
-        function hideLoading() {
-            document.getElementById('loadingOverlay').classList.add('d-none');
-        }
-        
-        // DOMが読み込まれたら実行
-        document.addEventListener('DOMContentLoaded', function() {
-            // サンプルカードの選択
-            document.querySelectorAll('.sample-card').forEach(card => {
-                card.addEventListener('click', function() {
-                    // 選択状態の更新
-                    document.querySelectorAll('.sample-card').forEach(c => {
-                        c.classList.remove('selected-sample');
-                    });
-                    this.classList.add('selected-sample');
-                    
-                    // サンプル分析
-                    analyzeSample(this.dataset.path);
-                });
-            });
+
+        // アノテーションモーダルを開く関数
+        function openAnnotationModal(paramImagePath) {
+            // 現在選択されている画像のパスを取得
+            const selectedCard = document.querySelector('.sample-card.selected-sample');
+            if (!selectedCard) {
+                alert('先にサンプル画像を選択してください');
+                return;
+            }
             
-            // サンプル画像アップロードフォーム
-            document.getElementById('uploadSampleForm').addEventListener('submit', function(e) {
-                e.preventDefault();
+            const imagePath = 'samples/' + selectedCard.dataset.path;
+            
+            // モーダルを作成
+            const modalHTML = `
+            <div class="modal fade" id="annotationModal" tabindex="-1" aria-labelledby="annotationModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="annotationModalLabel">生殖乳頭アノテーション</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="text-center mb-3">
+                                <canvas id="annotationCanvas" style="max-width: 100%; border: 1px solid #ddd;"></canvas>
+                            </div>
+                            <div class="d-flex justify-content-center mb-3">
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-outline-primary" id="penTool">
+                                        <i class="fas fa-pen"></i> ペン
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger" id="eraserTool">
+                                        <i class="fas fa-eraser"></i> 消しゴム
+                                    </button>
+                                    <button type="button" class="btn btn-outline-success" id="circleTool">
+                                        <i class="fas fa-circle"></i> 円形
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="form-group mb-3">
+                                <label for="toolSize" class="form-label">ツールサイズ: <span id="toolSizeValue">5</span>px</label>
+                                <input type="range" class="form-range" id="toolSize" min="1" max="20" value="5">
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                            <button type="button" class="btn btn-primary" id="saveAnnotation">保存</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            `;
+            
+            // モーダルをDOMに追加
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            
+            // Bootstrapモーダルを初期化
+            const annotationModal = new bootstrap.Modal(document.getElementById('annotationModal'));
+            annotationModal.show();
+            
+            // キャンバスの設定
+            const canvas = document.getElementById('annotationCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // 画像の読み込み
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = function() {
+                // キャンバスのサイズを画像に合わせる
+                canvas.width = img.width;
+                canvas.height = img.height;
                 
-                const sampleFile = document.getElementById('sampleFile').files[0];
-                const gender = document.getElementById('sampleGender').value;
+                // 画像を描画
+                ctx.drawImage(img, 0, 0);
                 
-                if (!sampleFile) {
-                    alert('サンプル画像を選択してください');
-                    return;
-                }
-                
-                // フォームデータの作成
-                const formData = new FormData();
-                formData.append('image', sampleFile);
-                formData.append('gender', gender);
-                
-                // ローディング表示
-                showLoading();
-                
-                // AJAX送信
-                fetch('/upload-sample', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    hideLoading();
-                    
-                    if (data.error) {
-                        alert('エラー: ' + data.error);
-                        return;
-                    }
-                    
-                    // 成功メッセージと画面更新
-                    alert(data.message);
-                    location.reload(); // 画面を更新してサンプル一覧を更新
-                })
-                .catch(error => {
-                    hideLoading();
-                    alert('エラー: ' + error);
-                });
+                // アノテーションツールの初期化
+                initAnnotationTools(canvas, ctx, img);
+            };
+            img.src = '/sample/' + selectedCard.dataset.path;
+            
+            // モーダルが閉じられたときの処理
+            document.getElementById('annotationModal').addEventListener('hidden.bs.modal', function () {
+                document.getElementById('annotationModal').remove();
             });
-        });
+        }
         
         // サンプル分析
         function analyzeSample(imagePath) {
@@ -487,6 +430,7 @@
             })
             .then(response => response.json())
             .then(data => {
+                console.log('サーバーからのレスポンス:', data); // レスポンスをコンソールに出力
                 if (data.error) {
                     resultElement.innerHTML = `
                         <div class="alert alert-danger">
@@ -512,6 +456,35 @@
         function displayAnalysisResult(imagePath, data) {
             const resultElement = document.getElementById('analysisResult');
             
+            // データの構造を確認
+            if (!data || !data.basic_stats) {
+                resultElement.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-circle me-2"></i> データの形式が不正です
+                    </div>
+                `;
+                return;
+            }
+            
+            // 以下、データを安全に参照するように修正
+            const size = data.basic_stats.size || [0, 0];
+            const mean = data.basic_stats.mean || 0;
+            const std = data.basic_stats.std || 0;
+            
+            // エッジ特性も安全に参照
+            const edgeFeatures = data.edge_features || {};
+            const edgeDensity = edgeFeatures.edge_density || 0;
+            const edgeCount = edgeFeatures.edge_count || 0;
+            
+            // テクスチャ特性も安全に参照
+            const textureFeatures = data.texture_features || {};
+            const contrast = textureFeatures.contrast || 0;
+            const uniformity = textureFeatures.uniformity || 0;
+            
+
+
+
+
             // 基本情報
             let html = `
                 <div class="row">
@@ -626,93 +599,71 @@
             const startAnnotationBtn = document.getElementById('startAnnotationBtn');
             if (startAnnotationBtn) {
                 startAnnotationBtn.addEventListener('click', function() {
-                    // 現在選択されている画像のパスを取得
-                    const selectedCard = document.querySelector('.sample-card.selected-sample');
-                    if (!selectedCard) {
-                        alert('先にサンプル画像を選択してください');
-                        return;
-                    }
-
-
-                    
-                    const imagePath = 'samples/' + selectedCard.dataset.path;
-                    
-                    // モーダルを作成
-                    const modalHTML = `
-                    <div class="modal fade" id="annotationModal" tabindex="-1" aria-labelledby="annotationModalLabel" aria-hidden="true">
-                        <div class="modal-dialog modal-lg">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title" id="annotationModalLabel">生殖乳頭アノテーション</h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <div class="text-center mb-3">
-                                        <canvas id="annotationCanvas" style="max-width: 100%; border: 1px solid #ddd;"></canvas>
-                                    </div>
-                                    <div class="d-flex justify-content-center mb-3">
-                                        <div class="btn-group" role="group">
-                                            <button type="button" class="btn btn-outline-primary" id="penTool">
-                                                <i class="fas fa-pen"></i> ペン
-                                            </button>
-                                            <button type="button" class="btn btn-outline-danger" id="eraserTool">
-                                                <i class="fas fa-eraser"></i> 消しゴム
-                                            </button>
-                                            <button type="button" class="btn btn-outline-success" id="circleTool">
-                                                <i class="fas fa-circle"></i> 円形
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div class="form-group mb-3">
-                                        <label for="toolSize" class="form-label">ツールサイズ: <span id="toolSizeValue">5</span>px</label>
-                                        <input type="range" class="form-range" id="toolSize" min="1" max="20" value="5">
-                                    </div>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
-                                    <button type="button" class="btn btn-primary" id="saveAnnotation">保存</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    `;
-                    
-                    // モーダルをDOMに追加
-                    document.body.insertAdjacentHTML('beforeend', modalHTML);
-                    
-                    // Bootstrapモーダルを初期化
-                    const annotationModal = new bootstrap.Modal(document.getElementById('annotationModal'));
-                    annotationModal.show();
-                    
-                    // キャンバスの設定
-                    const canvas = document.getElementById('annotationCanvas');
-                    const ctx = canvas.getContext('2d');
-                    
-                    // 画像の読み込み
-                    const img = new Image();
-                    img.crossOrigin = 'anonymous';
-                    img.onload = function() {
-                        // キャンバスのサイズを画像に合わせる
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        
-                        // 画像を描画
-                        ctx.drawImage(img, 0, 0);
-                        
-                        // アノテーションツールの初期化
-                        initAnnotationTools(canvas, ctx, img);
-                    };
-                    img.src = '/get_sample/' + selectedCard.dataset.path;
-
-                    
-                    // モーダルが閉じられたときの処理
-                    document.getElementById('annotationModal').addEventListener('hidden.bs.modal', function () {
-                        document.getElementById('annotationModal').remove();
-                    });
+                    openAnnotationModal(imagePath);
                 });
             }
-
         }
+        
+        // DOMが読み込まれたら実行
+        document.addEventListener('DOMContentLoaded', function() {
+            // サンプルカードの選択
+            document.querySelectorAll('.sample-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    // 選択状態の更新
+                    document.querySelectorAll('.sample-card').forEach(c => {
+                        c.classList.remove('selected-sample');
+                    });
+                    this.classList.add('selected-sample');
+                    
+                    // サンプル分析
+                    analyzeSample(this.dataset.path);
+                });
+            });
+            
+            // サンプル画像アップロードフォーム
+            document.getElementById('uploadSampleForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const sampleFile = document.getElementById('sampleFile').files[0];
+                const gender = document.getElementById('sampleGender').value;
+                
+                if (!sampleFile) {
+                    alert('サンプル画像を選択してください');
+                    return;
+                }
+                
+                // フォームデータの作成
+                const formData = new FormData();
+                formData.append('image', sampleFile);
+                formData.append('gender', gender);
+                
+                // ローディング表示
+                showLoading();
+                
+                // AJAX送信
+                fetch('/upload-sample', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    hideLoading();
+                    
+                    if (data.error) {
+                        alert('エラー: ' + data.error);
+                        return;
+                    }
+                    
+                    // 成功メッセージと画面更新
+                    alert(data.message);
+                    location.reload(); // 画面を更新してサンプル一覧を更新
+                })
+                .catch(error => {
+                    hideLoading();
+                    alert('エラー: ' + error);
+                });
+            });
+        });
     </script>
 </body>
 </html>

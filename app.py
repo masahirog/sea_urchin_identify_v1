@@ -409,7 +409,8 @@ def analyze_sample():
         
         # 生殖乳頭の検出
         analyzer = UrchinPapillaeAnalyzer()
-        papillae_contours, processed = analyzer.detect_papillae_improved(
+        from utils.image_processing import detect_papillae_improved
+        papillae_contours, processed = detect_papillae_improved(
             img, 
             min_area=500, 
             max_area=5000,
