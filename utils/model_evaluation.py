@@ -374,49 +374,60 @@ def process_annotation_file(evaluation_dir, anno_file, eval_history):
     file_path = os.path.join(evaluation_dir, anno_file)
     print(f"アノテーションファイル読み込み: {file_path}")
     
-    with open(file_path, 'r') as f:
-        data = json.load(f)
-    
-    # タイムスタンプの抽出
-    timestamp = data.get("timestamp", anno_file.replace("annotation_impact_", "").replace(".json", ""))
-    print(f"タイムスタンプ: {timestamp}")
-    
-    # アノテーション影響グラフの存在確認
-    annotation_impact_path = os.path.join(evaluation_dir, f"annotation_impact_{timestamp}.png")
-    anno_exists = os.path.exists(annotation_impact_path)
-    
-    print(f"アノテーション影響グラフ存在確認: {anno_exists}")
-    
-    # データセット情報
-    dataset = data.get("dataset", {})
-    male_total = dataset.get("male_total", 0)
-    female_total = dataset.get("female_total", 0)
-    male_annotated = dataset.get("male_annotated", 0)
-    female_annotated = dataset.get("female_annotated", 0)
-    
-    # アノテーション率をCV平均として使用
-    annotation_rate = dataset.get("annotation_rate", 0)
-    
-    # 要約情報を追加
-    summary = {
-        "timestamp": timestamp,
-        "cv_mean": annotation_rate,  # アノテーション率をCV平均として表示
-        "type": "annotation",
-        "file": anno_file,
-        "images": {
-            "annotation_impact": f"annotation_impact_{timestamp}.png" if anno_exists else None
-        },
-        "dataset": {
-            "male_total": male_total,
-            "female_total": female_total,
-            "male_annotated": male_annotated,
-            "female_annotated": female_annotated,
-            "annotation_rate": annotation_rate
+    try:
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+        
+        # タイムスタンプの抽出
+        timestamp = data.get("timestamp", anno_file.replace("annotation_impact_", "").replace(".json", ""))
+        print(f"タイムスタンプ: {timestamp}")
+        
+        # アノテーション影響グラフの存在確認
+        annotation_impact_path = os.path.join(evaluation_dir, f"annotation_impact_{timestamp}.png")
+        anno_exists = os.path.exists(annotation_impact_path)
+        
+        print(f"アノテーション影響グラフ存在確認: {anno_exists}")
+        
+        # データセット情報
+        dataset = data.get("dataset", {})
+        male_total = dataset.get("male_total", 0)
+        female_total = dataset.get("female_total", 0)
+        male_annotated = dataset.get("male_annotated", 0)
+        female_annotated = dataset.get("female_annotated", 0)
+        
+        # アノテーション率をCV平均として使用
+        annotation_rate = dataset.get("annotation_rate", 0)
+        
+        # 要約情報を追加
+        summary = {
+            "timestamp": timestamp,
+            "cv_mean": annotation_rate,  # アノテーション率をCV平均として表示
+            "cv_std": 0,  # 固定値としてセット (model_evaluation.jsでこの値を期待している)
+            "type": "annotation",
+            "file": anno_file,
+            "images": {
+                "annotation_impact": f"annotation_impact_{timestamp}.png" if anno_exists else None
+            },
+            "dataset": {
+                "male_total": male_total,
+                "female_total": female_total,
+                "male_annotated": male_annotated,
+                "female_annotated": female_annotated,
+                "annotation_rate": annotation_rate
+            }
         }
-    }
-    
-    eval_history.append(summary)
-
+        
+        # 分類レポートの追加 (フロントエンド互換性用)
+        summary["classification_report"] = {
+            "male": {"precision": 0, "recall": 0, "f1_score": 0, "support": male_total},
+            "female": {"precision": 0, "recall": 0, "f1_score": 0, "support": female_total},
+            "weighted avg": {"precision": 0, "recall": 0, "f1_score": 0, "support": male_total + female_total}
+        }
+        
+        eval_history.append(summary)
+    except Exception as e:
+        print(f"アノテーションファイル処理エラー: {str(e)}")
+        traceback.print_exc()
 
 def analyze_annotation_impact(dataset_dir, model_path, output_dir='static/evaluation'):
     """

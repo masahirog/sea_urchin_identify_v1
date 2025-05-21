@@ -210,9 +210,11 @@ def get_latest_evaluation_result():
         # ディレクトリの存在確認
         if not os.path.exists(evaluation_dir):
             os.makedirs(evaluation_dir, exist_ok=True)
+            current_app.logger.warning("評価ディレクトリが存在しないため作成しました")
             return jsonify({"error": "評価履歴がありません"}), 404
         
         history = get_model_evaluation_history(evaluation_dir)
+        current_app.logger.debug(f"履歴取得結果: {len(history)}件")
         
         if not history:
             current_app.logger.warning("評価履歴がありません")
@@ -243,7 +245,7 @@ def get_latest_evaluation_result():
                 if os.path.exists(anno_path):
                     with open(anno_path, 'r') as f:
                         details = json.load(f)
-                    # CV平均値を追加（フロントエンド互換性のため）
+                    # CV平均値などを追加（フロントエンド互換性のため）
                     dataset = details.get('dataset', {})
                     details['cv_mean'] = dataset.get('annotation_rate', 0)
                     details['cv_std'] = 0
@@ -253,12 +255,15 @@ def get_latest_evaluation_result():
                         "weighted avg": {"precision": 0, "recall": 0, "f1_score": 0, "support": dataset.get('male_total', 0) + dataset.get('female_total', 0)}
                     }
                     current_app.logger.debug(f"アノテーション詳細を読み込みました: {anno_path}")
+                    current_app.logger.debug(f"返却データサンプル: {json.dumps(details, ensure_ascii=False)[:200]}...")
                 else:
                     current_app.logger.warning(f"アノテーションファイルが見つかりません: {anno_path}")
             except Exception as e:
                 current_app.logger.error(f"アノテーション詳細読み込みエラー: {str(e)}")
         
-        return jsonify({"summary": latest, "details": details})
+        response_data = {"summary": latest, "details": details}
+        current_app.logger.debug(f"レスポンスデータ構造: summary={list(latest.keys())}, details={list(details.keys()) if details else 'なし'}")
+        return jsonify(response_data)
     except Exception as e:
         import traceback
         error_msg = f"最新評価結果取得エラー: {str(e)}"
