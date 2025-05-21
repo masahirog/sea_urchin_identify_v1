@@ -110,6 +110,9 @@ function analyzeSample(imagePath) {
             </div>
         `;
     }
+    let processedImagePath = imagePath;
+    console.log("分析送信パス:", processedImagePath);
+
     
     // 分析リクエスト
     fetch('/sample/analyze-sample', {
@@ -118,7 +121,7 @@ function analyzeSample(imagePath) {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            'image_path': 'samples/' + imagePath
+            'image_path': processedImagePath
         })
     })
     .then(response => {
@@ -169,6 +172,7 @@ function displayAnalysisResult(imagePath, data) {
 
     // 結果の表示
     resultElement.innerHTML = html;
+    resultElement.classList.remove('d-none'); // 表示状態に変更
 
     // 結果表示後、アノテーション開始ボタンにイベントリスナーを追加
     addAnnotationButtonListener();

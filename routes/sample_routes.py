@@ -12,11 +12,13 @@ import traceback
 import uuid
 
 sample_bp = Blueprint('sample', __name__)
+print("sample_routes.py が読み込まれました")
 
 
 @sample_bp.route('/analyze-samples', methods=['GET'])
 def analyze_samples_page():
     """サンプル分析ページを表示"""
+    print("analyze_samples_page が呼び出されました")
     from app import app
     
     # サンプル画像の取得
@@ -42,16 +44,21 @@ def analyze_sample():
     Returns:
     - JSON: 分析結果
     """
+    print("analyze_sample エンドポイントが呼び出されました")
+    current_app.logger.info("analyze_sample エンドポイントが呼び出されました")
+    
     from app import app
     from utils.image_analysis import analyze_basic_stats, analyze_edge_features, analyze_texture_features, detect_papillae, analyze_shape_features
     
     try:
         data = request.json
+        current_app.logger.info(f"受信したリクエストデータ: {data}")
         
         if not data or 'image_path' not in data:
             return jsonify({"error": "画像パスが指定されていません"}), 400
         
         image_path = data['image_path']
+        current_app.logger.info(f"分析対象画像パス: {image_path}")
         
         # パスの検証
         if '..' in image_path:
@@ -80,13 +87,27 @@ def analyze_sample():
                 except Exception as e:
                     current_app.logger.error(f"マッピング読み込みエラー: {str(e)}")
         
-        # 画像パスの確認
-        full_image_path = image_path
-        if not os.path.exists(full_image_path) and not full_image_path.startswith('/'):
+        # ★★★ ここを修正 ★★★
+        # 画像パスの正しい処理
+        full_image_path = None
+        
+        # パターン1: 'papillae/male/xxx.png' -> 'static/samples/papillae/male/xxx.png'
+        if image_path.startswith('papillae/'):
+            full_image_path = os.path.join('static', 'samples', image_path)
+        # パターン2: 'samples/papillae/male/xxx.png' -> 'static/samples/papillae/male/xxx.png'  
+        elif image_path.startswith('samples/'):
             full_image_path = os.path.join('static', image_path)
+        # パターン3: 絶対パスの場合はそのまま
+        elif os.path.isabs(image_path):
+            full_image_path = image_path
+        # パターン4: その他の場合は static/ を前に付ける
+        else:
+            full_image_path = os.path.join('static', image_path)
+        
+        current_app.logger.info(f"フルパス: {full_image_path}, 存在チェック: {os.path.exists(full_image_path)}")
             
         if not os.path.exists(full_image_path):
-            return jsonify({"error": f"画像ファイルが見つかりません: {image_path}"}), 404
+            return jsonify({"error": f"画像ファイルが見つかりません: {image_path} (変換先: {full_image_path})"}), 404
         
         # 通常の画像分析を実行
         basic_stats = analyze_basic_stats(full_image_path, app.config)
@@ -114,6 +135,7 @@ def analyze_sample():
             if shape_features:
                 result['shape_features'] = shape_features
 
+        current_app.logger.info("分析結果を返却します")
         return jsonify(result)
     
     except Exception as e:
@@ -121,6 +143,18 @@ def analyze_sample():
         traceback.print_exc()
         return jsonify({'error': f'分析処理エラー: {str(e)}'}), 500
 
+# デバッグ用: ルート一覧を表示
+@sample_bp.route('/debug-routes', methods=['GET'])
+def debug_routes():
+    """デバッグ用: 登録されているルートを確認"""
+    routes = []
+    for rule in current_app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods': list(rule.methods),
+            'rule': str(rule)
+        })
+    return jsonify(routes)
 
 @sample_bp.route('/upload-sample', methods=['POST'])
 def upload_sample():
