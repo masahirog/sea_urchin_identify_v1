@@ -1,9 +1,24 @@
 /**
  * ウニ生殖乳頭分析システム - アノテーションツール
- * 画像アノテーション機能を提供するスクリプト
+ * 画像アノテーション機能を提供するモジュール
  */
 
-// アノテーションモーダルを開く関数
+// モジュール内のデータを保持するための変数
+const annotationTools = {
+    selectedCard: null,
+    canvas: null,
+    context: null,
+    isDrawing: false,
+    lastX: 0,
+    lastY: 0,
+    currentTool: 'pen',
+    toolSize: 5,
+};
+
+/**
+ * アノテーションモーダルを開く
+ * @param {string} [paramImagePath] - オプションの画像パス
+ */
 function openAnnotationModal(paramImagePath) {
     // 現在選択されている画像のパスを取得
     const selectedCard = document.querySelector('.sample-card.selected-sample');
@@ -13,8 +28,34 @@ function openAnnotationModal(paramImagePath) {
     }
     
     const imagePath = 'samples/' + selectedCard.dataset.path;
+    annotationTools.selectedCard = selectedCard;
     
-    // モーダルを作成
+    // モーダルがすでに存在する場合は削除
+    const existingModal = document.getElementById('annotationModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // モーダルを作成して追加
+    createAnnotationModal();
+    
+    // Bootstrapモーダルを初期化
+    const annotationModal = new bootstrap.Modal(document.getElementById('annotationModal'));
+    annotationModal.show();
+    
+    // キャンバスの設定
+    setupAnnotationCanvas(selectedCard);
+    
+    // モーダルが閉じられたときのクリーンアップ
+    document.getElementById('annotationModal').addEventListener('hidden.bs.modal', function () {
+        cleanupAnnotationModal();
+    });
+}
+
+/**
+ * アノテーションモーダルのHTMLを作成
+ */
+function createAnnotationModal() {
     const modalHTML = `
     <div class="modal fade" id="annotationModal" tabindex="-1" aria-labelledby="annotationModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">
@@ -60,16 +101,17 @@ function openAnnotationModal(paramImagePath) {
     </div>
     `;
     
-    // モーダルをDOMに追加
     document.body.insertAdjacentHTML('beforeend', modalHTML);
-    
-    // Bootstrapモーダルを初期化
-    const annotationModal = new bootstrap.Modal(document.getElementById('annotationModal'));
-    annotationModal.show();
-    
-    // キャンバスの設定
+}
+
+/**
+ * アノテーションキャンバスの設定
+ * @param {HTMLElement} selectedCard - 選択されたサンプルカード
+ */
+function setupAnnotationCanvas(selectedCard) {
     const canvas = document.getElementById('annotationCanvas');
-    const ctx = canvas.getContext('2d');
+    annotationTools.canvas = canvas;
+    annotationTools.context = canvas.getContext('2d');
     
     // 画像の読み込み
     const img = new Image();
@@ -80,79 +122,91 @@ function openAnnotationModal(paramImagePath) {
         canvas.height = img.height;
         
         // 画像を描画
-        ctx.drawImage(img, 0, 0);
+        annotationTools.context.drawImage(img, 0, 0);
         
         // アノテーションツールの初期化
-        initAnnotationTools(canvas, ctx, img);
+        initAnnotationToolButtons();
+        initAnnotationEvents();
+    };
+    img.onerror = function() {
+        console.error('画像の読み込みに失敗しました');
+        alert('画像の読み込みに失敗しました。別の画像を試してください。');
     };
     img.src = '/sample/' + selectedCard.dataset.path;
-    
-    // モーダルが閉じられたときの処理
-    document.getElementById('annotationModal').addEventListener('hidden.bs.modal', function () {
-        document.getElementById('annotationModal').remove();
-    });
 }
 
-// アノテーションツールの初期化
-function initAnnotationTools(canvas, ctx, img) {
-    let isDrawing = false;
-    let lastX = 0;
-    let lastY = 0;
-    let currentTool = 'pen';
-    let toolSize = 5;
-    
+/**
+ * アノテーションツールのボタン初期化
+ */
+function initAnnotationToolButtons() {
     // ツール選択
     document.getElementById('penTool').addEventListener('click', function() {
-        currentTool = 'pen';
+        annotationTools.currentTool = 'pen';
         updateToolButtons();
     });
     
     document.getElementById('eraserTool').addEventListener('click', function() {
-        currentTool = 'eraser';
+        annotationTools.currentTool = 'eraser';
         updateToolButtons();
     });
     
     document.getElementById('circleTool').addEventListener('click', function() {
-        currentTool = 'circle';
+        annotationTools.currentTool = 'circle';
         updateToolButtons();
     });
     
     // ツールサイズの変更
     document.getElementById('toolSize').addEventListener('input', function() {
-        toolSize = parseInt(this.value);
-        document.getElementById('toolSizeValue').textContent = toolSize;
+        annotationTools.toolSize = parseInt(this.value);
+        document.getElementById('toolSizeValue').textContent = annotationTools.toolSize;
     });
     
-    // ツールボタンの更新
-    function updateToolButtons() {
-        document.getElementById('penTool').classList.remove('active');
-        document.getElementById('eraserTool').classList.remove('active');
-        document.getElementById('circleTool').classList.remove('active');
-        
-        if (currentTool === 'pen') {
-            document.getElementById('penTool').classList.add('active');
-        } else if (currentTool === 'eraser') {
-            document.getElementById('eraserTool').classList.add('active');
-        } else if (currentTool === 'circle') {
-            document.getElementById('circleTool').classList.add('active');
-        }
+    // 保存ボタン
+    document.getElementById('saveAnnotation').addEventListener('click', saveAnnotationData);
+    
+    // 初期状態のボタン更新
+    updateToolButtons();
+}
+
+/**
+ * ツールボタンの状態を更新
+ */
+function updateToolButtons() {
+    document.getElementById('penTool').classList.remove('active');
+    document.getElementById('eraserTool').classList.remove('active');
+    document.getElementById('circleTool').classList.remove('active');
+    
+    if (annotationTools.currentTool === 'pen') {
+        document.getElementById('penTool').classList.add('active');
+    } else if (annotationTools.currentTool === 'eraser') {
+        document.getElementById('eraserTool').classList.add('active');
+    } else if (annotationTools.currentTool === 'circle') {
+        document.getElementById('circleTool').classList.add('active');
     }
+}
+
+/**
+ * アノテーションキャンバスのイベント初期化
+ */
+function initAnnotationEvents() {
+    const canvas = annotationTools.canvas;
     
     // 描画開始
     canvas.addEventListener('mousedown', function(e) {
-        isDrawing = true;
+        annotationTools.isDrawing = true;
         
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
         
-        lastX = (e.clientX - rect.left) * scaleX;
-        lastY = (e.clientY - rect.top) * scaleY;
+        annotationTools.lastX = (e.clientX - rect.left) * scaleX;
+        annotationTools.lastY = (e.clientY - rect.top) * scaleY;
         
-        if (currentTool === 'circle') {
+        if (annotationTools.currentTool === 'circle') {
             // 円ツールの場合は一時的な円を描画
+            const ctx = annotationTools.context;
             ctx.beginPath();
-            ctx.arc(lastX, lastY, toolSize, 0, Math.PI * 2);
+            ctx.arc(annotationTools.lastX, annotationTools.lastY, annotationTools.toolSize, 0, Math.PI * 2);
             ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
             ctx.fill();
         }
@@ -160,7 +214,7 @@ function initAnnotationTools(canvas, ctx, img) {
     
     // 描画中
     canvas.addEventListener('mousemove', function(e) {
-        if (!isDrawing) return;
+        if (!annotationTools.isDrawing) return;
         
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
@@ -169,118 +223,53 @@ function initAnnotationTools(canvas, ctx, img) {
         const x = (e.clientX - rect.left) * scaleX;
         const y = (e.clientY - rect.top) * scaleY;
         
+        const ctx = annotationTools.context;
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
-        ctx.lineWidth = toolSize;
+        ctx.lineWidth = annotationTools.toolSize;
         
-        if (currentTool === 'pen') {
+        if (annotationTools.currentTool === 'pen') {
             ctx.globalCompositeOperation = 'source-over';
             ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)';
             
             ctx.beginPath();
-            ctx.moveTo(lastX, lastY);
+            ctx.moveTo(annotationTools.lastX, annotationTools.lastY);
             ctx.lineTo(x, y);
             ctx.stroke();
-        } else if (currentTool === 'eraser') {
+        } else if (annotationTools.currentTool === 'eraser') {
             ctx.globalCompositeOperation = 'destination-out';
             
             ctx.beginPath();
-            ctx.moveTo(lastX, lastY);
+            ctx.moveTo(annotationTools.lastX, annotationTools.lastY);
             ctx.lineTo(x, y);
             ctx.stroke();
         }
         
-        lastX = x;
-        lastY = y;
+        annotationTools.lastX = x;
+        annotationTools.lastY = y;
     });
     
     // 描画終了
     canvas.addEventListener('mouseup', stopDrawing);
     canvas.addEventListener('mouseout', stopDrawing);
     
-    function stopDrawing() {
-        isDrawing = false;
-        // 元の描画モードに戻す
-        ctx.globalCompositeOperation = 'source-over';
-    }
-    
-    // アノテーションの保存
-    document.getElementById('saveAnnotation').addEventListener('click', function() {
-        try {
-            showLoading(); // ローディング表示を追加
-            console.log('アノテーション保存開始');
-
-            // キャンバスのデータをBase64形式で取得
-            const annotationData = canvas.toDataURL('image/png');
-            console.log('Base64データサイズ:', (annotationData.length / 1024).toFixed(2), 'KB');
-
-            const selectedCard = document.querySelector('.sample-card.selected-sample');
-            console.log('選択カード:', selectedCard.dataset.path);
-
-            // 画像データをサーバーに送信
-            fetch('/sample/save-annotation', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    image_data: annotationData,
-                    original_path: selectedCard.dataset.path
-
-                })
-            })
-            .then(response => {
-                console.log('サーバーレスポンスステータス:', response.status);
-                if (!response.ok) {
-                    throw new Error('サーバーレスポンスが不正です');
-                }
-                return response.json();
-            })
-            .then(data => {
-                hideLoading(); // ローディング表示を非表示
-                console.log('アノテーション保存レスポンス:', data);
-                
-                if (data.error) {
-                    console.error('保存エラー:', data.error);
-                    alert('エラー: ' + data.error);
-                } else {
-                    alert('アノテーションを保存しました');
-                    saveToSession('annotationSaved', true);
-                    console.log('保存成功フラグ設定');
-                    // モーダルを閉じる
-                    bootstrap.Modal.getInstance(document.getElementById('annotationModal')).hide();
-                    analyzeSample(selectedCard.dataset.path);
-
-
-                    
-                    // // 少し待ってからリロード（サーバー処理の完了を待つ）
-                    // console.log('1秒待機開始...');
-                    // setTimeout(() => {
-                    //     // 画像パスを保持してリロード
-                    //     const currentPath = selectedCard.dataset.path;
-                    //     saveToSession('lastSelectedSample', currentPath);
-                    //     console.log('リロード実行');
-                    //     location.reload();
-                    // }, 500);
-                }
-            })
-            .catch(error => {
-                hideLoading();
-                console.error('保存エラー:', error);
-                alert('保存中にエラーが発生しました: ' + error);
-            });
-        } catch (e) {
-            hideLoading();
-            console.error('アノテーション処理エラー:', e);
-            alert('アノテーションの保存中にエラーが発生しました: ' + e);
-        }
-    });
-    
-    // 初期状態のボタン更新
-    updateToolButtons();
+    // タッチデバイス対応
+    enableTouchSupport(canvas);
 }
 
-// タッチデバイス用の拡張（オプション）
+/**
+ * 描画停止処理
+ */
+function stopDrawing() {
+    annotationTools.isDrawing = false;
+    // 元の描画モードに戻す
+    annotationTools.context.globalCompositeOperation = 'source-over';
+}
+
+/**
+ * タッチデバイス対応の有効化
+ * @param {HTMLCanvasElement} canvas - 対象のキャンバス要素
+ */
 function enableTouchSupport(canvas) {
     // タッチイベントをマウスイベントに変換
     function touchToMouse(touchEvent, mouseEventType) {
@@ -294,8 +283,87 @@ function enableTouchSupport(canvas) {
         canvas.dispatchEvent(mouseEvent);
     }
     
-    canvas.addEventListener('touchstart', e => touchToMouse(e, 'mousedown'), false);
-    canvas.addEventListener('touchmove', e => touchToMouse(e, 'mousemove'), false);
-    canvas.addEventListener('touchend', e => touchToMouse(e, 'mouseup'), false);
-    canvas.addEventListener('touchcancel', e => touchToMouse(e, 'mouseout'), false);
+    canvas.addEventListener('touchstart', e => touchToMouse(e, 'mousedown'), { passive: false });
+    canvas.addEventListener('touchmove', e => touchToMouse(e, 'mousemove'), { passive: false });
+    canvas.addEventListener('touchend', e => touchToMouse(e, 'mouseup'), { passive: false });
+    canvas.addEventListener('touchcancel', e => touchToMouse(e, 'mouseout'), { passive: false });
+}
+
+/**
+ * アノテーションデータを保存
+ */
+function saveAnnotationData() {
+    try {
+        showLoading(); // ローディング表示を追加
+        console.log('アノテーション保存開始');
+
+        // キャンバスのデータをBase64形式で取得
+        const annotationData = annotationTools.canvas.toDataURL('image/png');
+        console.log('Base64データサイズ:', calculateImageSize(annotationData), 'KB');
+
+        const selectedCard = annotationTools.selectedCard;
+        console.log('選択カード:', selectedCard.dataset.path);
+
+        // 画像データをサーバーに送信
+        fetch('/sample/save-annotation', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                image_data: annotationData,
+                original_path: selectedCard.dataset.path
+            })
+        })
+        .then(response => {
+            console.log('サーバーレスポンスステータス:', response.status);
+            if (!response.ok) {
+                throw new Error('サーバーレスポンスが不正です');
+            }
+            return response.json();
+        })
+        .then(data => {
+            hideLoading(); // ローディング表示を非表示
+            console.log('アノテーション保存レスポンス:', data);
+            
+            if (data.error) {
+                console.error('保存エラー:', data.error);
+                alert('エラー: ' + data.error);
+            } else {
+                alert('アノテーションを保存しました');
+                saveToSession('annotationSaved', true);
+                console.log('保存成功フラグ設定');
+                
+                // モーダルを閉じる
+                bootstrap.Modal.getInstance(document.getElementById('annotationModal')).hide();
+                
+                // サンプルの再分析
+                if (typeof analyzeSample === 'function') {
+                    analyzeSample(selectedCard.dataset.path);
+                }
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('保存エラー:', error);
+            alert('保存中にエラーが発生しました: ' + error);
+        });
+    } catch (e) {
+        hideLoading();
+        console.error('アノテーション処理エラー:', e);
+        alert('アノテーションの保存中にエラーが発生しました: ' + e);
+    }
+}
+
+/**
+ * アノテーションモーダルのクリーンアップ
+ */
+function cleanupAnnotationModal() {
+    // リソースの解放やイベントリスナーの削除など
+    annotationTools.canvas = null;
+    annotationTools.context = null;
+    annotationTools.isDrawing = false;
+    
+    // モーダル要素の削除
+    document.getElementById('annotationModal').remove();
 }

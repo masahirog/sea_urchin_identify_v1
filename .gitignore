@@ -1,3 +1,4 @@
+# Python関連
 __pycache__/
 *.py[cod]
 *.class
@@ -28,8 +29,13 @@ models/saved/*.pkl
 uploads/*
 extracted_images/*
 dataset/*
+static/papillae/
+static/uploads/
+static/images/
+static/evaluation/
+static/annotations/
 
-# IDEとエディタのファイル
+# IDE/エディタファイル
 .idea/
 .vscode/
 *.swp
@@ -38,3 +44,74 @@ dataset/*
 # OSファイル
 .DS_Store
 Thumbs.db
+
+# データベースファイル
+*.db
+*.sqlite
+*.sqlite3
+
+# ログと生成されたレポート
+logs/
+*.log
+log.txt
+reports/
+
+# フロントエンド関連（必要に応じて）
+node_modules/
+package-lock.json
+yarn.lock
+.npm
+.yarn-integrity
+yarn-error.log
+
+# バックアップファイル
+*.bak
+*.backup
+*~
+
+# 機密情報
+.env
+.env.local
+secrets.json
+credentials.json
+
+# テスト関連
+.coverage
+coverage/
+.pytest_cache/
+.cache/
+htmlcov/
+
+# 一時ファイル
+tmp/
+temp/
+.tmp/
+.temp/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# 追加のデータファイル形式
+*.h5
+*.npy
+*.npz
+*.csv
+*.xlsx
+*.xls
+*.json
+*.geojson
+*.xml
+*.pdf
+*.html
+*.txt
+
+# 追加の画像ファイル形式
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tif
+*.tiff
+*.svg
+*.ico

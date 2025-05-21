@@ -1,29 +1,51 @@
 /**
  * ウニ生殖乳頭分析システム - ユーティリティ関数
- * 共通で使用する便利な関数を集めたファイル
+ * アプリケーション全体で使用される共通ユーティリティ関数
  */
 
-// ローディングオーバーレイの表示
+/**
+ * ローディングオーバーレイを表示する
+ */
 function showLoading() {
-    document.getElementById('loadingOverlay').classList.remove('d-none');
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+        overlay.classList.remove('d-none');
+    }
 }
 
-// ローディングオーバーレイの非表示
+/**
+ * ローディングオーバーレイを非表示にする
+ */
 function hideLoading() {
-    document.getElementById('loadingOverlay').classList.add('d-none');
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+        overlay.classList.add('d-none');
+    }
 }
 
-// Base64エンコードされた画像データのサイズを計算（KB単位）
+/**
+ * Base64エンコードされた画像データのサイズを計算（KB単位）
+ * @param {string} base64String - Base64エンコードされた画像データ
+ * @returns {string} サイズ（KB単位、小数点以下2桁）
+ */
 function calculateImageSize(base64String) {
+    if (!base64String) return '0.00';
+    
     // Base64のヘッダー部分を削除
-    const base64Data = base64String.split(',')[1];
+    const base64Data = base64String.includes(',') ? 
+        base64String.split(',')[1] : base64String;
+    
     // Base64のデータサイズを計算（バイト単位）
     const sizeInBytes = Math.ceil((base64Data.length * 3) / 4);
     // KB単位に変換（小数点以下2桁）
     return (sizeInBytes / 1024).toFixed(2);
 }
 
-// 日付をフォーマット（YYYY-MM-DD HH:MM:SS）
+/**
+ * 日付をフォーマット（YYYY-MM-DD HH:MM:SS）
+ * @param {Date} [date=new Date()] - フォーマットする日付
+ * @returns {string} フォーマットされた日付文字列
+ */
 function formatDate(date) {
     const d = date || new Date();
     
@@ -37,7 +59,11 @@ function formatDate(date) {
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
-// エラーメッセージの表示
+/**
+ * エラーメッセージを表示する
+ * @param {string} elementId - メッセージを表示する要素のID
+ * @param {string} message - 表示するエラーメッセージ
+ */
 function showError(elementId, message) {
     const element = document.getElementById(elementId);
     if (element) {
@@ -52,7 +78,11 @@ function showError(elementId, message) {
     }
 }
 
-// 成功メッセージの表示
+/**
+ * 成功メッセージを表示する
+ * @param {string} elementId - メッセージを表示する要素のID
+ * @param {string} message - 表示する成功メッセージ
+ */
 function showSuccess(elementId, message) {
     const element = document.getElementById(elementId);
     if (element) {
@@ -67,15 +97,26 @@ function showSuccess(elementId, message) {
     }
 }
 
-// URLパラメータの取得
+/**
+ * URLパラメータを取得する
+ * @param {string} name - 取得するパラメータ名
+ * @returns {string|null} パラメータの値（存在しない場合はnull）
+ */
 function getUrlParameter(name) {
+    if (!name) return null;
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get(name);
 }
 
-// セッションストレージに値を保存
+/**
+ * セッションストレージに値を保存する
+ * @param {string} key - 保存するキー
+ * @param {*} value - 保存する値
+ * @returns {boolean} 保存の成功/失敗
+ */
 function saveToSession(key, value) {
     try {
+        if (!key) throw new Error('キーが指定されていません');
         sessionStorage.setItem(key, JSON.stringify(value));
         return true;
     } catch (e) {
@@ -84,9 +125,14 @@ function saveToSession(key, value) {
     }
 }
 
-// セッションストレージから値を取得
+/**
+ * セッションストレージから値を取得する
+ * @param {string} key - 取得するキー
+ * @returns {*} 保存されている値（存在しない場合はnull）
+ */
 function getFromSession(key) {
     try {
+        if (!key) return null;
         const value = sessionStorage.getItem(key);
         return value ? JSON.parse(value) : null;
     } catch (e) {
@@ -95,13 +141,43 @@ function getFromSession(key) {
     }
 }
 
-// セッションストレージから値を削除
+/**
+ * セッションストレージから値を削除する
+ * @param {string} key - 削除するキー
+ * @returns {boolean} 削除の成功/失敗
+ */
 function removeFromSession(key) {
     try {
+        if (!key) return false;
         sessionStorage.removeItem(key);
         return true;
     } catch (e) {
         console.error('セッションストレージからの削除エラー:', e);
         return false;
     }
+}
+
+/**
+ * 指定された要素が存在するかチェックする
+ * @param {string} elementId - チェックする要素のID
+ * @returns {boolean} 要素が存在するかどうか
+ */
+function elementExists(elementId) {
+    return !!document.getElementById(elementId);
+}
+
+/**
+ * 安全にイベントリスナーを追加する（要素が存在する場合のみ）
+ * @param {string} elementId - イベントを追加する要素のID
+ * @param {string} eventType - イベントタイプ（'click'など）
+ * @param {Function} handler - イベントハンドラ関数
+ * @returns {boolean} 追加の成功/失敗
+ */
+function addSafeEventListener(elementId, eventType, handler) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.addEventListener(eventType, handler);
+        return true;
+    }
+    return false;
 }

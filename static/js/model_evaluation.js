@@ -1,44 +1,50 @@
 /**
- * ウニ生殖乳頭分析システム - モデル評価機能
- * モデル評価とアノテーション影響分析のためのスクリプト
+ * ウニ生殖乳頭分析システム - モデル評価モジュール
+ * モデル評価とアノテーション影響分析のための機能
  */
 
-// グローバル変数
-let currentTaskId = null;
-let statusCheckInterval = null;
-let currentEvaluationId = null;
+// モジュールの状態を管理する変数
+const modelEvaluation = {
+    currentTaskId: null,
+    statusCheckInterval: null,
+    currentEvaluationId: null,
+    taskStatusErrorCount: 0
+};
 
-// DOMが読み込まれたら実行
+/**
+ * ページ初期化処理
+ */
 document.addEventListener('DOMContentLoaded', function() {
+    initModelEvaluationPage();
+});
+
+/**
+ * モデル評価ページの初期化
+ */
+function initModelEvaluationPage() {
     // 評価実行ボタン
-    document.getElementById('runEvaluationBtn').addEventListener('click', function() {
-        runModelEvaluation();
-    });
+    addSafeEventListener('runEvaluationBtn', 'click', runModelEvaluation);
     
     // アノテーション分析ボタン
-    document.getElementById('analyzeAnnotationsBtn').addEventListener('click', function() {
-        analyzeAnnotationImpact();
-    });
+    addSafeEventListener('analyzeAnnotationsBtn', 'click', analyzeAnnotationImpact);
     
     // 履歴読み込み
     loadEvaluationHistory();
     
     // 最新の評価結果を取得
     loadLatestEvaluation();
-});
+}
 
-// モデル評価の実行
+/**
+ * モデル評価の実行
+ */
 function runModelEvaluation() {
     // ローディング表示
     showLoading();
     
     // 「処理中」ステータスの表示
-    document.getElementById('evaluationStatus').classList.remove('d-none');
-    document.getElementById('evaluationStatus').className = 'alert alert-info';
-    document.getElementById('evaluationStatus').textContent = '評価を準備中...';
-    document.getElementById('evaluationProgressContainer').classList.remove('d-none');
-    document.getElementById('evaluationProgressBar').style.width = '0%';
-    document.getElementById('evaluationProgressBar').textContent = '0%';
+    updateEvaluationStatus('evaluationStatus', 'alert-info', '評価を準備中...');
+    showProgressBar('evaluationProgressContainer', 'evaluationProgressBar', 0);
     
     // リクエスト送信
     fetch('/evaluation/run_evaluation', {
@@ -49,19 +55,17 @@ function runModelEvaluation() {
         hideLoading();
         
         if (data.error) {
+            updateEvaluationStatus('evaluationStatus', 'alert-danger', 'エラー: ' + data.error);
             showErrorMessage('エラー: ' + data.error);
-            document.getElementById('evaluationStatus').className = 'alert alert-danger';
-            document.getElementById('evaluationStatus').textContent = 'エラー: ' + data.error;
             return;
         }
         
         // タスクIDの保存
-        currentTaskId = data.task_id;
+        modelEvaluation.currentTaskId = data.task_id;
         
         // 状態表示の更新
-        document.getElementById('evaluationStatus').textContent = '評価を開始しました...';
-        document.getElementById('evaluationProgressBar').style.width = '10%';
-        document.getElementById('evaluationProgressBar').textContent = '10%';
+        updateEvaluationStatus('evaluationStatus', 'alert-info', '評価を開始しました...');
+        updateProgressBar('evaluationProgressBar', 10);
         
         // 状態チェックの開始
         startStatusCheck();
@@ -74,12 +78,57 @@ function runModelEvaluation() {
         console.error('評価実行エラー:', error);
         showErrorMessage('評価実行中にエラーが発生しました: ' + error);
         
-        document.getElementById('evaluationStatus').className = 'alert alert-danger';
-        document.getElementById('evaluationStatus').textContent = 'エラー: 通信に失敗しました';
+        updateEvaluationStatus('evaluationStatus', 'alert-danger', 'エラー: 通信に失敗しました');
     });
 }
 
-// アノテーション影響分析の実行
+/**
+ * 評価ステータスの更新
+ * @param {string} elementId - ステータス要素のID
+ * @param {string} alertClass - アラートのクラス
+ * @param {string} message - 表示するメッセージ
+ */
+function updateEvaluationStatus(elementId, alertClass, message) {
+    const statusElement = document.getElementById(elementId);
+    if (!statusElement) return;
+    
+    statusElement.classList.remove('d-none');
+    statusElement.className = 'alert ' + alertClass;
+    statusElement.textContent = message;
+}
+
+/**
+ * プログレスバーの表示
+ * @param {string} containerId - プログレスバーコンテナのID
+ * @param {string} barId - プログレスバー要素のID
+ * @param {number} progress - 進捗値（0-100）
+ */
+function showProgressBar(containerId, barId, progress) {
+    const container = document.getElementById(containerId);
+    const bar = document.getElementById(barId);
+    
+    if (!container || !bar) return;
+    
+    container.classList.remove('d-none');
+    updateProgressBar(barId, progress);
+}
+
+/**
+ * プログレスバーの更新
+ * @param {string} barId - プログレスバー要素のID
+ * @param {number} progress - 進捗値（0-100）
+ */
+function updateProgressBar(barId, progress) {
+    const bar = document.getElementById(barId);
+    if (!bar) return;
+    
+    bar.style.width = progress + '%';
+    bar.textContent = Math.round(progress) + '%';
+}
+
+/**
+ * アノテーション影響分析の実行
+ */
 function analyzeAnnotationImpact() {
     // ローディング表示
     showLoading();
@@ -98,7 +147,7 @@ function analyzeAnnotationImpact() {
         }
         
         // タスクIDの保存（状態チェック用）
-        currentTaskId = data.task_id;
+        modelEvaluation.currentTaskId = data.task_id;
         
         // 状態チェックの開始
         startStatusCheck();
@@ -113,7 +162,10 @@ function analyzeAnnotationImpact() {
     });
 }
 
-// 成功メッセージの表示
+/**
+ * 成功メッセージの表示
+ * @param {string} message - 表示するメッセージ
+ */
 function showSuccessMessage(message) {
     const alertElement = document.createElement('div');
     alertElement.className = 'alert alert-success alert-dismissible fade show';
@@ -124,39 +176,76 @@ function showSuccessMessage(message) {
     `;
     
     const container = document.querySelector('.container');
-    container.insertBefore(alertElement, container.firstChild);
-    
-    // 自動的に閉じる
-    setTimeout(() => {
-        try {
-            const bsAlert = new bootstrap.Alert(alertElement);
-            bsAlert.close();
-        } catch (e) {
-            // フォールバック（Bootstrapが使えない場合）
-            alertElement.remove();
-        }
-    }, 5000);
+    if (container) {
+        container.insertBefore(alertElement, container.firstChild);
+        
+        // 自動的に閉じる
+        setTimeout(() => {
+            try {
+                const bsAlert = new bootstrap.Alert(alertElement);
+                bsAlert.close();
+            } catch (e) {
+                // フォールバック（Bootstrapが使えない場合）
+                alertElement.remove();
+            }
+        }, 5000);
+    }
 }
 
-// 状態チェックの開始
+/**
+ * エラーメッセージの表示
+ * @param {string} message - 表示するメッセージ
+ */
+function showErrorMessage(message) {
+    const alertElement = document.createElement('div');
+    alertElement.className = 'alert alert-danger alert-dismissible fade show';
+    alertElement.role = 'alert';
+    alertElement.innerHTML = `
+        <i class="fas fa-exclamation-circle me-2"></i> ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
+    `;
+    
+    const container = document.querySelector('.container');
+    if (container) {
+        container.insertBefore(alertElement, container.firstChild);
+        
+        // 自動的に閉じる
+        setTimeout(() => {
+            try {
+                const bsAlert = new bootstrap.Alert(alertElement);
+                bsAlert.close();
+            } catch (e) {
+                // フォールバック
+                alertElement.remove();
+            }
+        }, 5000);
+    }
+}
+
+/**
+ * 状態チェックの開始
+ */
 function startStatusCheck() {
     // 既存のタイマーをクリア
-    if (statusCheckInterval) {
-        clearInterval(statusCheckInterval);
+    if (modelEvaluation.statusCheckInterval) {
+        clearInterval(modelEvaluation.statusCheckInterval);
     }
     
+    // エラーカウントリセット
+    modelEvaluation.taskStatusErrorCount = 0;
+    
     // 新しいタイマーの設定
-    statusCheckInterval = setInterval(checkTaskStatus, 1000);
+    modelEvaluation.statusCheckInterval = setInterval(checkTaskStatus, 1000);
 }
 
-// タスク状態のチェック
+/**
+ * タスク状態のチェック
+ */
 function checkTaskStatus() {
-    if (!currentTaskId) return;
-    
-    console.log("タスク状態チェック:", currentTaskId);
+    if (!modelEvaluation.currentTaskId) return;
     
     // APIエンドポイントのパスを修正
-    fetch('/api/task-status/' + currentTaskId)
+    fetch('/api/task-status/' + modelEvaluation.currentTaskId)
     .then(response => {
         if (!response.ok) {
             throw new Error('状態取得に失敗しました: ' + response.status);
@@ -164,7 +253,9 @@ function checkTaskStatus() {
         return response.json();
     })
     .then(data => {
-        console.log('タスク状態:', data);
+        // エラーカウントリセット
+        modelEvaluation.taskStatusErrorCount = 0;
+        
         // 状態の表示
         updateTaskStatus(data);
         
@@ -172,8 +263,8 @@ function checkTaskStatus() {
         if (data.status === 'completed' || data.status === 'error' || 
             data.status === 'failed') {
             // タイマーの停止
-            clearInterval(statusCheckInterval);
-            statusCheckInterval = null;
+            clearInterval(modelEvaluation.statusCheckInterval);
+            modelEvaluation.statusCheckInterval = null;
             
             // 完了時は結果を更新
             if (data.status === 'completed') {
@@ -191,60 +282,62 @@ function checkTaskStatus() {
     .catch(error => {
         console.error('状態チェックエラー:', error);
         
-        // エラーカウントを追加
-        if (!window.taskStatusErrorCount) {
-            window.taskStatusErrorCount = 1;
-        } else {
-            window.taskStatusErrorCount++;
-        }
+        // エラーカウントを増加
+        modelEvaluation.taskStatusErrorCount++;
         
         // エラーが続く場合は停止（5回でギブアップ）
-        if (window.taskStatusErrorCount >= 5) {
-            clearInterval(statusCheckInterval);
-            statusCheckInterval = null;
+        if (modelEvaluation.taskStatusErrorCount >= 5) {
+            clearInterval(modelEvaluation.statusCheckInterval);
+            modelEvaluation.statusCheckInterval = null;
             
-            const statusElement = document.getElementById('evaluationStatus');
-            if (statusElement) {
-                statusElement.className = 'alert alert-danger';
-                statusElement.textContent = '状態取得中にエラーが発生しました。処理は継続している可能性があります。';
-            }
+            updateEvaluationStatus('evaluationStatus', 'alert-danger', 
+                '状態取得中にエラーが発生しました。処理は継続している可能性があります。');
         }
     });
 }
 
-// タスク状態の更新
+/**
+ * タスク状態の更新
+ * @param {Object} data - タスク状態データ
+ */
 function updateTaskStatus(data) {
-    const statusElement = document.getElementById('evaluationStatus');
-    const progressElement = document.getElementById('evaluationProgressBar');
+    // 状態データの形式を確認
+    let status, message, progress;
     
-    if (!statusElement || !progressElement) return;
-    
-    // ステータスメッセージ
-    statusElement.textContent = data.message || '処理中...';
-    
-    // ステータスクラス
-    statusElement.className = 'alert';
-    if (data.status === 'processing' || data.status === 'queued') {
-        statusElement.classList.add('alert-info');
-    } else if (data.status === 'completed') {
-        statusElement.classList.add('alert-success');
-    } else if (data.status === 'error') {
-        statusElement.classList.add('alert-danger');
+    if (data.status && typeof data.status === 'object') {
+        // status オブジェクトが返された場合
+        status = data.status.status;
+        message = data.status.message;
+        progress = data.status.progress || 0;
+    } else {
+        // 直接データが返された場合
+        status = data.status;
+        message = data.message;
+        progress = data.progress || 0;
     }
     
-    // プログレスバー
-    if (data.progress !== undefined) {
-        progressElement.style.width = data.progress + '%';
-        progressElement.textContent = Math.round(data.progress) + '%';
+    // 適切なアラートクラスを決定
+    let alertClass = 'alert-info';
+    if (status === 'completed') {
+        alertClass = 'alert-success';
+    } else if (status === 'error' || status === 'failed') {
+        alertClass = 'alert-danger';
     }
+    
+    // 状態の更新
+    updateEvaluationStatus('evaluationStatus', alertClass, message || '処理中...');
+    updateProgressBar('evaluationProgressBar', progress);
 }
 
-// 評価履歴の読み込み
+/**
+ * 評価履歴の読み込み
+ */
 function loadEvaluationHistory() {
     fetch('/evaluation/history')
     .then(response => response.json())
     .then(data => {
         const historyList = document.getElementById('historyList');
+        if (!historyList) return;
         
         // リストのクリア
         historyList.innerHTML = '';
@@ -261,14 +354,8 @@ function loadEvaluationHistory() {
         
         // 履歴項目の作成
         data.history.forEach(item => {
-            const date = new Date(item.timestamp.replace(/_/g, 'T').substring(0, 4) + "-" +
-                                 item.timestamp.substring(4, 6) + "-" +
-                                 item.timestamp.substring(6, 8) + "T" +
-                                 item.timestamp.substring(9, 11) + ":" +
-                                 item.timestamp.substring(11, 13) + ":" +
-                                 item.timestamp.substring(13, 15));
-            
-            const dateStr = date.toLocaleString();
+            // タイムスタンプを読みやすい日付に変換
+            const date = formatEvaluationDate(item.timestamp);
             const accuracy = (item.cv_mean * 100).toFixed(1) + '%';
             
             const historyItem = document.createElement('a');
@@ -278,10 +365,10 @@ function loadEvaluationHistory() {
             
             historyItem.innerHTML = `
                 <div class="d-flex w-100 justify-content-between">
-                    <h6 class="mb-1">${dateStr}</h6>
+                    <h6 class="mb-1">${date}</h6>
                     <span class="badge bg-primary">${accuracy}</span>
                 </div>
-                <p class="mb-1 small">モデル評価結果</p>
+                <p class="mb-1 small">${item.type === 'evaluation' ? 'モデル評価結果' : 'アノテーション分析'}</p>
             `;
             
             historyItem.addEventListener('click', function(e) {
@@ -304,16 +391,44 @@ function loadEvaluationHistory() {
         console.error('履歴読み込みエラー:', error);
         
         const historyList = document.getElementById('historyList');
-        historyList.innerHTML = `
-            <div class="text-center py-3 text-danger">
-                <i class="fas fa-exclamation-circle fa-2x mb-2"></i>
-                <p>履歴の読み込み中にエラーが発生しました</p>
-            </div>
-        `;
+        if (historyList) {
+            historyList.innerHTML = `
+                <div class="text-center py-3 text-danger">
+                    <i class="fas fa-exclamation-circle fa-2x mb-2"></i>
+                    <p>履歴の読み込み中にエラーが発生しました</p>
+                </div>
+            `;
+        }
     });
 }
 
-// 最新の評価結果を読み込む
+/**
+ * 評価タイムスタンプを日付形式に変換
+ * @param {string} timestamp - YYYYMMdd_HHmmss形式のタイムスタンプ
+ * @returns {string} フォーマットされた日付文字列
+ */
+function formatEvaluationDate(timestamp) {
+    if (!timestamp || timestamp.length < 15) return 'Invalid date';
+    
+    try {
+        const year = timestamp.substring(0, 4);
+        const month = timestamp.substring(4, 6);
+        const day = timestamp.substring(6, 8);
+        const hour = timestamp.substring(9, 11);
+        const minute = timestamp.substring(11, 13);
+        const second = timestamp.substring(13, 15);
+        
+        const date = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
+        return date.toLocaleString();
+    } catch (e) {
+        console.error('日付変換エラー:', e);
+        return timestamp;
+    }
+}
+
+/**
+ * 最新の評価結果を読み込む
+ */
 function loadLatestEvaluation() {
     fetch('/evaluation/get-latest-result')
     .then(response => {
@@ -345,9 +460,12 @@ function loadLatestEvaluation() {
     });
 }
 
-// 特定の評価結果を読み込む
+/**
+ * 特定の評価結果を読み込む
+ * @param {string} timestamp - 評価結果のタイムスタンプ
+ */
 function loadEvaluationResult(timestamp) {
-    fetch('/evaluation/static/evaluation/eval_' + timestamp + '.json')
+    fetch('/evaluation/get-specific-result/' + timestamp)
     .then(response => {
         if (!response.ok) {
             throw new Error('サーバーレスポンスが不正です: ' + response.status);
@@ -356,7 +474,7 @@ function loadEvaluationResult(timestamp) {
     })
     .then(data => {
         // 評価結果を表示
-        displayEvaluationResult(data, timestamp);
+        displayEvaluationResult(data.details, timestamp);
     })
     .catch(error => {
         console.error('評価結果読み込みエラー:', error);
@@ -364,91 +482,125 @@ function loadEvaluationResult(timestamp) {
     });
 }
 
-
-
-// 評価結果の表示
+/**
+ * 評価結果の表示
+ * @param {Object} data - 評価結果データ
+ * @param {string} timestamp - 評価のタイムスタンプ
+ */
 function displayEvaluationResult(data, timestamp) {
     // プレースホルダーを非表示、結果を表示
-    document.getElementById('evaluationPlaceholder').classList.add('d-none');
-    document.getElementById('evaluationResult').classList.remove('d-none');
+    const placeholder = document.getElementById('evaluationPlaceholder');
+    const result = document.getElementById('evaluationResult');
+    
+    if (placeholder) placeholder.classList.add('d-none');
+    if (result) result.classList.remove('d-none');
     
     // 現在の評価IDを保存
-    currentEvaluationId = timestamp;
+    modelEvaluation.currentEvaluationId = timestamp;
     
     // データが正しく取得できない場合のフォールバック値
     const defaultValue = 'N/A';
     
     try {
         // メトリクス値の設定
-        document.getElementById('accuracyValue').textContent = 
-            data && data.cv_mean !== undefined ? 
-            (data.cv_mean * 100).toFixed(1) + '%' : defaultValue;
+        updateMetricsValues(data);
         
-        // 分類レポートから適合率と再現率を設定
-        const report = data ? data.classification_report || {} : {};
-        
-        // オスクラスのメトリクス設定
-        const male = report.male || {};
-        setMetricText('malePrecision', male.precision);
-        setMetricText('maleRecall', male.recall);
-        setMetricText('maleF1', male.f1_score);
-        setMetricText('maleSupport', male.support, false);
-        
-        // メスクラスのメトリクス設定
-        const female = report.female || {};
-        setMetricText('femalePrecision', female.precision);
-        setMetricText('femaleRecall', female.recall);
-        setMetricText('femaleF1', female.f1_score);
-        setMetricText('femaleSupport', female.support, false);
-        
-        // 平均/合計のメトリクス設定
-        const avg = report["weighted avg"] || {};
-        setMetricText('avgPrecision', avg.precision);
-        setMetricText('avgRecall', avg.recall);
-        setMetricText('avgF1', avg.f1_score);
-        setMetricText('totalSupport', avg.support, false);
-        
-        // メイン指標に適合率と再現率を設定
-        setMetricText('precisionValue', avg.precision);
-        setMetricText('recallValue', avg.recall);
-        
-        // 学習曲線の画像
-        setImageWithFallback('learningCurveImg', '/evaluation/static/evaluation/learning_curve_' + timestamp + '.png');
-        
-        // 混同行列の画像
-        setImageWithFallback('confusionMatrixImg', '/evaluation/static/evaluation/confusion_matrix_' + timestamp + '.png');
-        
-        // ROCカーブの画像
-        setImageWithFallback('rocCurveImg', '/evaluation/static/evaluation/roc_curve_' + timestamp + '.png');
+        // 画像の設定
+        updateEvaluationImages(timestamp);
         
         // クロスバリデーションスコア
-        const cvScoresTableBody = document.getElementById('cvScoresTableBody');
-        cvScoresTableBody.innerHTML = '';
-        
-        if (data && data.cv_scores && data.cv_scores.length > 0) {
-            data.cv_scores.forEach((score, index) => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>分割 ${index + 1}</td>
-                    <td>${(score * 100).toFixed(1)}%</td>
-                `;
-                cvScoresTableBody.appendChild(row);
-            });
-            
-            setMetricText('cvMeanValue', data.cv_mean);
-            setMetricText('cvStdValue', data.cv_std);
-        } else {
-            // スコアがない場合のフォールバック表示
-            const row = document.createElement('tr');
-            row.innerHTML = `<td colspan="2" class="text-center">データなし</td>`;
-            cvScoresTableBody.appendChild(row);
-            
-            document.getElementById('cvMeanValue').textContent = defaultValue;
-            document.getElementById('cvStdValue').textContent = defaultValue;
-        }
+        updateCrossValidationScores(data);
     } catch (error) {
         console.error('評価結果表示エラー:', error);
         showErrorMessage('評価結果の表示中にエラーが発生しました');
+    }
+}
+
+/**
+ * メトリクス値の更新
+ * @param {Object} data - 評価データ
+ */
+function updateMetricsValues(data) {
+    // データが存在しない場合のデフォルト値
+    const defaultValue = 'N/A';
+    
+    // 精度値の設定
+    setMetricText('accuracyValue', data?.cv_mean);
+    
+    // 分類レポートから適合率と再現率を設定
+    const report = data?.classification_report || {};
+    
+    // オスクラスのメトリクス設定
+    const male = report.male || {};
+    setMetricText('malePrecision', male.precision);
+    setMetricText('maleRecall', male.recall);
+    setMetricText('maleF1', male.f1_score);
+    setMetricText('maleSupport', male.support, false);
+    
+    // メスクラスのメトリクス設定
+    const female = report.female || {};
+    setMetricText('femalePrecision', female.precision);
+    setMetricText('femaleRecall', female.recall);
+    setMetricText('femaleF1', female.f1_score);
+    setMetricText('femaleSupport', female.support, false);
+    
+    // 平均/合計のメトリクス設定
+    const avg = report["weighted avg"] || {};
+    setMetricText('avgPrecision', avg.precision);
+    setMetricText('avgRecall', avg.recall);
+    setMetricText('avgF1', avg.f1_score);
+    setMetricText('totalSupport', avg.support, false);
+    
+    // メイン指標に適合率と再現率を設定
+    setMetricText('precisionValue', avg.precision);
+    setMetricText('recallValue', avg.recall);
+}
+
+/**
+ * 評価画像の更新
+ * @param {string} timestamp - 評価タイムスタンプ
+ */
+function updateEvaluationImages(timestamp) {
+    // 学習曲線の画像
+    setImageWithFallback('learningCurveImg', '/evaluation/static/evaluation/learning_curve_' + timestamp + '.png');
+    
+    // 混同行列の画像
+    setImageWithFallback('confusionMatrixImg', '/evaluation/static/evaluation/confusion_matrix_' + timestamp + '.png');
+    
+    // ROCカーブの画像
+    setImageWithFallback('rocCurveImg', '/evaluation/static/evaluation/roc_curve_' + timestamp + '.png');
+}
+
+/**
+ * クロスバリデーションスコアの更新
+ * @param {Object} data - 評価データ
+ */
+function updateCrossValidationScores(data) {
+    const cvScoresTableBody = document.getElementById('cvScoresTableBody');
+    if (!cvScoresTableBody) return;
+    
+    cvScoresTableBody.innerHTML = '';
+    
+    if (data?.cv_scores && data.cv_scores.length > 0) {
+        data.cv_scores.forEach((score, index) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>分割 ${index + 1}</td>
+                <td>${(score * 100).toFixed(1)}%</td>
+            `;
+            cvScoresTableBody.appendChild(row);
+        });
+        
+        setMetricText('cvMeanValue', data.cv_mean);
+        setMetricText('cvStdValue', data.cv_std);
+    } else {
+        // スコアがない場合のフォールバック表示
+        const row = document.createElement('tr');
+        row.innerHTML = `<td colspan="2" class="text-center">データなし</td>`;
+        cvScoresTableBody.appendChild(row);
+        
+        document.getElementById('cvMeanValue').textContent = 'N/A';
+        document.getElementById('cvStdValue').textContent = 'N/A';
     }
 }
 
@@ -474,17 +626,17 @@ function setMetricText(elementId, value, isPercent = true) {
 }
 
 /**
- * 画像を設定し、読み込みエラーの場合はフォールバック表示する
- * @param {string} imageId - 画像要素ID
- * @param {string} src - 画像URL
- */
+* 画像を設定し、読み込みエラーの場合はフォールバック表示する
+* @param {string} imageId - 画像要素ID
+* @param {string} src - 画像URL
+*/
 function setImageWithFallback(imageId, src) {
     const imageElement = document.getElementById(imageId);
     if (!imageElement) return;
-    
+   
     // 元のエラーハンドラを保持
     const originalOnerror = imageElement.onerror;
-    
+   
     // エラーハンドラを設定
     imageElement.onerror = function() {
         // 画像が読み込めない場合は代替テキストとスタイルを設定
@@ -493,13 +645,13 @@ function setImageWithFallback(imageId, src) {
         this.style.border = '1px solid #dee2e6';
         this.style.borderRadius = '4px';
         this.alt = 'グラフは利用できません';
-        
+       
         // 画像の代わりに表示するテキスト要素を作成
         const parentElement = this.parentElement;
         if (parentElement) {
             // 既存の画像を非表示
             this.style.display = 'none';
-            
+           
             // プレースホルダーDiv作成（存在しない場合のみ）
             if (!parentElement.querySelector('.image-placeholder')) {
                 const placeholder = document.createElement('div');
@@ -511,107 +663,138 @@ function setImageWithFallback(imageId, src) {
                 parentElement.appendChild(placeholder);
             }
         }
-        
+       
         // 元のエラーハンドラを呼び出す
         if (originalOnerror) originalOnerror.call(this);
     };
-    
+   
     // 新しいURLを設定
     imageElement.src = src;
 }
 
-// エラーメッセージの表示
-function showErrorMessage(message) {
-    const alertElement = document.createElement('div');
-    alertElement.className = 'alert alert-danger alert-dismissible fade show';
-    alertElement.role = 'alert';
-    alertElement.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
-    `;
-    
-    const container = document.querySelector('.container');
-    container.insertBefore(alertElement, container.firstChild);
-    
-    // 自動的に閉じる
-    setTimeout(() => {
-        const bsAlert = new bootstrap.Alert(alertElement);
-        bsAlert.close();
-    }, 5000);
-}
-
-
-
-// アノテーション分析結果の表示
+/**
+* アノテーション分析結果の表示
+* @param {Object} data - 分析結果データ
+*/
 function displayAnnotationAnalysis(data) {
     // プレースホルダーを非表示、結果を表示
-    document.getElementById('annotationPlaceholder').classList.add('d-none');
-    document.getElementById('annotationResult').classList.remove('d-none');
-    
+    const placeholder = document.getElementById('annotationPlaceholder');
+    const result = document.getElementById('annotationResult');
+   
+    if (placeholder) placeholder.classList.add('d-none');
+    if (result) result.classList.remove('d-none');
+   
     try {
         // データセット情報を表示
-        const dataset = data.dataset || {};
-        document.getElementById('maleTotalCount').textContent = dataset.male_total || 0;
-        document.getElementById('maleAnnotatedCount').textContent = dataset.male_annotated || 0;
-        document.getElementById('femaleTotalCount').textContent = dataset.female_total || 0;
-        document.getElementById('femaleAnnotatedCount').textContent = dataset.female_annotated || 0;
-        
-        const annotationRate = dataset.annotation_rate || 0;
-        document.getElementById('annotationRate').textContent = (annotationRate * 100).toFixed(1) + '%';
-        
+        updateAnnotationDatasetInfo(data);
+       
         // アノテーション影響の画像
-        if (data.images && data.images.annotation_impact) {
-            const imgSrc = '/evaluation/static/evaluation/' + data.images.annotation_impact;
-            setImageWithFallback('annotationImpactImg', imgSrc);
-        } else {
-            // 画像がない場合はデータからグラフを生成
-            renderAnnotationChart(dataset);
-        }
-        
+        updateAnnotationImpactImage(data);
+       
         // アノテーションのインサイト
-        let insightMessage = '';
-        
-        if (annotationRate < 0.3) {
-            insightMessage = 'アノテーション率が低いため、モデルの性能が十分に発揮されていない可能性があります。より多くの画像にアノテーションを追加することで性能が向上する可能性があります。';
-        } else if (annotationRate < 0.7) {
-            insightMessage = 'アノテーションの割合は中程度です。より多くのアノテーションを追加することで、モデルの性能向上が期待できます。';
-        } else {
-            insightMessage = 'アノテーション率が高く、モデルの学習に十分なデータが提供されています。このまま継続して新しいサンプルのアノテーションを行うことで、モデルの精度を維持・向上できるでしょう。';
-        }
-        
-        document.getElementById('annotationInsight').textContent = insightMessage;
+        updateAnnotationInsight(data);
     } catch (error) {
         console.error('アノテーション分析表示エラー:', error);
         showErrorMessage('アノテーション分析の表示中にエラーが発生しました');
     }
 }
 
-// データセット情報からグラフを描画（Chart.jsを使用）
+/**
+* アノテーションデータセット情報の更新
+* @param {Object} data - 分析データ
+*/
+function updateAnnotationDatasetInfo(data) {
+    // データセット情報を表示
+    const dataset = data.dataset || {};
+   
+    // 基本情報の設定
+    setElementText('maleTotalCount', dataset.male_total || 0);
+    setElementText('maleAnnotatedCount', dataset.male_annotated || 0);
+    setElementText('femaleTotalCount', dataset.female_total || 0);
+    setElementText('femaleAnnotatedCount', dataset.female_annotated || 0);
+   
+    // アノテーション率
+    const annotationRate = dataset.annotation_rate || 0;
+    setElementText('annotationRate', (annotationRate * 100).toFixed(1) + '%');
+}
+
+/**
+* 要素にテキストを設定
+* @param {string} elementId - 要素ID
+* @param {string|number} text - 設定するテキスト
+*/
+function setElementText(elementId, text) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.textContent = text;
+    }
+}
+
+/**
+* アノテーション影響画像の更新
+* @param {Object} data - 分析データ
+*/
+function updateAnnotationImpactImage(data) {
+    if (data.images && data.images.annotation_impact) {
+        const imgSrc = '/evaluation/static/evaluation/' + data.images.annotation_impact;
+        setImageWithFallback('annotationImpactImg', imgSrc);
+    } else {
+        // 画像がない場合はデータからグラフを生成
+        renderAnnotationChart(data.dataset || {});
+    }
+}
+
+/**
+* アノテーションのインサイト更新
+* @param {Object} data - 分析データ
+*/
+function updateAnnotationInsight(data) {
+    const dataset = data.dataset || {};
+    const annotationRate = dataset.annotation_rate || 0;
+    let insightMessage = '';
+   
+    if (annotationRate < 0.3) {
+        insightMessage = 'アノテーション率が低いため、モデルの性能が十分に発揮されていない可能性があります。より多くの画像にアノテーションを追加することで性能が向上する可能性があります。';
+    } else if (annotationRate < 0.7) {
+        insightMessage = 'アノテーションの割合は中程度です。より多くのアノテーションを追加することで、モデルの性能向上が期待できます。';
+    } else {
+        insightMessage = 'アノテーション率が高く、モデルの学習に十分なデータが提供されています。このまま継続して新しいサンプルのアノテーションを行うことで、モデルの精度を維持・向上できるでしょう。';
+    }
+   
+    setElementText('annotationInsight', insightMessage);
+}
+
+/**
+* データセット情報からグラフを描画（Chart.jsを使用）
+* @param {Object} dataset - データセット情報
+*/
 function renderAnnotationChart(dataset) {
     try {
         const canvas = document.getElementById('annotationImpactImg');
         if (!canvas) return;
-        
+       
         // キャンバス要素をリセット
         const chartContainer = canvas.parentElement;
+        if (!chartContainer) return;
+       
         chartContainer.innerHTML = '';
-        
+       
         // 新しいキャンバス要素を作成
         const newCanvas = document.createElement('canvas');
         newCanvas.id = 'annotationChartCanvas';
         chartContainer.appendChild(newCanvas);
-        
+       
         // データセット情報
         const male_total = dataset.male_total || 0;
         const female_total = dataset.female_total || 0;
         const male_annotated = dataset.male_annotated || 0;
         const female_annotated = dataset.female_annotated || 0;
-        
+       
         // グラフデータ
         const data = {
             labels: ['オス', 'メス', '合計'],
             datasets: [
-                {
+                {    
                     label: 'アノテーション済み',
                     data: [male_annotated, female_annotated, male_annotated + female_annotated],
                     backgroundColor: 'rgba(54, 162, 235, 0.7)',
@@ -631,7 +814,7 @@ function renderAnnotationChart(dataset) {
                 }
             ]
         };
-        
+       
         // グラフオプション
         const options = {
             responsive: true,
@@ -661,7 +844,7 @@ function renderAnnotationChart(dataset) {
                 }
             }
         };
-        
+       
         // Chart.jsが読み込まれているか確認
         if (typeof Chart !== 'undefined') {
             // グラフを描画
