@@ -1,11 +1,26 @@
+"""
+ウニ生殖乳頭分析システム - 画像分析ユーティリティ
+サンプル画像の詳細な分析機能を提供する
+"""
+
 import os
 import cv2
 import numpy as np
 import uuid
 import traceback
 
+
 def analyze_basic_stats(image_path, app_config):
-    """画像の基本的な統計情報を分析する"""
+    """
+    画像の基本的な統計情報を分析する
+    
+    Parameters:
+    - image_path: 分析する画像のパス
+    - app_config: アプリケーション設定
+    
+    Returns:
+    - dict: 画像の基本統計情報
+    """
     try:
         # 画像パスの修正（必要に応じて）
         if not os.path.exists(image_path) and image_path.startswith('samples/'):
@@ -32,10 +47,21 @@ def analyze_basic_stats(image_path, app_config):
         }
     except Exception as e:
         print(f"基本統計分析エラー: {str(e)}")
+        traceback.print_exc()
         return {'mean': 0, 'std': 0, 'size': [0, 0]}
 
+
 def analyze_edge_features(image_path, app_config):
-    """画像のエッジに関する特徴を分析する"""
+    """
+    画像のエッジに関する特徴を分析する
+    
+    Parameters:
+    - image_path: 分析する画像のパス
+    - app_config: アプリケーション設定
+    
+    Returns:
+    - dict: エッジ特徴の分析結果
+    """
     try:
         # 画像パスの修正（必要に応じて）
         if not os.path.exists(image_path) and image_path.startswith('samples/'):
@@ -67,10 +93,21 @@ def analyze_edge_features(image_path, app_config):
         }
     except Exception as e:
         print(f"エッジ特徴分析エラー: {str(e)}")
+        traceback.print_exc()
         return {'edge_count': 0, 'edge_density': 0}
 
+
 def analyze_texture_features(image_path, app_config):
-    """画像のテクスチャに関する特徴を分析する"""
+    """
+    画像のテクスチャに関する特徴を分析する
+    
+    Parameters:
+    - image_path: 分析する画像のパス
+    - app_config: アプリケーション設定
+    
+    Returns:
+    - dict: テクスチャ特徴の分析結果
+    """
     try:
         # 画像パスの修正（必要に応じて）
         if not os.path.exists(image_path) and image_path.startswith('samples/'):
@@ -104,10 +141,21 @@ def analyze_texture_features(image_path, app_config):
         }
     except Exception as e:
         print(f"テクスチャ特徴分析エラー: {str(e)}")
+        traceback.print_exc()
         return {'contrast': 0, 'uniformity': 0}
 
+
 def detect_papillae(image_path, app_config):
-    """画像から生殖乳頭を検出する"""
+    """
+    画像から生殖乳頭を検出する
+    
+    Parameters:
+    - image_path: 分析する画像のパス
+    - app_config: アプリケーション設定
+    
+    Returns:
+    - dict: 検出結果
+    """
     try:
         # 画像パスの修正（必要に応じて）
         if not os.path.exists(image_path) and image_path.startswith('samples/'):
@@ -125,23 +173,32 @@ def detect_papillae(image_path, app_config):
                 'image_path': '/uploads/detection_failed.jpg'
             }
         
-        # ここでは簡易的な検出を行う（実際はモデルを使用）
+        # utils/image_processing.pyから生殖乳頭検出関数をインポート
+        from utils.image_processing import detect_papillae_improved
+        
+        # 検出実行
+        papillae_contours, processed_img = detect_papillae_improved(
+            img, 
+            min_area=500, 
+            max_area=5000,
+            circularity_threshold=0.3
+        )
+        
         # 検出結果を可視化した画像を保存
         output_filename = f"detection_{uuid.uuid4().hex}.jpg"
-        output_path = os.path.join(app_config['UPLOAD_FOLDER'], output_filename)
+        upload_folder = app_config.get('UPLOAD_FOLDER', 'uploads')
+        output_path = os.path.join(upload_folder, output_filename)
         
         # 元の画像をコピー（後で検出結果を描画）
         detection_img = img.copy()
         
-        # 簡易的な検出結果（ここでは0個としています）
-        # 実際のアプリケーションでは、AIモデルによる検出を実装
-        papillae_count = 0
-        papillae_details = []
+        # 検出された輪郭を描画
+        cv2.drawContours(detection_img, papillae_contours, -1, (0, 255, 0), 2)
         
-        # 結果を描画
+        # 検出情報を描画
         cv2.putText(
             detection_img, 
-            f"Detected: {papillae_count}", 
+            f"Detected: {len(papillae_contours)}", 
             (10, 30), 
             cv2.FONT_HERSHEY_SIMPLEX, 
             1, 
@@ -150,23 +207,59 @@ def detect_papillae(image_path, app_config):
         )
         
         # 結果画像を保存
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
         cv2.imwrite(output_path, detection_img)
         
+        # 各乳頭の詳細情報を抽出
+        papillae_details = []
+        for i, cnt in enumerate(papillae_contours):
+            area = cv2.contourArea(cnt)
+            perimeter = cv2.arcLength(cnt, True)
+            circularity = 4 * np.pi * area / (perimeter ** 2) if perimeter > 0 else 0
+            
+            # 輪郭の中心点を計算
+            M = cv2.moments(cnt)
+            if M["m00"] > 0:
+                cx = int(M["m10"] / M["m00"])
+                cy = int(M["m01"] / M["m00"])
+                position = (cx, cy)
+            else:
+                position = (0, 0)
+                
+            papillae_details.append({
+                'id': i + 1,
+                'area': float(area),
+                'perimeter': float(perimeter),
+                'circularity': float(circularity),
+                'position': position
+            })
+        
         return {
-            'papillae_count': papillae_count,
+            'papillae_count': len(papillae_contours),
             'papillae_details': papillae_details,
             'image_path': output_path
         }
     except Exception as e:
         print(f"生殖乳頭検出エラー: {str(e)}")
+        traceback.print_exc()
         return {
             'papillae_count': 0,
             'papillae_details': [],
             'image_path': '/uploads/detection_failed.jpg'
         }
 
+
 def analyze_shape_features(annotation_path, app_config):
-    """アノテーション画像から形状特性を分析する"""
+    """
+    アノテーション画像から形状特性を分析する
+    
+    Parameters:
+    - annotation_path: アノテーション画像のパス
+    - app_config: アプリケーション設定
+    
+    Returns:
+    - dict: 形状特性の分析結果
+    """
     try:
         print(f"形状特性分析開始: {annotation_path}")
         
@@ -210,14 +303,31 @@ def analyze_shape_features(annotation_path, app_config):
         # 円形度 (4π × 面積 / 周囲長²)
         circularity = 4 * np.pi * area / (perimeter * perimeter) if perimeter > 0 else 0
         
-        print(f"形状特性分析結果: 面積={area}, 周囲長={perimeter}, 円形度={circularity}")
+        # 凸包
+        hull = cv2.convexHull(contour)
+        hull_area = cv2.contourArea(hull)
+        
+        # 凸性（面積/凸包面積）
+        solidity = area / hull_area if hull_area > 0 else 0
+        
+        # 楕円近似
+        if len(contour) >= 5:  # 楕円フィッティングには少なくとも5点必要
+            ellipse = cv2.fitEllipse(contour)
+            ellipse_axes = ellipse[1]  # (長軸, 短軸)
+            aspect_ratio = ellipse_axes[0] / ellipse_axes[1] if ellipse_axes[1] > 0 else 1.0
+        else:
+            aspect_ratio = 1.0
+        
+        print(f"形状特性分析結果: 面積={area}, 周囲長={perimeter}, 円形度={circularity}, 凸性={solidity}, アスペクト比={aspect_ratio}")
         
         return {
             'area': float(area),
             'perimeter': float(perimeter),
-            'circularity': float(circularity)
+            'circularity': float(circularity),
+            'solidity': float(solidity),
+            'aspect_ratio': float(aspect_ratio)
         }
     except Exception as e:
         print(f"形状特性分析エラー: {str(e)}")
-        traceback.print_exc()  # スタックトレースを出力
+        traceback.print_exc()
         return {}

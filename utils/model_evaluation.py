@@ -1,24 +1,22 @@
-
 """
-モデル評価と分析機能を提供するモジュール
-学習曲線、混同行列、クロスバリデーションを実装
+ウニ生殖乳頭分析システム - モデル評価ユーティリティ
+モデルの性能評価とアノテーション影響分析機能を提供する
 """
 
 import os
 import numpy as np
 import pandas as pd
-import pickle
 import json
 from datetime import datetime
 import joblib
-# matplotlib設定を先頭に追加（GUIなしの環境用）
+import traceback
+
+# matplotlib設定（GUIなしの環境用）
 import matplotlib
 matplotlib.use('Agg')  # GUIが不要なバックエンドを選択
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, classification_report, roc_curve, auc
 from sklearn.model_selection import cross_val_score, learning_curve, StratifiedKFold
-import io
-import base64
 
 
 def evaluate_model(X, y, model, model_path=None, output_dir='static/evaluation'):
@@ -29,11 +27,11 @@ def evaluate_model(X, y, model, model_path=None, output_dir='static/evaluation')
     - X: 特徴量データ
     - y: ラベルデータ
     - model: 学習済みモデル
-    - model_path: モデルファイルパス（Noneの場合はmodelパラメータを使用）
-    - output_dir: 評価結果出力ディレクトリ
+    - model_path: モデルファイルのパス（Noneの場合はmodelパラメータを使用）
+    - output_dir: 評価結果の出力ディレクトリ
     
     Returns:
-    - eval_results: 評価結果の辞書
+    - dict: 評価結果の辞書
     """
     print(f"モデル評価開始 - サンプル数: {len(X) if X is not None else 'None'}")
     print(f"出力ディレクトリ: {output_dir}")
@@ -51,8 +49,7 @@ def evaluate_model(X, y, model, model_path=None, output_dir='static/evaluation')
             except Exception as e:
                 error_msg = f"モデル読み込みエラー: {str(e)}"
                 print(error_msg)
-                import traceback
-                print(traceback.format_exc())
+                traceback.print_exc()
                 return {"error": error_msg}
         
         if model is None:
@@ -98,8 +95,7 @@ def evaluate_model(X, y, model, model_path=None, output_dir='static/evaluation')
             print(f"ROCカーブ計算完了 - AUC: {roc_auc}")
         except Exception as e:
             print(f"ROCカーブ計算エラー: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
+            traceback.print_exc()
             fpr, tpr = [], []
             roc_auc = 0
         
@@ -115,13 +111,15 @@ def evaluate_model(X, y, model, model_path=None, output_dir='static/evaluation')
             "test_scores_mean": test_scores.mean(axis=1).tolist(),
             "test_scores_std": test_scores.std(axis=1).tolist(),
             "cv_scores": cv_scores.tolist(),
-            "cv_mean": cv_scores.mean(),
-            "cv_std": cv_scores.std(),
+            "cv_mean": float(cv_scores.mean()),
+            "cv_std": float(cv_scores.std()),
             "confusion_matrix": cm.tolist(),
             "classification_report": report,
-            "roc_auc": roc_auc,
+            "roc_auc": float(roc_auc),
             "fpr": fpr.tolist() if len(fpr) > 0 else [],
-            "tpr": tpr.tolist() if len(tpr) > 0 else []
+            "tpr": tpr.tolist() if len(tpr) > 0 else [],
+            "sample_count": len(X),
+            "features_count": X.shape[1] if hasattr(X, 'shape') else None
         }
         
         print(f"評価結果JSONの保存先: {result_path}")
@@ -132,8 +130,7 @@ def evaluate_model(X, y, model, model_path=None, output_dir='static/evaluation')
             print(f"ファイル存在確認: {os.path.exists(result_path)}")
         except Exception as e:
             print(f"評価結果JSON保存エラー: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
+            traceback.print_exc()
         
         # グラフを生成して保存
         create_evaluation_plots(eval_results, output_dir, timestamp)
@@ -144,13 +141,19 @@ def evaluate_model(X, y, model, model_path=None, output_dir='static/evaluation')
     except Exception as e:
         error_msg = f"モデル評価中にエラーが発生: {str(e)}"
         print(error_msg)
-        import traceback
-        print(traceback.format_exc())
+        traceback.print_exc()
         return {"error": error_msg}
 
 
 def create_evaluation_plots(eval_results, output_dir, timestamp):
-    """評価結果からグラフを生成して保存"""
+    """
+    評価結果からグラフを生成して保存
+    
+    Parameters:
+    - eval_results: 評価結果の辞書
+    - output_dir: 出力ディレクトリ
+    - timestamp: タイムスタンプ文字列
+    """
     print(f"グラフ生成開始: {output_dir}, timestamp: {timestamp}")
     
     try:
@@ -161,19 +164,19 @@ def create_evaluation_plots(eval_results, output_dir, timestamp):
         print("学習曲線のプロット生成開始")
         # 学習曲線のプロット
         plt.figure(figsize=(10, 6))
-        train_sizes = eval_results["train_sizes"]
-        train_scores_mean = eval_results["train_scores_mean"]
-        train_scores_std = eval_results["train_scores_std"]
-        test_scores_mean = eval_results["test_scores_mean"]
-        test_scores_std = eval_results["test_scores_std"]
+        train_sizes = np.array(eval_results["train_sizes"])
+        train_scores_mean = np.array(eval_results["train_scores_mean"])
+        train_scores_std = np.array(eval_results["train_scores_std"])
+        test_scores_mean = np.array(eval_results["test_scores_mean"])
+        test_scores_std = np.array(eval_results["test_scores_std"])
         
         plt.fill_between(train_sizes, 
-                        [m - s for m, s in zip(train_scores_mean, train_scores_std)],
-                        [m + s for m, s in zip(train_scores_mean, train_scores_std)], 
+                        train_scores_mean - train_scores_std,
+                        train_scores_mean + train_scores_std, 
                         alpha=0.1, color="blue")
         plt.fill_between(train_sizes, 
-                        [m - s for m, s in zip(test_scores_mean, test_scores_std)],
-                        [m + s for m, s in zip(test_scores_mean, test_scores_std)], 
+                        test_scores_mean - test_scores_std,
+                        test_scores_mean + test_scores_std, 
                         alpha=0.1, color="green")
         plt.plot(train_sizes, train_scores_mean, 'o-', color="blue", label="学習データ")
         plt.plot(train_sizes, test_scores_mean, 'o-', color="green", label="検証データ")
@@ -223,8 +226,8 @@ def create_evaluation_plots(eval_results, output_dir, timestamp):
         # ROCカーブのプロット
         plt.figure(figsize=(8, 6))
         if "fpr" in eval_results and len(eval_results["fpr"]) > 0:
-            fpr = eval_results["fpr"]
-            tpr = eval_results["tpr"]
+            fpr = np.array(eval_results["fpr"])
+            tpr = np.array(eval_results["tpr"])
             roc_auc = eval_results["roc_auc"]
             plt.plot(fpr, tpr, color='darkorange', lw=2, 
                     label=f'ROC曲線 (AUC = {roc_auc:.2f})')
@@ -245,21 +248,20 @@ def create_evaluation_plots(eval_results, output_dir, timestamp):
         
         print("グラフ生成完了")
     except Exception as e:
-        import traceback
         print(f"グラフ生成エラー: {str(e)}")
-        print(traceback.format_exc())
-
-def plot_to_base64(plt):
-    """matplotlib プロットをbase64エンコードした画像に変換"""
-    img_buf = io.BytesIO()
-    plt.savefig(img_buf, format='png', bbox_inches='tight')
-    img_buf.seek(0)
-    img_data = base64.b64encode(img_buf.read()).decode('utf-8')
-    return img_data
+        traceback.print_exc()
 
 
 def get_model_evaluation_history(evaluation_dir='static/evaluation'):
-    """評価履歴を取得する"""
+    """
+    評価履歴を取得する
+    
+    Parameters:
+    - evaluation_dir: 評価結果が保存されているディレクトリ
+    
+    Returns:
+    - list: 評価履歴のリスト
+    """
     print(f"評価履歴取得開始: {evaluation_dir}")
     
     if not os.path.exists(evaluation_dir):
@@ -268,17 +270,17 @@ def get_model_evaluation_history(evaluation_dir='static/evaluation'):
     
     # ディレクトリ内の全ファイルを一覧表示
     all_files = os.listdir(evaluation_dir)
-    print(f"ディレクトリ内のファイル: {all_files}")
+    print(f"ディレクトリ内のファイル数: {len(all_files)}")
     
     # JSONファイルのみを抽出
     json_files = [f for f in all_files if f.endswith('.json')]
-    print(f"JSONファイル: {json_files}")
+    print(f"JSONファイル数: {len(json_files)}")
     
     # 評価JSONファイルとアノテーション影響JSONファイルを分けて抽出
     eval_files = [f for f in json_files if f.startswith('eval_')]
     annotation_files = [f for f in json_files if f.startswith('annotation_impact_')]
     
-    print(f"評価ファイル: {eval_files}, アノテーションファイル: {annotation_files}")
+    print(f"評価ファイル: {len(eval_files)}, アノテーションファイル: {len(annotation_files)}")
     
     # 評価履歴の結果を格納するリスト
     eval_history = []
@@ -288,20 +290,16 @@ def get_model_evaluation_history(evaluation_dir='static/evaluation'):
         try:
             process_evaluation_file(evaluation_dir, eval_file, eval_history)
         except Exception as e:
-            import traceback
             print(f"評価ファイル読み込みエラー: {eval_file} - {str(e)}")
-            print(traceback.format_exc())
+            traceback.print_exc()
     
-    # 評価ファイルがない場合は、アノテーションファイルから履歴を作成
-    if len(eval_files) == 0 and len(annotation_files) > 0:
-        print("評価ファイルがありません。アノテーション影響ファイルから履歴を作成します。")
-        for anno_file in annotation_files:
-            try:
-                process_annotation_file(evaluation_dir, anno_file, eval_history)
-            except Exception as e:
-                import traceback
-                print(f"アノテーションファイル読み込みエラー: {anno_file} - {str(e)}")
-                print(traceback.format_exc())
+    # アノテーションファイルの処理
+    for anno_file in annotation_files:
+        try:
+            process_annotation_file(evaluation_dir, anno_file, eval_history)
+        except Exception as e:
+            print(f"アノテーションファイル読み込みエラー: {anno_file} - {str(e)}")
+            traceback.print_exc()
     
     # 日時でソート（新しい順）
     eval_history.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
@@ -309,8 +307,16 @@ def get_model_evaluation_history(evaluation_dir='static/evaluation'):
     print(f"評価履歴取得完了: {len(eval_history)}件")
     return eval_history
 
+
 def process_evaluation_file(evaluation_dir, eval_file, eval_history):
-    """評価ファイルを処理して履歴に追加する"""
+    """
+    評価ファイルを処理して履歴に追加する
+    
+    Parameters:
+    - evaluation_dir: 評価ディレクトリ
+    - eval_file: 評価ファイル名
+    - eval_history: 結果を追加する履歴リスト
+    """
     file_path = os.path.join(evaluation_dir, eval_file)
     print(f"評価ファイル読み込み: {file_path}")
     
@@ -336,9 +342,11 @@ def process_evaluation_file(evaluation_dir, eval_file, eval_history):
     summary = {
         "timestamp": timestamp,
         "cv_mean": data.get("cv_mean", 0),
+        "cv_std": data.get("cv_std", 0),
         "classification_report": data.get("classification_report", {}),
         "file": eval_file,
         "type": "evaluation",
+        "sample_count": data.get("sample_count", 0),
         "images": {
             "learning_curve": f"learning_curve_{timestamp}.png" if lc_exists else None,
             "confusion_matrix": f"confusion_matrix_{timestamp}.png" if cm_exists else None,
@@ -353,8 +361,16 @@ def process_evaluation_file(evaluation_dir, eval_file, eval_history):
     
     eval_history.append(summary)
 
+
 def process_annotation_file(evaluation_dir, anno_file, eval_history):
-    """アノテーション影響ファイルを処理して履歴に追加する"""
+    """
+    アノテーション影響ファイルを処理して履歴に追加する
+    
+    Parameters:
+    - evaluation_dir: 評価ディレクトリ
+    - anno_file: アノテーションファイル名
+    - eval_history: 結果を追加する履歴リスト
+    """
     file_path = os.path.join(evaluation_dir, anno_file)
     print(f"アノテーションファイル読み込み: {file_path}")
     
@@ -412,120 +428,198 @@ def analyze_annotation_impact(dataset_dir, model_path, output_dir='static/evalua
     - output_dir: 出力ディレクトリ
     
     Returns:
-    - analysis: 分析結果
+    - dict: 分析結果
     """
     os.makedirs(output_dir, exist_ok=True)
+    print(f"アノテーション影響分析開始 - データセット: {dataset_dir}")
     
-    # アノテーションデータの取得
-    annotation_mapping_file = os.path.join('static', 'annotation_mapping.json')
-    annotations = {}
-    
-    if os.path.exists(annotation_mapping_file):
-        try:
-            with open(annotation_mapping_file, 'r') as f:
-                annotations = json.load(f)
-        except Exception as e:
-            print(f"アノテーションマッピング読み込みエラー: {str(e)}")
-    
-    # カテゴリ別のファイル数をカウント
-    male_dir = os.path.join(dataset_dir, "male")
-    female_dir = os.path.join(dataset_dir, "female")
-    
-    male_files = [f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))] if os.path.exists(male_dir) else []
-    female_files = [f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))] if os.path.exists(female_dir) else []
-    
-    # アノテーション済みの画像をカウント
-    male_annotated = 0
-    female_annotated = 0
-    
-    for src_path in annotations.keys():
-        # パスのフォーマットを確認（papillae/male/xxx.png など）
-        if "/male/" in src_path:
-            male_annotated += 1
-        elif "/female/" in src_path:
-            female_annotated += 1
-    
-    # モデルのロード
     try:
-        model, scaler = joblib.load(model_path)
-        model_loaded = True
-    except Exception as e:
-        print(f"モデル読み込みエラー: {str(e)}")
+        # アノテーションデータの取得
+        annotation_mapping_file = os.path.join('static', 'annotation_mapping.json')
+        annotations = {}
+        
+        if os.path.exists(annotation_mapping_file):
+            try:
+                with open(annotation_mapping_file, 'r') as f:
+                    annotations = json.load(f)
+                print(f"アノテーションマッピング読み込み: {len(annotations)}件")
+            except Exception as e:
+                print(f"アノテーションマッピング読み込みエラー: {str(e)}")
+                traceback.print_exc()
+        
+        # カテゴリ別のファイル数をカウント
+        male_dir = os.path.join(dataset_dir, "male")
+        female_dir = os.path.join(dataset_dir, "female")
+        
+        male_files = [f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))] if os.path.exists(male_dir) else []
+        female_files = [f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))] if os.path.exists(female_dir) else []
+        
+        print(f"データセット: オス画像 {len(male_files)}枚, メス画像 {len(female_files)}枚")
+        
+        # アノテーション済みの画像をカウント
+        male_annotated = 0
+        female_annotated = 0
+        
+        for src_path in annotations.keys():
+            # パスのフォーマットを確認（papillae/male/xxx.png など）
+            if "/male/" in src_path:
+                male_annotated += 1
+            elif "/female/" in src_path:
+                female_annotated += 1
+        
+        print(f"アノテーション: オス {male_annotated}枚, メス {female_annotated}枚")
+        
+        # モデルのロード
         model_loaded = False
         model = None
         scaler = None
-    # 分析結果の作成
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    analysis = {
-        "timestamp": timestamp,
-        "dataset": {
-            "male_total": len(male_files),
-            "female_total": len(female_files),
-            "male_annotated": male_annotated,
-            "female_annotated": female_annotated,
-            "annotation_rate": (male_annotated + female_annotated) / max(1, len(male_files) + len(female_files))
-        },
-        "model_loaded": model_loaded
-    }
-    
-    # 結果をJSONで保存
-    analysis_path = os.path.join(output_dir, f"annotation_impact_{timestamp}.json")
-    print(f"アノテーション分析結果の保存先: {analysis_path}")
-    with open(analysis_path, 'w') as f:
-        json.dump(analysis, f, indent=2)
-    print(f"アノテーション分析結果を保存しました: {analysis_path}")
-    print(f"ファイル存在確認: {os.path.exists(analysis_path)}")
-    
-    # グラフを生成
-    try:
-        print(f"アノテーション分析グラフ生成開始: {output_dir}")
         
-        # 出力ディレクトリの確認
-        os.makedirs(output_dir, exist_ok=True)
-        print(f"出力ディレクトリ存在確認: {os.path.exists(output_dir)}")
+        try:
+            if os.path.exists(model_path):
+                model, scaler = joblib.load(model_path)
+                model_loaded = True
+                print(f"モデルを読み込みました: {model_path}")
+            else:
+                print(f"モデルファイルが見つかりません: {model_path}")
+        except Exception as e:
+            print(f"モデル読み込みエラー: {str(e)}")
+            traceback.print_exc()
         
-        plt.figure(figsize=(10, 6))
-        labels = ['オス', 'メス', '合計']
-        annotated = [male_annotated, female_annotated, male_annotated + female_annotated]
-        total = [len(male_files), len(female_files), len(male_files) + len(female_files)]
-        non_annotated = [t - a for t, a in zip(total, annotated)]
+        # 分析結果の作成
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        analysis = {
+            "timestamp": timestamp,
+            "dataset": {
+                "male_total": len(male_files),
+                "female_total": len(female_files),
+                "male_annotated": male_annotated,
+                "female_annotated": female_annotated,
+                "annotation_rate": (male_annotated + female_annotated) / max(1, len(male_files) + len(female_files))
+            },
+            "model_loaded": model_loaded,
+            "model_path": model_path
+        }
         
-        x = np.arange(len(labels))
-        width = 0.35
+        # 結果をJSONで保存
+        analysis_path = os.path.join(output_dir, f"annotation_impact_{timestamp}.json")
+        print(f"アノテーション分析結果の保存先: {analysis_path}")
+        with open(analysis_path, 'w') as f:
+            json.dump(analysis, f, indent=2)
+        print(f"アノテーション分析結果を保存しました: {analysis_path}")
         
-        fig, ax = plt.subplots(figsize=(10, 6))
-        rects1 = ax.bar(x - width/2, annotated, width, label='アノテーション済み')
-        rects2 = ax.bar(x + width/2, non_annotated, width, label='未アノテーション')
+        # グラフを生成
+        try:
+            print(f"アノテーション分析グラフ生成開始: {output_dir}")
+            
+            # 出力ディレクトリの確認
+            os.makedirs(output_dir, exist_ok=True)
+            
+            plt.figure(figsize=(10, 6))
+            labels = ['オス', 'メス', '合計']
+            annotated = [male_annotated, female_annotated, male_annotated + female_annotated]
+            total = [len(male_files), len(female_files), len(male_files) + len(female_files)]
+            non_annotated = [t - a for t, a in zip(total, annotated)]
+            
+            x = np.arange(len(labels))
+            width = 0.35
+            
+            fig, ax = plt.subplots(figsize=(10, 6))
+            rects1 = ax.bar(x - width/2, annotated, width, label='アノテーション済み')
+            rects2 = ax.bar(x + width/2, non_annotated, width, label='未アノテーション')
+            
+            ax.set_title('データセットのアノテーション状況')
+            ax.set_ylabel('画像数')
+            ax.set_xticks(x)
+            ax.set_xticklabels(labels)
+            ax.legend()
+            
+            # バーに数値を追加
+            def add_labels(rects):
+                for rect in rects:
+                    height = rect.get_height()
+                    ax.annotate(f'{height}',
+                                xy=(rect.get_x() + rect.get_width() / 2, height),
+                                xytext=(0, 3),
+                                textcoords="offset points",
+                                ha='center', va='bottom')
+            
+            add_labels(rects1)
+            add_labels(rects2)
+            
+            fig.tight_layout()
+            annotation_impact_path = os.path.join(output_dir, f"annotation_impact_{timestamp}.png")
+            print(f"アノテーション影響グラフの保存先: {annotation_impact_path}")
+            plt.savefig(annotation_impact_path, dpi=100, bbox_inches='tight')
+            print(f"アノテーション影響グラフを保存しました: {annotation_impact_path}")
+            plt.close()
+            
+            print("アノテーション分析グラフ生成完了")
+        except Exception as e:
+            print(f"アノテーション分析グラフ生成エラー: {str(e)}")
+            traceback.print_exc()
+            
+        return analysis
         
-        ax.set_title('データセットのアノテーション状況')
-        ax.set_ylabel('画像数')
-        ax.set_xticks(x)
-        ax.set_xticklabels(labels)
-        ax.legend()
-        
-        # バーに数値を追加
-        def add_labels(rects):
-            for rect in rects:
-                height = rect.get_height()
-                ax.annotate(f'{height}',
-                            xy=(rect.get_x() + rect.get_width() / 2, height),
-                            xytext=(0, 3),
-                            textcoords="offset points",
-                            ha='center', va='bottom')
-        
-        add_labels(rects1)
-        add_labels(rects2)
-        
-        fig.tight_layout()
-        annotation_impact_path = os.path.join(output_dir, f"annotation_impact_{timestamp}.png")
-        print(f"アノテーション影響グラフの保存先: {annotation_impact_path}")
-        plt.savefig(annotation_impact_path, dpi=100, bbox_inches='tight')
-        print(f"アノテーション影響グラフを保存しました: {annotation_impact_path}")
-        print(f"ファイル存在確認: {os.path.exists(annotation_impact_path)}")
-        plt.close()
-        
-        print("アノテーション分析グラフ生成完了")
     except Exception as e:
-        import traceback
-        print(f"アノテーション分析グラフ生成エラー: {str(e)}")
-        print(traceback.format_exc())
+        error_msg = f"アノテーション影響分析エラー: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        return {"error": error_msg}
+        
+# コマンドラインからの直接実行用
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="モデル評価ツール")
+    subparsers = parser.add_subparsers(dest="command", help="実行するコマンド")
+    
+    # 評価コマンド
+    eval_parser = subparsers.add_parser("evaluate", help="モデルを評価")
+    eval_parser.add_argument("--model", required=True, help="モデルファイルのパス")
+    eval_parser.add_argument("--dataset", required=True, help="データセットディレクトリ")
+    eval_parser.add_argument("--output", default="static/evaluation", help="出力ディレクトリ")
+    
+    # アノテーション影響分析コマンド
+    anno_parser = subparsers.add_parser("analyze-annotation", help="アノテーション影響を分析")
+    anno_parser.add_argument("--model", required=True, help="モデルファイルのパス")
+    anno_parser.add_argument("--dataset", required=True, help="データセットディレクトリ")
+    anno_parser.add_argument("--output", default="static/evaluation", help="出力ディレクトリ")
+    
+    # 履歴表示コマンド
+    hist_parser = subparsers.add_parser("history", help="評価履歴を表示")
+    hist_parser.add_argument("--dir", default="static/evaluation", help="評価ディレクトリ")
+    
+    args = parser.parse_args()
+    
+    if args.command == "evaluate":
+        # データセットからの特徴量抽出（実際の実装ではmodels.analyzerを使用）
+        # ここでは仮のコード
+        print(f"データセット {args.dataset} からの特徴量抽出")
+        
+        from utils.worker import process_dataset_for_evaluation
+        X, y = process_dataset_for_evaluation(args.dataset)
+        
+        if X is not None and y is not None:
+            # モデルの評価
+            result = evaluate_model(X, y, None, args.model, args.output)
+            print(f"評価結果: {result}")
+        else:
+            print("特徴量抽出に失敗しました")
+        
+    elif args.command == "analyze-annotation":
+        # アノテーション影響の分析
+        result = analyze_annotation_impact(args.dataset, args.model, args.output)
+        print(f"分析結果: {result}")
+        
+    elif args.command == "history":
+        # 評価履歴の表示
+        history = get_model_evaluation_history(args.dir)
+        print(f"評価履歴 ({len(history)}件):")
+        for i, item in enumerate(history):
+            date_str = item['timestamp']
+            item_type = item['type']
+            cv_mean = item.get('cv_mean', 0) * 100
+            print(f"{i+1}. {date_str} - {item_type} (精度: {cv_mean:.1f}%)")
+            
+    else:
+        parser.print_help()

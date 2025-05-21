@@ -1,6 +1,6 @@
-# utils/file_cleanup.py
 """
-一時ファイルのクリーンアップ機能を提供するモジュール
+ウニ生殖乳頭分析システム - 一時ファイルクリーンアップユーティリティ
+一時ファイルの管理と定期的なクリーンアップ機能を提供する
 """
 
 import os
@@ -11,13 +11,17 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 def cleanup_temp_files(directory='static/uploads', max_age_hours=24):
     """
-    指定されたディレクトリ内の古い一時ファイルを削除します
+    指定されたディレクトリ内の古い一時ファイルを削除する
     
-    :param directory: クリーンアップするディレクトリのパス
-    :param max_age_hours: 保持する最大時間（時間単位）
-    :return: 削除されたファイル数
+    Parameters:
+    - directory: クリーンアップするディレクトリのパス
+    - max_age_hours: 保持する最大時間（時間単位）
+    
+    Returns:
+    - int: 削除されたファイル数
     """
     if not os.path.exists(directory):
         logger.warning(f"ディレクトリが存在しません: {directory}")
@@ -29,30 +33,40 @@ def cleanup_temp_files(directory='static/uploads', max_age_hours=24):
     # 削除したファイル数をカウント
     deleted_count = 0
     
-    # ディレクトリ内のJPG/PNG画像を検索
-    for filepath in glob.glob(os.path.join(directory, '*.jpg')) + glob.glob(os.path.join(directory, '*.png')):
-        # ファイルの最終変更時刻を取得
-        file_modified = os.path.getmtime(filepath)
-        
-        # 指定された時間より古いファイルを削除
-        if now - file_modified > max_age_hours * 3600:
-            try:
-                os.remove(filepath)
-                deleted_count += 1
-                logger.info(f"一時ファイルを削除しました: {filepath}")
-            except Exception as e:
-                logger.error(f"ファイル削除エラー {filepath}: {str(e)}")
+    # 画像と動画ファイルのパターン
+    patterns = ['*.jpg', '*.jpeg', '*.png', '*.mp4', '*.avi', '*.mov', '*.mkv']
+    
+    # すべてのパターンに対して検索
+    for pattern in patterns:
+        for filepath in glob.glob(os.path.join(directory, pattern)):
+            # ファイルの最終変更時刻を取得
+            file_modified = os.path.getmtime(filepath)
+            
+            # 指定された時間より古いファイルを削除
+            if now - file_modified > max_age_hours * 3600:
+                try:
+                    os.remove(filepath)
+                    deleted_count += 1
+                    logger.info(f"一時ファイルを削除しました: {filepath}")
+                except Exception as e:
+                    logger.error(f"ファイル削除エラー {filepath}: {str(e)}")
+    
+    if deleted_count > 0:
+        logger.info(f"合計 {deleted_count} 個の一時ファイルを削除しました")
+    else:
+        logger.debug(f"削除対象の一時ファイルはありませんでした")
                 
     return deleted_count
 
 
 def schedule_cleanup(app, interval_hours=12):
     """
-    定期的なクリーンアップをスケジュールします
+    定期的なクリーンアップをスケジュールする
     （Flaskアプリケーションと組み合わせて使用）
     
-    :param app: Flaskアプリケーションインスタンス
-    :param interval_hours: クリーンアップの間隔（時間単位）
+    Parameters:
+    - app: Flaskアプリケーションインスタンス
+    - interval_hours: クリーンアップの間隔（時間単位）
     """
     try:
         from apscheduler.schedulers.background import BackgroundScheduler

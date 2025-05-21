@@ -1,17 +1,25 @@
-from flask import Blueprint, request, jsonify, render_template, send_from_directory
+"""
+ウニ生殖乳頭分析システム - サンプル分析ルート
+サンプル画像の分析とアノテーション機能を提供する
+"""
+
+from flask import Blueprint, request, jsonify, render_template, send_from_directory, current_app
 from werkzeug.utils import secure_filename
 import os
 import json
 import base64
 import traceback
+import uuid
 
 sample_bp = Blueprint('sample', __name__)
 
-@sample_bp.route('/sample/analyze-samples', methods=['GET'])
+
+@sample_bp.route('/analyze-samples', methods=['GET'])
 def analyze_samples_page():
     """サンプル分析ページを表示"""
     from app import app
     
+    # サンプル画像の取得
     male_dir = os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', 'male')
     female_dir = os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', 'female')
     
@@ -25,15 +33,37 @@ def analyze_samples_page():
 
 @sample_bp.route('/analyze-sample', methods=['POST'])
 def analyze_sample():
+    """
+    サンプル画像を分析
+    
+    Request:
+    - image_path: 分析するサンプル画像のパス
+    
+    Returns:
+    - JSON: 分析結果
+    """
     from app import app
     from utils.image_analysis import analyze_basic_stats, analyze_edge_features, analyze_texture_features, detect_papillae, analyze_shape_features
     
     try:
         data = request.json
+        
+        if not data or 'image_path' not in data:
+            return jsonify({"error": "画像パスが指定されていません"}), 400
+        
         image_path = data['image_path']
         
+        # パスの検証
+        if '..' in image_path:
+            current_app.logger.warning(f"不正なパスへのアクセス試行: {image_path}")
+            return jsonify({"error": "不正なパスです"}), 400
+        
         # 元のパスから相対パスを取得
-        relative_path = image_path.replace('samples/', '')
+        relative_path = image_path
+        if image_path.startswith('samples/'):
+            relative_path = image_path
+        elif image_path.startswith('/sample/'):
+            relative_path = image_path.lstrip('/sample/')
         
         # アノテーションマッピング情報を取得
         annotation_path = None
@@ -46,20 +76,28 @@ def analyze_sample():
                     # 該当のサンプルにアノテーションがあるか確認
                     if relative_path in mapping:
                         annotation_path = os.path.join('static', mapping[relative_path])
-                        print(f"アノテーション見つかりました: {annotation_path}")
+                        current_app.logger.debug(f"アノテーション見つかりました: {annotation_path}")
                 except Exception as e:
-                    print(f"マッピング読み込みエラー: {str(e)}")
+                    current_app.logger.error(f"マッピング読み込みエラー: {str(e)}")
+        
+        # 画像パスの確認
+        full_image_path = image_path
+        if not os.path.exists(full_image_path) and not full_image_path.startswith('/'):
+            full_image_path = os.path.join('static', image_path)
+            
+        if not os.path.exists(full_image_path):
+            return jsonify({"error": f"画像ファイルが見つかりません: {image_path}"}), 404
         
         # 通常の画像分析を実行
-        basic_stats = analyze_basic_stats(image_path, app.config)
-        edge_features = analyze_edge_features(image_path, app.config)
-        texture_features = analyze_texture_features(image_path, app.config)
-        detection_result = detect_papillae(image_path, app.config)
+        basic_stats = analyze_basic_stats(full_image_path, app.config)
+        edge_features = analyze_edge_features(full_image_path, app.config)
+        texture_features = analyze_texture_features(full_image_path, app.config)
+        detection_result = detect_papillae(full_image_path, app.config)
         
         # アノテーションがある場合は形状特性を計算
         shape_features = {}
         if annotation_path and os.path.exists(annotation_path):
-            print(f"アノテーション画像を分析: {annotation_path}")
+            current_app.logger.debug(f"アノテーション画像を分析: {annotation_path}")
             shape_features = analyze_shape_features(annotation_path, app.config)
         
         # 結果を返す
@@ -67,7 +105,8 @@ def analyze_sample():
             'basic_stats': basic_stats,
             'detection_result': detection_result,
             'edge_features': edge_features,
-            'texture_features': texture_features
+            'texture_features': texture_features,
+            'image_path': image_path
         }
         
         if annotation_path and os.path.exists(annotation_path):
@@ -78,12 +117,23 @@ def analyze_sample():
         return jsonify(result)
     
     except Exception as e:
-        print(f"分析エラー: {str(e)}")
-        traceback.print_exc()  # スタックトレースを出力
+        current_app.logger.error(f"サンプル分析エラー: {str(e)}")
+        traceback.print_exc()
         return jsonify({'error': f'分析処理エラー: {str(e)}'}), 500
+
 
 @sample_bp.route('/upload-sample', methods=['POST'])
 def upload_sample():
+    """
+    サンプル画像をアップロード
+    
+    Request:
+    - image: アップロードするサンプル画像
+    - gender: 性別カテゴリ ('male', 'female', または 'unknown')
+    
+    Returns:
+    - JSON: アップロード結果
+    """
     from app import app
     from utils.file_handlers import allowed_file, is_image_file
     
@@ -97,6 +147,7 @@ def upload_sample():
         return jsonify({"error": "ファイルが選択されていません"}), 400
     
     if file and allowed_file(file.filename, app.config['ALLOWED_EXTENSIONS']) and is_image_file(file.filename):
+        # 安全なファイル名に変換
         filename = secure_filename(file.filename)
         
         # 保存先ディレクトリ
@@ -104,57 +155,103 @@ def upload_sample():
             target_dir = os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', gender)
         else:
             target_dir = os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', 'unknown')
-            
+        
+        # ディレクトリが存在しない場合は作成
         os.makedirs(target_dir, exist_ok=True)
         
-        # 保存先パス
+        # 同名ファイルが既に存在する場合はユニークな名前に変更
         target_path = os.path.join(target_dir, filename)
+        if os.path.exists(target_path):
+            name, ext = os.path.splitext(filename)
+            unique_suffix = uuid.uuid4().hex[:8]
+            filename = f"{name}_{unique_suffix}{ext}"
+            target_path = os.path.join(target_dir, filename)
+        
+        # ファイルを保存
         file.save(target_path)
+        current_app.logger.info(f"サンプル画像をアップロード: {gender}/{filename}")
+        
+        # サンプルパス
+        sample_path = os.path.join('papillae', gender, filename)
         
         return jsonify({
             "success": True, 
             "message": "サンプル画像をアップロードしました",
-            "path": target_path
+            "path": sample_path,
+            "filename": filename
         })
     
     return jsonify({"error": "無効なファイル形式です"}), 400
 
+
 @sample_bp.route('/<path:path>')
 def get_sample(path):
+    """
+    サンプル画像ファイルを提供
+    
+    Parameters:
+    - path: サンプル画像の相対パス
+    
+    Returns:
+    - Response: 画像ファイル
+    """
     from app import app
+    
+    # パスの検証
+    if '..' in path or path.startswith('/'):
+        current_app.logger.warning(f"不正なパスへのアクセス試行: {path}")
+        return jsonify({"error": "不正なパスです"}), 400
+    
     return send_from_directory(app.config['SAMPLES_FOLDER'], path)
+
 
 @sample_bp.route('/save-annotation', methods=['POST'])
 def save_annotation():
+    """
+    アノテーション画像を保存
+    
+    Request:
+    - image_data: Base64エンコードされたアノテーション画像データ
+    - original_path: 元のサンプル画像パス
+    
+    Returns:
+    - JSON: 保存結果
+    """
     try:
-        print("アノテーション保存リクエスト受信")
+        current_app.logger.info("アノテーション保存リクエスト受信")
         data = request.json
         
         if not data or 'image_data' not in data or 'original_path' not in data:
-            print("リクエストデータ不正")
             return jsonify({'error': '必要なデータが不足しています'}), 400
         
         # Base64データを取得
         image_data = data['image_data']
         original_path = data['original_path'].lstrip('/sample/')
         
-        print(f"元画像パス: {original_path}")
+        current_app.logger.debug(f"元画像パス: {original_path}")
+        
+        # パスの検証
+        if '..' in original_path:
+            current_app.logger.warning(f"不正なパスへのアクセス試行: {original_path}")
+            return jsonify({"error": "不正なパスです"}), 400
         
         # 保存先ディレクトリ作成
-        base_dir = os.path.join('static', 'samples')
         annotations_dir = os.path.join('static', 'annotations')
         os.makedirs(annotations_dir, exist_ok=True)
-        
-        # 元画像のフルパス
-        original_full_path = os.path.join(base_dir, original_path)
         
         # アノテーション画像のパス生成
         filename = os.path.basename(original_path)
         name, ext = os.path.splitext(filename)
         annotation_filename = f"{name}_annotation{ext}"
-        annotation_path = os.path.join(annotations_dir, annotation_filename)
         
-        print(f"アノテーション保存先: {annotation_path}")
+        # 同名ファイルが存在する場合はユニークな名前に変更
+        annotation_path = os.path.join(annotations_dir, annotation_filename)
+        if os.path.exists(annotation_path):
+            unique_suffix = uuid.uuid4().hex[:8]
+            annotation_filename = f"{name}_annotation_{unique_suffix}{ext}"
+            annotation_path = os.path.join(annotations_dir, annotation_filename)
+        
+        current_app.logger.debug(f"アノテーション保存先: {annotation_path}")
         
         # Base64データを画像ファイルとして保存
         try:
@@ -166,10 +263,9 @@ def save_annotation():
             with open(annotation_path, 'wb') as f:
                 f.write(base64.b64decode(image_data))
             
-            print("アノテーション保存成功")
+            current_app.logger.info("アノテーション保存成功")
             
-            # データベースや設定ファイルなどにマッピング情報を保存
-            # 例: annotation_mapping.json に元画像とアノテーション画像の対応関係を記録
+            # マッピング情報を更新
             mapping_file = os.path.join('static', 'annotation_mapping.json')
             mapping = {}
             
@@ -186,21 +282,31 @@ def save_annotation():
             with open(mapping_file, 'w') as f:
                 json.dump(mapping, f, indent=2)
             
-            return jsonify({'success': True, 'message': 'アノテーションを保存しました', 'path': annotation_path})
+            return jsonify({
+                'success': True, 
+                'message': 'アノテーションを保存しました', 
+                'path': annotation_path.replace('static/', '')
+            })
         
         except Exception as e:
-            print(f"画像保存エラー: {str(e)}")
-            traceback.print_exc()  # スタックトレースを出力
+            current_app.logger.error(f"画像保存エラー: {str(e)}")
+            traceback.print_exc()
             return jsonify({'error': f'画像保存エラー: {str(e)}'}), 500
     
     except Exception as e:
-        print(f"アノテーション保存エラー: {str(e)}")
-        traceback.print_exc()  # スタックトレースを出力
+        current_app.logger.error(f"アノテーション保存エラー: {str(e)}")
+        traceback.print_exc()
         return jsonify({'error': f'アノテーション保存処理エラー: {str(e)}'}), 500
+
 
 @sample_bp.route('/debug/mapping', methods=['GET'])
 def debug_mapping():
-    """アノテーションマッピング情報のデバッグ"""
+    """
+    アノテーションマッピング情報のデバッグ
+    
+    Returns:
+    - JSON: マッピング情報診断結果
+    """
     mapping_file = os.path.join('static', 'annotation_mapping.json')
     
     if not os.path.exists(mapping_file):
@@ -222,15 +328,23 @@ def debug_mapping():
         
         return jsonify({
             'mapping_file': mapping_file,
-            'entries': results
+            'entries': results,
+            'count': len(mapping)
         })
     except Exception as e:
-        traceback.print_exc()  # スタックトレースを出力
+        current_app.logger.error(f"マッピングデバッグエラー: {str(e)}")
+        traceback.print_exc()
         return jsonify({'error': f'マッピング読み込みエラー: {str(e)}'})
+
 
 @sample_bp.route('/debug-paths', methods=['GET'])
 def debug_paths():
-    """パス変換デバッグ用"""
+    """
+    パス変換デバッグ用
+    
+    Returns:
+    - JSON: サンプルパス変換テスト結果
+    """
     # テスト用のパスサンプル
     test_paths = [
         "papillae/male/2__1.png",
@@ -266,5 +380,85 @@ def debug_paths():
     
     return jsonify({
         "mapping": mapping,
-        "analysis_results": analysis_results
+        "analysis_results": analysis_results,
+        "test_paths": test_paths
     })
+
+
+@sample_bp.route('/list', methods=['GET'])
+def list_samples():
+    """
+    サンプル画像一覧を取得
+    
+    Parameters:
+    - gender: フィルタリングする性別 (オプション)
+    
+    Returns:
+    - JSON: サンプル画像一覧
+    """
+    from app import app
+    
+    # オプションのフィルタリング
+    gender = request.args.get('gender')
+    
+    # サンプルディレクトリ
+    samples_base_dir = os.path.join(app.config['SAMPLES_FOLDER'], 'papillae')
+    
+    result = {
+        'male': [],
+        'female': [],
+        'unknown': []
+    }
+    
+    # 各性別フォルダを検索
+    for category in ['male', 'female', 'unknown']:
+        if gender and gender != category:
+            continue
+            
+        category_dir = os.path.join(samples_base_dir, category)
+        if not os.path.exists(category_dir):
+            continue
+            
+        # 画像ファイルをリストアップ
+        for filename in os.listdir(category_dir):
+            if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                # アノテーション情報を確認
+                rel_path = f"papillae/{category}/{filename}"
+                
+                # アノテーション状態を確認
+                has_annotation = False
+                annotation_path = None
+                
+                mapping_file = os.path.join('static', 'annotation_mapping.json')
+                if os.path.exists(mapping_file):
+                    try:
+                        with open(mapping_file, 'r') as f:
+                            mapping = json.load(f)
+                            if rel_path in mapping:
+                                has_annotation = True
+                                annotation_path = mapping[rel_path]
+                    except Exception:
+                        pass
+                
+                # 画像情報を追加
+                sample_info = {
+                    'filename': filename,
+                    'path': rel_path,
+                    'url': f"/sample/{rel_path}",
+                    'has_annotation': has_annotation
+                }
+                
+                if has_annotation:
+                    sample_info['annotation_path'] = annotation_path
+                
+                result[category].append(sample_info)
+    
+    # 総数情報を追加
+    result['counts'] = {
+        'male': len(result['male']),
+        'female': len(result['female']),
+        'unknown': len(result['unknown']),
+        'total': len(result['male']) + len(result['female']) + len(result['unknown'])
+    }
+    
+    return jsonify(result)

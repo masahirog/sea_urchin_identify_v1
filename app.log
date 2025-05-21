@@ -3031,3 +3031,56 @@
 2025-05-21 18:19:33,189 - apscheduler.scheduler - INFO - Scheduler has been shut down
 2025-05-21 18:19:33,190 - apscheduler.scheduler - INFO - Scheduler has been shut down
 2025-05-21 18:19:33,375 - apscheduler.scheduler - INFO - Scheduler has been shut down
+2025-05-21 18:26:43,607 - __main__ - INFO - 起動時クリーンアップ: 0ファイルを削除しました
+2025-05-21 18:26:43,624 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-21 18:26:43,624 - apscheduler.scheduler - INFO - Added job "Temporary files cleanup" to job store "default"
+2025-05-21 18:26:43,625 - apscheduler.scheduler - INFO - Scheduler started
+2025-05-21 18:26:43,625 - utils.file_cleanup - INFO - 一時ファイルの定期クリーンアップをスケジュール（6時間ごと）
+2025-05-21 18:26:44,359 - __main__ - INFO - 初期化時クリーンアップ: 0ファイルを削除しました
+2025-05-21 18:26:44,380 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://192.168.11.4:8080
+2025-05-21 18:26:44,380 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-05-21 18:26:44,380 - werkzeug - INFO -  * Restarting with stat
+2025-05-21 18:26:44,528 - __main__ - INFO - 起動時クリーンアップ: 0ファイルを削除しました
+2025-05-21 18:26:44,552 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-21 18:26:44,553 - apscheduler.scheduler - INFO - Added job "Temporary files cleanup" to job store "default"
+2025-05-21 18:26:44,553 - apscheduler.scheduler - INFO - Scheduler started
+2025-05-21 18:26:44,553 - utils.file_cleanup - INFO - 一時ファイルの定期クリーンアップをスケジュール（6時間ごと）
+2025-05-21 18:26:45,292 - __main__ - INFO - 初期化時クリーンアップ: 0ファイルを削除しました
+2025-05-21 18:26:45,305 - werkzeug - WARNING -  * Debugger is active!
+2025-05-21 18:26:45,311 - werkzeug - INFO -  * Debugger PIN: 100-568-560
+2025-05-21 18:26:46,873 - app - INFO - 起動時クリーンアップ: 0ファイルを削除しました
+2025-05-21 18:26:46,873 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-21 18:26:46,874 - apscheduler.scheduler - INFO - Added job "Temporary files cleanup" to job store "default"
+2025-05-21 18:26:46,874 - apscheduler.scheduler - INFO - Scheduler started
+2025-05-21 18:26:46,874 - utils.file_cleanup - INFO - 一時ファイルの定期クリーンアップをスケジュール（6時間ごと）
+2025-05-21 18:26:46,889 - app - INFO - 初期化時クリーンアップ: 0ファイルを削除しました
+2025-05-21 18:26:46,890 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 18:26:46] "[33mGET /task-status/42042e6b-ff5f-4ef0-9ae2-99e122904aca HTTP/1.1[0m" 404 -
+2025-05-21 18:26:47,588 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 18:26:47] "[33mGET /task-status/42042e6b-ff5f-4ef0-9ae2-99e122904aca HTTP/1.1[0m" 404 -
+2025-05-21 18:26:47,736 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 18:26:47] "GET /evaluation/ HTTP/1.1" 200 -
+2025-05-21 18:26:47,759 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 18:26:47] "[36mGET /static/css/style.css HTTP/1.1[0m" 304 -
+2025-05-21 18:26:47,760 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 18:26:47] "[36mGET /static/js/utilities.js HTTP/1.1[0m" 304 -
+2025-05-21 18:26:47,760 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 18:26:47] "GET /static/js/model_evaluation.js HTTP/1.1" 200 -
+2025-05-21 18:26:47,799 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 18:26:47] "[33mGET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1[0m" 404 -
+2025-05-21 18:26:47,805 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 18:26:47] "GET /evaluation/history HTTP/1.1" 200 -
+2025-05-21 18:26:47,806 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 18:26:47] "GET /evaluation/get-latest-result HTTP/1.1" 200 -
+2025-05-21 18:26:47,816 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 18:26:47] "[33mGET /evaluation/static/evaluation/learning_curve_20250521_174023.png HTTP/1.1[0m" 404 -
+2025-05-21 18:26:47,817 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 18:26:47] "[33mGET /evaluation/static/evaluation/confusion_matrix_20250521_174023.png HTTP/1.1[0m" 404 -
+2025-05-21 18:26:47,819 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 18:26:47] "[33mGET /evaluation/static/evaluation/roc_curve_20250521_174023.png HTTP/1.1[0m" 404 -
+2025-05-21 18:32:58,662 - werkzeug - INFO -  * Detected change in '/Users/yamashitamasahiro/projects/sea_urchin_identify_v1/app.py', reloading
+2025-05-21 18:32:58,663 - apscheduler.scheduler - INFO - Scheduler has been shut down
+2025-05-21 18:32:58,664 - apscheduler.scheduler - INFO - Scheduler has been shut down
+2025-05-21 18:32:58,800 - werkzeug - INFO -  * Restarting with stat
+2025-05-21 18:32:58,882 - __main__ - INFO - 起動時クリーンアップ: 0ファイルを削除しました
+2025-05-21 18:32:58,899 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-21 18:32:58,899 - apscheduler.scheduler - INFO - Added job "Temporary files cleanup" to job store "default"
+2025-05-21 18:32:58,899 - apscheduler.scheduler - INFO - Scheduler started
+2025-05-21 18:32:58,900 - utils.file_cleanup - INFO - 一時ファイルの定期クリーンアップをスケジュール（6時間ごと）
+2025-05-21 18:32:58,959 - __main__ - INFO - 処理ワーカースレッドを開始しました
+2025-05-21 18:32:59,684 - __main__ - INFO - アプリケーションを起動します
+2025-05-21 18:32:59,700 - werkzeug - WARNING -  * Debugger is active!
+2025-05-21 18:32:59,706 - werkzeug - INFO -  * Debugger PIN: 100-568-560
+2025-05-21 18:33:00,299 - apscheduler.scheduler - INFO - Scheduler has been shut down
+2025-05-21 18:33:00,430 - apscheduler.scheduler - INFO - Scheduler has been shut down

@@ -1,13 +1,26 @@
+"""
+ウニ生殖乳頭分析システム - 画像処理ユーティリティ
+生殖乳頭の検出や分析に必要な画像処理機能を提供する
+"""
+
 import cv2
 import numpy as np
 from skimage.metrics import structural_similarity as ssim
+
 
 def variance_of_laplacian(image):
     """
     画像のピント合わせの度合いを計算（ラプラシアンの分散）
     値が大きいほどシャープでピントが合っている
+    
+    Parameters:
+    - image: 入力画像（グレースケール）
+    
+    Returns:
+    - float: ラプラシアンの分散値
     """
     return cv2.Laplacian(image, cv2.CV_64F).var()
+
 
 def detect_papillae(frame, min_contour_area):
     """
@@ -54,6 +67,7 @@ def detect_papillae(frame, min_contour_area):
     
     return papillae_contours, gray
 
+
 def is_similar_to_previous(current_frame, previous_frames, similarity_threshold=0.85):
     """
     現在のフレームが以前のフレームと似ているかを判定
@@ -93,6 +107,7 @@ def is_similar_to_previous(current_frame, previous_frames, similarity_threshold=
             return True
             
     return False
+
 
 def extract_features(image, contours):
     """
@@ -146,6 +161,7 @@ def extract_features(image, contours):
     
     return np.array(features)
 
+
 def enhance_image(image):
     """
     画像の品質を向上させる
@@ -174,8 +190,17 @@ def enhance_image(image):
     
     return sharpened
 
+
 def enhance_sea_urchin_image(image):
-    """ウニの生殖乳頭が見えやすくなるように画像を前処理"""
+    """
+    ウニの生殖乳頭が見えやすくなるように画像を前処理
+    
+    Parameters:
+    - image: 入力画像
+    
+    Returns:
+    - result: 強調された画像
+    """
     # グレースケール変換
     if len(image.shape) == 3:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -199,8 +224,21 @@ def enhance_sea_urchin_image(image):
     
     return result
 
+
 def detect_papillae_improved(frame, min_area=100, max_area=1000, circularity_threshold=0.4):
-    """生殖乳頭らしき構造を検出する改良版"""
+    """
+    生殖乳頭らしき構造を検出する改良版
+    
+    Parameters:
+    - frame: 入力画像フレーム
+    - min_area: 検出する輪郭の最小サイズ
+    - max_area: 検出する輪郭の最大サイズ
+    - circularity_threshold: 円形度のしきい値
+    
+    Returns:
+    - papillae_contours: 検出された生殖乳頭の輪郭
+    - processed: 処理された画像
+    """
     # 画像の前処理
     processed = enhance_sea_urchin_image(frame)
     
@@ -211,7 +249,8 @@ def detect_papillae_improved(frame, min_area=100, max_area=1000, circularity_thr
     )
     
     # 小さなノイズを除去
-    clean = cv2.morphologyEx(binary, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    kernel = np.ones((3, 3), np.uint8)
+    clean = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
     
     # 輪郭検出
     contours, _ = cv2.findContours(clean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)

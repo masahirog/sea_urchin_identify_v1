@@ -1,6 +1,6 @@
 """
-テスト用のモデルを生成するスクリプト
-開発環境や初回セットアップ用
+ウニ生殖乳頭分析システム - テストモデル生成ユーティリティ
+初回起動時やテスト用のランダムフォレストモデルを生成する
 """
 
 import os
@@ -9,12 +9,15 @@ import joblib
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 
-def create_test_model(output_path='models'):
+def create_test_model(output_path='models/saved'):
     """
     テスト用のランダムフォレストモデルを生成する
     
     Parameters:
     - output_path: モデルの保存先ディレクトリ
+    
+    Returns:
+    - str: 作成されたモデルのパス
     """
     print("テストモデル生成開始")
     
@@ -66,7 +69,28 @@ def create_test_model(output_path='models'):
     
     print(f"テストモデルを保存しました: {model_path}")
     
+    # モデルの精度を評価（トレーニングデータの再利用）
+    accuracy = rf_model.score(X_scaled, y)
+    print(f"モデル精度: {accuracy:.2f}")
+    
+    # 特徴量の重要度
+    feature_names = ["面積", "周囲長", "円形度", "充実度", "アスペクト比"]
+    importance = list(zip(feature_names, rf_model.feature_importances_))
+    importance.sort(key=lambda x: x[1], reverse=True)
+    
+    print("特徴量の重要度:")
+    for name, imp in importance:
+        print(f"  - {name}: {imp:.4f}")
+    
     return model_path
 
+
 if __name__ == '__main__':
-    create_test_model()
+    # コマンドライン引数のパース
+    import argparse
+    parser = argparse.ArgumentParser(description='テスト用の分類モデルを生成します')
+    parser.add_argument('--output', default='models/saved', help='モデルの保存先ディレクトリ')
+    args = parser.parse_args()
+    
+    # テストモデルの生成
+    create_test_model(args.output)

@@ -1,10 +1,13 @@
 """
 非同期処理用のワーカー機能
+タスクキューからジョブを取得して処理を行う
 """
 
 import os
 import numpy as np
 import joblib
+import traceback
+
 
 def processing_worker(queue, status_dict, app_config):
     """
@@ -38,27 +41,47 @@ def processing_worker(queue, status_dict, app_config):
                 }
                 
                 # タスクの種類に応じた処理
-                if task_type == 'extract_frames':
-                    # 動画フレーム抽出
-                    video_path = task.get('video_path')
-                    output_dir = task.get('output_dir')
-                    file_prefix = task.get('file_prefix', 'frame_')
+                if task_type == 'process_video':
+                    # 動画処理タスク
+                    from models.analyzer import UrchinPapillaeAnalyzer
                     
-                    # 進捗状況を更新
-                    status_dict[task_id]["message"] = "フレーム抽出準備中..."
+                    # パラメータ取得
+                    video_path = task.get('video_path')
+                    max_images = task.get('max_images', 10)
+                    
+                    # 状態更新
+                    status_dict[task_id]["message"] = "動画処理の準備中..."
                     status_dict[task_id]["progress"] = 20
                     
-                    # フレーム抽出実行
-                    from video_processing.frame_extractor import extract_frames
-                    frames = extract_frames(video_path, output_dir, file_prefix)
+                    # 分析インスタンス作成
+                    analyzer = UrchinPapillaeAnalyzer()
                     
-                    # 処理完了を記録
-                    status_dict[task_id] = {
-                        "status": "completed",
-                        "message": f"フレーム抽出完了: {frames}フレームを抽出しました",
-                        "frames": frames,
-                        "progress": 100
-                    }
+                    # 出力ディレクトリ
+                    output_dir = app_config.get('EXTRACTED_FOLDER', 'extracted_images')
+                    
+                    # 処理実行
+                    extracted_images = analyzer.process_video(video_path, output_dir, task_id, max_images)
+                    
+                    # 処理状態の更新はprocess_video内で行われる
+                
+                elif task_type == 'train_model':
+                    # モデル訓練タスク
+                    from models.analyzer import UrchinPapillaeAnalyzer
+                    
+                    # パラメータ取得
+                    dataset_dir = task.get('dataset_dir')
+                    
+                    # 状態更新
+                    status_dict[task_id]["message"] = "モデル訓練の準備中..."
+                    status_dict[task_id]["progress"] = 20
+                    
+                    # 分析インスタンス作成
+                    analyzer = UrchinPapillaeAnalyzer()
+                    
+                    # 訓練実行
+                    success = analyzer.train_model(dataset_dir, task_id)
+                    
+                    # 処理状態の更新はtrain_model内で行われる
                     
                 elif task_type == 'evaluate_model':
                     # モデル評価
@@ -128,21 +151,21 @@ def processing_worker(queue, status_dict, app_config):
                                     "progress": 100
                                 }
                             except Exception as e:
-                                import traceback
-                                print(f"モデル評価中にエラーが発生: {str(e)}")
+                                error_msg = f"モデル評価中にエラーが発生: {str(e)}"
+                                print(error_msg)
                                 traceback.print_exc()
                                 status_dict[task_id] = {
                                     "status": "failed", 
-                                    "message": f"モデル評価中にエラーが発生しました: {str(e)}",
+                                    "message": error_msg,
                                     "progress": 100
                                 }
                     except Exception as e:
-                        import traceback
-                        print(f"特徴量抽出中にエラーが発生: {str(e)}")
+                        error_msg = f"特徴量抽出中にエラーが発生: {str(e)}"
+                        print(error_msg)
                         traceback.print_exc()
                         status_dict[task_id] = {
                             "status": "failed", 
-                            "message": f"特徴量抽出中にエラーが発生しました: {str(e)}",
+                            "message": error_msg,
                             "progress": 100
                         }
                 
@@ -182,15 +205,14 @@ def processing_worker(queue, status_dict, app_config):
             
             except Exception as e:
                 # エラーを記録
-                import traceback
-                error_details = traceback.format_exc()
-                print(f"処理エラー ({task_type}): {str(e)}")
-                print(error_details)
+                error_msg = f"処理エラー ({task_type}): {str(e)}"
+                print(error_msg)
+                traceback.print_exc()
                 
                 status_dict[task_id] = {
                     "status": "failed",
-                    "message": f"処理エラー: {str(e)}",
-                    "error_details": error_details,
+                    "message": error_msg,
+                    "error_details": traceback.format_exc(),
                     "progress": 100
                 }
             
@@ -199,17 +221,23 @@ def processing_worker(queue, status_dict, app_config):
                 queue.task_done()
         
         except Exception as e:
-            import traceback
-            print(f"ワーカースレッドエラー: {str(e)}")
-            print(traceback.format_exc())
-            if 'task_id' in locals() and 'status_dict' in locals():
+            # ワーカースレッド自体のエラー
+            error_msg = f"ワーカースレッドエラー: {str(e)}"
+            print(error_msg)
+            traceback.print_exc()
+            
+            if 'task_id' in locals() and task_id in status_dict:
                 status_dict[task_id] = {
                     "status": "failed",
-                    "message": f"処理エラー: {str(e)}",
+                    "message": error_msg,
                     "progress": 100
                 }
-            if 'queue' in locals():
-                queue.task_done()
+            
+            if 'queue' in locals() and hasattr(queue, 'task_done'):
+                try:
+                    queue.task_done()
+                except Exception:
+                    pass  # キューに関する処理は既に完了している可能性があるため無視
 
 
 def process_dataset_for_evaluation(dataset_dir):
@@ -246,8 +274,8 @@ def process_dataset_for_evaluation(dataset_dir):
             return create_test_data()
         
         # 特徴量抽出の初期化
-        from models.analyzer import PapillaeAnalyzer
-        analyzer = PapillaeAnalyzer()
+        from models.analyzer import UrchinPapillaeAnalyzer
+        analyzer = UrchinPapillaeAnalyzer()
         
         # 各画像から特徴量を抽出
         features = []
@@ -294,8 +322,7 @@ def process_dataset_for_evaluation(dataset_dir):
         
     except Exception as e:
         print(f"データセット処理中にエラーが発生: {str(e)}")
-        import traceback
-        print(traceback.format_exc())
+        traceback.print_exc()
         print("テストデータを使用します。")
         return create_test_data()
 
@@ -303,6 +330,9 @@ def process_dataset_for_evaluation(dataset_dir):
 def create_test_data():
     """テスト用のデータを生成（開発用）"""
     print("テストデータの生成を開始")
+    
+    # 乱数シードを固定
+    np.random.seed(42)
     
     # 特徴量の次元
     n_features = 5

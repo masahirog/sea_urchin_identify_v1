@@ -1,12 +1,19 @@
+"""
+ウニ生殖乳頭分析用のモデルクラス
+画像処理と機械学習を組み合わせて分析を行う
+"""
+
 import cv2
 import numpy as np
 import os
 import time
 import uuid
+import json
 from datetime import datetime
 from skimage.metrics import structural_similarity as ssim
 import base64
 import joblib
+import traceback
 
 # ユーティリティ関数のインポート
 from utils.image_processing import variance_of_laplacian, detect_papillae, is_similar_to_previous, extract_features
@@ -14,6 +21,8 @@ from utils.image_processing import enhance_sea_urchin_image, detect_papillae_imp
 
 
 class UrchinPapillaeAnalyzer:
+    """ウニの生殖乳頭を分析するクラス"""
+    
     def __init__(self):
         # パラメータ設定
         self.min_contour_area = 500  # 検出する輪郭の最小サイズ
@@ -253,7 +262,10 @@ class UrchinPapillaeAnalyzer:
             
             # モデルが読み込まれていない場合はロード
             if self.rf_model is None:
-                self.load_model()
+                self.load_models()
+                
+                if self.rf_model is None:
+                    return {"error": "分類モデルが読み込めませんでした。"}
             
             # 特徴量のスケーリング
             features_scaled = self.scaler.transform([features])
@@ -263,235 +275,31 @@ class UrchinPapillaeAnalyzer:
             probabilities = self.rf_model.predict_proba(features_scaled)[0]
             
             # クラスラベルの取得
-            class_label = "male" if prediction == 0 else "female"
-            class_proba = probabilities[0] if prediction == 0 else probabilities[1]
+            gender = "male" if prediction == 0 else "female"
+            confidence = probabilities[0] if prediction == 0 else probabilities[1]
             
             return {
-                "class": class_label,
-                "probability": float(class_proba),
+                "gender": gender,
+                "confidence": float(confidence),
                 "features": features
             }
             
         except Exception as e:
             print(f"分類エラー: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
-            return None
-
+            traceback.print_exc()
+            return {"error": f"分類処理中にエラーが発生しました: {str(e)}"}
 
     def train_model(self, dataset_dir, task_id):
-        """モデルを訓練"""
-        # グローバル変数
-        try:
-            from app import processing_status
-            global_status = True
-        except ImportError:
-            global_status = False
+        """
+        モデルを訓練する
         
-        # 処理状態の更新
-        if global_status:
-            processing_status[task_id] = {"status": "processing", "progress": 0, "message": "モデル訓練を開始しました"}
+        Parameters:
+        - dataset_dir: 訓練データセットのディレクトリ
+        - task_id: 処理タスクのID
         
-        try:
-            # データセットの確認
-            male_dir = os.path.join(dataset_dir, "male")
-            female_dir = os.path.join(dataset_dir, "female")
-            
-            if not os.path.exists(male_dir) or not os.path.exists(female_dir):
-                if global_status:
-                    processing_status[task_id] = {"status": "error", "message": "データセットディレクトリが正しくありません"}
-                print("エラー: データセットディレクトリが正しくありません")
-                return False
-            
-            male_images = [f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-            female_images = [f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-            
-            if len(male_images) == 0 or len(female_images) == 0:
-                if global_status:
-                    processing_status[task_id] = {"status": "error", "message": "オスまたはメスの画像が見つかりません"}
-                print("エラー: オスまたはメスの画像が見つかりません")
-                return False
-            
-            print(f"データセット: オス画像 {len(male_images)}枚, メス画像 {len(female_images)}枚")
-            
-            # 特徴量データセットの構築
-            X = []
-            y = []
-            
-            # オス画像の処理
-            for i, img_file in enumerate(male_images):
-                try:
-                    progress = (i / len(male_images)) * 50
-                    if global_status:
-                        processing_status[task_id] = {
-                            "status": "processing", 
-                            "progress": progress,
-                            "message": f"オス画像を処理中... {i+1}/{len(male_images)}"
-                        }
-                    print(f"オス画像を処理中... {i+1}/{len(male_images)}", end="\r")
-                    
-                    img_path = os.path.join(male_dir, img_file)
-                    img = cv2.imread(img_path)
-                    if img is None:
-                        continue
-                        
-                    papillae_contours, gray = detect_papillae(img, self.min_contour_area)
-                    
-                    if papillae_contours:
-                        features = extract_features(gray, papillae_contours)
-                        if features is not None:
-                            X.append(features)
-                            y.append(0)  # 0:オス
-                    
-                except Exception as e:
-                    print(f"\n画像処理中にエラー: {img_file} - {str(e)}")
-            
-            print()  # 改行
-            
-            # メス画像の処理
-            for i, img_file in enumerate(female_images):
-                try:
-                    progress = 50 + (i / len(female_images)) * 50
-                    if global_status:
-                        processing_status[task_id] = {
-                            "status": "processing", 
-                            "progress": progress,
-                            "message": f"メス画像を処理中... {i+1}/{len(female_images)}"
-                        }
-                    print(f"メス画像を処理中... {i+1}/{len(female_images)}", end="\r")
-                    
-                    img_path = os.path.join(female_dir, img_file)
-                    img = cv2.imread(img_path)
-                    if img is None:
-                        continue
-                        
-                    papillae_contours, gray = detect_papillae(img, self.min_contour_area)
-                    
-                    if papillae_contours:
-                        features = extract_features(gray, papillae_contours)
-                        if features is not None:
-                            X.append(features)
-                            y.append(1)  # 1:メス
-                    
-                except Exception as e:
-                    print(f"\n画像処理中にエラー: {img_file} - {str(e)}")
-            
-            print()  # 改行
-            
-            # モデルの訓練
-            if len(X) > 0 and len(y) > 0:
-                X = np.array(X)
-                y = np.array(y)
-                
-                print(f"学習データ: {len(X)}サンプル")
-                
-                # データのシャッフルと分割
-                from sklearn.model_selection import train_test_split
-                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-                
-                # 特徴量のスケーリング
-                from sklearn.preprocessing import StandardScaler
-                self.scaler = StandardScaler()
-                X_train_scaled = self.scaler.fit_transform(X_train)
-                X_test_scaled = self.scaler.transform(X_test)
-                
-                # ランダムフォレスト分類器
-                from sklearn.ensemble import RandomForestClassifier
-                self.rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
-                self.rf_model.fit(X_train_scaled, y_train)
-                
-                # モデル評価
-                from sklearn.metrics import accuracy_score, classification_report
-                y_pred = self.rf_model.predict(X_test_scaled)
-                accuracy = accuracy_score(y_test, y_pred)
-                
-                print(f"モデル精度: {accuracy:.2f}")
-                print(classification_report(y_test, y_pred, target_names=["male", "female"]))
-                
-                # モデルの保存
-                os.makedirs('models/saved', exist_ok=True)
-                model_path = os.path.join('models/saved', "sea_urchin_rf_model.pkl")
-                joblib.dump((self.rf_model, self.scaler), model_path)
-                
-                # 特徴量の重要度
-                feature_names = ["Area", "Perimeter", "Circularity", "Solidity", "Aspect Ratio"]
-                importance = dict(zip(feature_names, self.rf_model.feature_importances_))
-                
-                if global_status:
-                    processing_status[task_id] = {
-                        "status": "completed", 
-                        "message": f"モデルの訓練が完了しました（精度: {accuracy:.2f}）",
-                        "accuracy": float(accuracy),
-                        "feature_importance": importance,
-                        "male_images": len(male_images),
-                        "female_images": len(female_images),
-                        "train_samples": len(X_train)
-                    }
-                
-                return True
-            else:
-                if global_status:
-                    processing_status[task_id] = {
-                        "status": "error", 
-                        "message": "特徴量を抽出できませんでした。データセットを確認してください。"
-                    }
-                print("エラー: 特徴量を抽出できませんでした。データセットを確認してください。")
-                return False
-                
-        except Exception as e:
-            import traceback
-            error_msg = f"モデル訓練中にエラーが発生しました: {str(e)}\n{traceback.format_exc()}"
-            if global_status:
-                processing_status[task_id] = {
-                    "status": "error", 
-                    "message": error_msg
-                }
-            print(f"エラー: {error_msg}")
-            return False
-
-
-
-    def visualize_detection(self, image, contours=None, title="検出結果"):
-        """検出結果を視覚化する"""
-        # 入力画像のコピー
-        if len(image.shape) == 2:
-            # グレースケール画像をRGBに変換
-            vis_img = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
-        else:
-            vis_img = image.copy()
-        
-        # 検出された輪郭を描画
-        if contours is not None:
-            cv2.drawContours(vis_img, contours, -1, (0, 255, 0), 2)
-            
-            # 各輪郭の中心に番号を描画
-            for i, cnt in enumerate(contours):
-                M = cv2.moments(cnt)
-                if M["m00"] > 0:
-                    cx = int(M["m10"] / M["m00"])
-                    cy = int(M["m01"] / M["m00"])
-                    cv2.putText(vis_img, str(i+1), (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 
-                               0.5, (255, 0, 0), 1, cv2.LINE_AA)
-        
-        # タイトルと検出された輪郭数を描画
-        cv2.putText(vis_img, f"{title}: {len(contours) if contours else 0} 個", (10, 30), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
-        
-        return vis_img
-
-    def detect_papillae_improved(self, image, min_area=500, max_area=5000, circularity_threshold=0.3):
-        """クラスメソッドとしてdetect_papillae_improvedを実装"""
-        from utils.image_processing import detect_papillae_improved
-        return detect_papillae_improved(image, min_area, max_area, circularity_threshold)
-
-
-
-
-
-
-
-def train_model(self, dataset_dir, task_id):
-        """モデルを訓練"""
+        Returns:
+        - bool: 訓練の成功/失敗
+        """
         # グローバル変数
         try:
             from app import processing_status
@@ -754,7 +562,6 @@ def train_model(self, dataset_dir, task_id):
                 return False
                 
         except Exception as e:
-            import traceback
             error_msg = f"モデル訓練中にエラーが発生しました: {str(e)}\n{traceback.format_exc()}"
             if global_status:
                 processing_status[task_id] = {
@@ -763,3 +570,34 @@ def train_model(self, dataset_dir, task_id):
                 }
             print(f"エラー: {error_msg}")
             return False
+
+    def visualize_detection(self, image, contours=None, title="検出結果"):
+        """検出結果を視覚化する"""
+        # 入力画像のコピー
+        if len(image.shape) == 2:
+            # グレースケール画像をRGBに変換
+            vis_img = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        else:
+            vis_img = image.copy()
+        
+        # 検出された輪郭を描画
+        if contours is not None:
+            cv2.drawContours(vis_img, contours, -1, (0, 255, 0), 2)
+            
+            # 各輪郭の中心に番号を描画
+            for i, cnt in enumerate(contours):
+                M = cv2.moments(cnt)
+                if M["m00"] > 0:
+                    cx = int(M["m10"] / M["m00"])
+                    cy = int(M["m01"] / M["m00"])
+                    cv2.putText(vis_img, str(i+1), (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 
+                               0.5, (255, 0, 0), 1, cv2.LINE_AA)
+        
+        # タイトルと検出された輪郭数を描画
+        cv2.putText(vis_img, f"{title}: {len(contours) if contours else 0} 個", (10, 30), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
+        
+        return vis_img
+
+# 別名をPapillaeAnalyzerとして提供（後方互換性のため）
+PapillaeAnalyzer = UrchinPapillaeAnalyzer

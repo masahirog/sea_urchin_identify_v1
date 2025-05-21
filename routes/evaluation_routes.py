@@ -1,34 +1,53 @@
 """
-モデル評価ダッシュボード関連のルート
+ウニ生殖乳頭分析システム - モデル評価ルート
+モデル評価、検証、アノテーション分析機能を提供する
 """
 
 import os
 import uuid
 import json
-from flask import Blueprint, render_template, jsonify, request, send_from_directory
+from flask import Blueprint, render_template, jsonify, request, send_from_directory, current_app
 from utils.model_evaluation import evaluate_model, analyze_annotation_impact, get_model_evaluation_history
 
 evaluation_bp = Blueprint('evaluation', __name__)
+
 
 @evaluation_bp.route('/')
 def index():
     """モデル評価ダッシュボードのメイン画面"""
     return render_template('model_evaluation.html')
 
+
 @evaluation_bp.route('/run_evaluation', methods=['POST'])
 def run_model_evaluation():
-    """モデル評価を実行"""
+    """
+    モデル評価を実行
+    
+    Returns:
+    - JSON: 評価タスクの情報
+    """
     from app import app, processing_queue, processing_status
     
     try:
-        print("モデル評価実行リクエスト受信")
+        current_app.logger.info("モデル評価実行リクエスト受信")
         
         # モデルとデータセットのパスを確認
         model_path = os.path.join(app.config['MODEL_FOLDER'], "sea_urchin_rf_model.pkl")
         dataset_dir = app.config['DATASET_FOLDER']
         
-        print(f"モデルパス: {model_path} (存在: {os.path.exists(model_path)})")
-        print(f"データセットディレクトリ: {dataset_dir} (存在: {os.path.exists(dataset_dir)})")
+        # ファイルとディレクトリの存在確認
+        if not os.path.exists(model_path):
+            return jsonify({
+                "error": "モデルファイルが見つかりません。先にモデルを訓練してください。"
+            }), 404
+            
+        if not os.path.exists(dataset_dir):
+            return jsonify({
+                "error": "データセットディレクトリが見つかりません。"
+            }), 404
+        
+        current_app.logger.info(f"モデルパス: {model_path} (存在: {os.path.exists(model_path)})")
+        current_app.logger.info(f"データセットディレクトリ: {dataset_dir} (存在: {os.path.exists(dataset_dir)})")
         
         # データセット内のファイル数を確認
         try:
@@ -41,9 +60,15 @@ def run_model_evaluation():
             male_images = [f for f in male_files if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
             female_images = [f for f in female_files if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
             
-            print(f"データセット内のファイル - オス: {len(male_images)}件, メス: {len(female_images)}件")
+            if len(male_images) == 0 or len(female_images) == 0:
+                return jsonify({
+                    "error": "データセットが不十分です。オスとメスの両方のサンプルが必要です。"
+                }), 400
+                
+            current_app.logger.info(f"データセット内のファイル - オス: {len(male_images)}件, メス: {len(female_images)}件")
         except Exception as e:
-            print(f"データセット確認エラー: {str(e)}")
+            current_app.logger.error(f"データセット確認エラー: {str(e)}")
+            return jsonify({"error": f"データセット確認エラー: {str(e)}"}), 500
         
         # 処理タスクの作成
         task_id = str(uuid.uuid4())
@@ -56,31 +81,58 @@ def run_model_evaluation():
         }
         
         # 処理状態の初期化
-        processing_status[task_id] = {"status": "queued", "message": "モデル評価を待機中..."}
+        processing_status[task_id] = {
+            "status": "queued", 
+            "message": "モデル評価を待機中...",
+            "progress": 0
+        }
         
         # キューに追加
         processing_queue.put(task)
         
-        print(f"評価タスクをキューに追加: {task_id}")
+        current_app.logger.info(f"評価タスクをキューに追加: {task_id}")
         
-        return jsonify({"success": True, "task_id": task_id, "message": "モデル評価を開始しました"})
+        return jsonify({
+            "success": True, 
+            "task_id": task_id, 
+            "message": "モデル評価を開始しました"
+        })
     except Exception as e:
         import traceback
         error_msg = f"評価実行リクエスト処理エラー: {str(e)}"
-        print(error_msg)
-        print(traceback.format_exc())
+        current_app.logger.error(error_msg)
+        current_app.logger.error(traceback.format_exc())
         return jsonify({"error": error_msg}), 500
+
 
 @evaluation_bp.route('/analyze-annotation-impact', methods=['POST'])
 def analyze_annotation_impact_route():
-    """アノテーション影響分析を実行"""
+    """
+    アノテーション影響分析を実行
+    
+    Returns:
+    - JSON: 分析タスクの情報
+    """
     from app import app, processing_queue, processing_status
     
     try:
-        # 処理タスクの作成
-        task_id = str(uuid.uuid4())
+        # モデルとデータセットのパスを確認
         model_path = os.path.join(app.config['MODEL_FOLDER'], "sea_urchin_rf_model.pkl")
         dataset_dir = app.config['DATASET_FOLDER']
+        
+        # ファイルとディレクトリの存在確認
+        if not os.path.exists(model_path):
+            return jsonify({
+                "error": "モデルファイルが見つかりません。先にモデルを訓練してください。"
+            }), 404
+            
+        if not os.path.exists(dataset_dir):
+            return jsonify({
+                "error": "データセットディレクトリが見つかりません。"
+            }), 404
+        
+        # 処理タスクの作成
+        task_id = str(uuid.uuid4())
         
         task = {
             "type": "analyze_annotation",
@@ -90,47 +142,85 @@ def analyze_annotation_impact_route():
         }
         
         # 処理状態の初期化
-        processing_status[task_id] = {"status": "queued", "message": "アノテーション影響分析を待機中..."}
+        processing_status[task_id] = {
+            "status": "queued", 
+            "message": "アノテーション影響分析を待機中...",
+            "progress": 0
+        }
         
         # キューに追加
         processing_queue.put(task)
         
-        return jsonify({"success": True, "task_id": task_id, "message": "アノテーション影響分析を開始しました"})
+        current_app.logger.info(f"アノテーション分析タスクをキューに追加: {task_id}")
+        
+        return jsonify({
+            "success": True, 
+            "task_id": task_id, 
+            "message": "アノテーション影響分析を開始しました"
+        })
     except Exception as e:
         import traceback
-        traceback.print_exc()
-        return jsonify({"error": f"アノテーション分析実行エラー: {str(e)}"}), 500
+        error_msg = f"アノテーション分析実行エラー: {str(e)}"
+        current_app.logger.error(error_msg)
+        current_app.logger.error(traceback.format_exc())
+        return jsonify({"error": error_msg}), 500
+
 
 @evaluation_bp.route('/history')
 def get_evaluation_history():
-    """評価履歴を取得"""
+    """
+    評価履歴を取得
+    
+    Returns:
+    - JSON: 評価履歴一覧
+    """
     from app import app
     
     try:
         evaluation_dir = os.path.join(app.config.get('STATIC_FOLDER', 'static'), 'evaluation')
+        
+        # ディレクトリの存在確認
+        if not os.path.exists(evaluation_dir):
+            os.makedirs(evaluation_dir, exist_ok=True)
+            return jsonify({"history": []})
+            
         history = get_model_evaluation_history(evaluation_dir)
         return jsonify({"history": history})
     except Exception as e:
         import traceback
-        traceback.print_exc()
-        return jsonify({"error": f"履歴取得エラー: {str(e)}"}), 500
+        error_msg = f"履歴取得エラー: {str(e)}"
+        current_app.logger.error(error_msg)
+        current_app.logger.error(traceback.format_exc())
+        return jsonify({"error": error_msg}), 500
+
 
 @evaluation_bp.route('/get-latest-result')
 def get_latest_evaluation_result():
-    """最新の評価結果を取得"""
+    """
+    最新の評価結果を取得
+    
+    Returns:
+    - JSON: 最新の評価結果
+    """
     from app import app
     
     try:
         evaluation_dir = os.path.join(app.config.get('STATIC_FOLDER', 'static'), 'evaluation')
+        
+        # ディレクトリの存在確認
+        if not os.path.exists(evaluation_dir):
+            os.makedirs(evaluation_dir, exist_ok=True)
+            return jsonify({"error": "評価履歴がありません"}), 404
+        
         history = get_model_evaluation_history(evaluation_dir)
         
         if not history:
-            print("評価履歴がありません")
+            current_app.logger.warning("評価履歴がありません")
             return jsonify({"error": "評価履歴がありません"}), 404
         
         # 最新の評価結果
         latest = history[0]
-        print(f"最新の評価結果: {latest['timestamp']}, タイプ: {latest.get('type', 'unknown')}")
+        current_app.logger.debug(f"最新の評価結果: {latest['timestamp']}, タイプ: {latest.get('type', 'unknown')}")
         
         # 詳細結果の読み込み
         details = {}
@@ -141,11 +231,11 @@ def get_latest_evaluation_result():
                 if os.path.exists(eval_path):
                     with open(eval_path, 'r') as f:
                         details = json.load(f)
-                    print(f"評価詳細を読み込みました: {eval_path}")
+                    current_app.logger.debug(f"評価詳細を読み込みました: {eval_path}")
                 else:
-                    print(f"評価ファイルが見つかりません: {eval_path}")
+                    current_app.logger.warning(f"評価ファイルが見つかりません: {eval_path}")
             except Exception as e:
-                print(f"評価詳細読み込みエラー: {str(e)}")
+                current_app.logger.error(f"評価詳細読み込みエラー: {str(e)}")
         else:
             # アノテーション影響ファイルの読み込み
             try:
@@ -162,40 +252,61 @@ def get_latest_evaluation_result():
                         "female": {"precision": 0, "recall": 0, "f1_score": 0, "support": dataset.get('female_total', 0)},
                         "weighted avg": {"precision": 0, "recall": 0, "f1_score": 0, "support": dataset.get('male_total', 0) + dataset.get('female_total', 0)}
                     }
-                    print(f"アノテーション詳細を読み込みました: {anno_path}")
+                    current_app.logger.debug(f"アノテーション詳細を読み込みました: {anno_path}")
                 else:
-                    print(f"アノテーションファイルが見つかりません: {anno_path}")
+                    current_app.logger.warning(f"アノテーションファイルが見つかりません: {anno_path}")
             except Exception as e:
-                print(f"アノテーション詳細読み込みエラー: {str(e)}")
+                current_app.logger.error(f"アノテーション詳細読み込みエラー: {str(e)}")
         
         return jsonify({"summary": latest, "details": details})
     except Exception as e:
         import traceback
         error_msg = f"最新評価結果取得エラー: {str(e)}"
-        print(error_msg)
-        print(traceback.format_exc())
+        current_app.logger.error(error_msg)
+        current_app.logger.error(traceback.format_exc())
         return jsonify({"error": error_msg}), 500
+
 
 @evaluation_bp.route('/static/evaluation/<path:filename>')
 def evaluation_static(filename):
-    """評価結果の静的ファイルを提供"""
+    """
+    評価結果の静的ファイルを提供
+    
+    Parameters:
+    - filename: 評価結果ファイルの名前
+    
+    Returns:
+    - Response: 評価結果ファイル
+    """
     from app import app
     
     evaluation_dir = os.path.join(app.config.get('STATIC_FOLDER', 'static'), 'evaluation')
-    print(f"静的ファイル要求: {filename}, ディレクトリ: {evaluation_dir}")
+    
+    # パスの検証
+    if '..' in filename or filename.startswith('/'):
+        current_app.logger.warning(f"不正なパスへのアクセス試行: {filename}")
+        return jsonify({"error": "不正なパスです"}), 400
+        
+    current_app.logger.debug(f"静的ファイル要求: {filename}, ディレクトリ: {evaluation_dir}")
     
     # ファイルの存在確認
     full_path = os.path.join(evaluation_dir, filename)
     if os.path.exists(full_path):
-        print(f"ファイルが見つかりました: {full_path}")
+        current_app.logger.debug(f"ファイルが見つかりました: {full_path}")
+        return send_from_directory(evaluation_dir, filename)
     else:
-        print(f"ファイルが見つかりません: {full_path}")
-    
-    return send_from_directory(evaluation_dir, filename)
+        current_app.logger.warning(f"ファイルが見つかりません: {full_path}")
+        return jsonify({"error": "ファイルが見つかりません"}), 404
+
 
 @evaluation_bp.route('/debug-directory')
 def debug_directory():
-    """評価ディレクトリの内容を確認"""
+    """
+    評価ディレクトリの内容を確認（デバッグ用）
+    
+    Returns:
+    - JSON: ディレクトリ内容
+    """
     from app import app
     import os
     
@@ -218,11 +329,73 @@ def debug_directory():
             "name": file,
             "is_dir": os.path.isdir(file_path),
             "size": os.path.getsize(file_path) if os.path.isfile(file_path) else None,
-            "created": os.path.getctime(file_path)
+            "created": os.path.getctime(file_path),
+            "modified": os.path.getmtime(file_path)
         })
     
     return jsonify({
         "directory": evaluation_dir,
         "exists": True,
-        "files": file_info
+        "files": file_info,
+        "count": len(files)
     })
+
+
+@evaluation_bp.route('/get-specific-result/<timestamp>')
+def get_specific_evaluation_result(timestamp):
+    """
+    特定のタイムスタンプの評価結果を取得
+    
+    Parameters:
+    - timestamp: 評価結果のタイムスタンプ
+    
+    Returns:
+    - JSON: 評価結果
+    """
+    from app import app
+    
+    try:
+        if not timestamp or '..' in timestamp or '/' in timestamp:
+            return jsonify({"error": "不正なタイムスタンプです"}), 400
+            
+        evaluation_dir = os.path.join(app.config.get('STATIC_FOLDER', 'static'), 'evaluation')
+        
+        # 評価ファイルのパス
+        eval_path = os.path.join(evaluation_dir, f"eval_{timestamp}.json")
+        anno_path = os.path.join(evaluation_dir, f"annotation_impact_{timestamp}.json")
+        
+        details = {}
+        result_type = "unknown"
+        
+        # 評価ファイルの確認
+        if os.path.exists(eval_path):
+            with open(eval_path, 'r') as f:
+                details = json.load(f)
+            result_type = "evaluation"
+        # アノテーション影響ファイルの確認
+        elif os.path.exists(anno_path):
+            with open(anno_path, 'r') as f:
+                details = json.load(f)
+            result_type = "annotation"
+            
+            # CV平均値を追加（フロントエンド互換性のため）
+            dataset = details.get('dataset', {})
+            details['cv_mean'] = dataset.get('annotation_rate', 0)
+            details['cv_std'] = 0
+        else:
+            return jsonify({"error": "指定されたタイムスタンプの評価結果が見つかりません"}), 404
+        
+        # 結果のサマリーを作成
+        summary = {
+            "timestamp": timestamp,
+            "type": result_type,
+            "cv_mean": details.get('cv_mean', 0)
+        }
+        
+        return jsonify({"summary": summary, "details": details})
+    except Exception as e:
+        import traceback
+        error_msg = f"評価結果取得エラー: {str(e)}"
+        current_app.logger.error(error_msg)
+        current_app.logger.error(traceback.format_exc())
+        return jsonify({"error": error_msg}), 500
