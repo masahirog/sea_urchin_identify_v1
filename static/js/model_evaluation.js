@@ -33,6 +33,9 @@ function initModelEvaluationPage() {
     
     // 最新の評価結果を取得
     loadLatestEvaluation();
+    
+    // リセットボタン
+    addSafeEventListener('resetAnnotationsBtn', 'click', resetAnnotationData);
 }
 
 /**
@@ -468,6 +471,32 @@ function loadLatestEvaluation() {
         if (!response.ok) {
             if (response.status === 404) {
                 console.log("評価結果がまだありません");
+                // 評価結果がない場合のUI表示処理
+                const placeholder = document.getElementById('evaluationPlaceholder');
+                if (placeholder) {
+                    placeholder.classList.remove('d-none');
+                    placeholder.innerHTML = `
+                        <div class="text-center py-5">
+                            <i class="fas fa-info-circle fa-3x mb-3 text-muted" aria-hidden="true"></i>
+                            <p class="text-muted">評価履歴がありません。評価を実行するか、新しいアノテーションを作成してください。</p>
+                        </div>
+                    `;
+                }
+                
+                // アノテーション結果も隠す
+                const annoResult = document.getElementById('annotationResult');
+                const annoPlaceholder = document.getElementById('annotationPlaceholder');
+                if (annoResult) annoResult.classList.add('d-none');
+                if (annoPlaceholder) {
+                    annoPlaceholder.classList.remove('d-none');
+                    annoPlaceholder.innerHTML = `
+                        <div class="text-center py-5">
+                            <i class="fas fa-tag fa-3x mb-3 text-muted" aria-hidden="true"></i>
+                            <p class="text-muted">アノテーションデータはリセットされました。新しいアノテーションを作成してください。</p>
+                        </div>
+                    `;
+                }
+                
                 return null;
             }
             throw new Error('サーバーレスポンスが不正です: ' + response.status);
@@ -482,7 +511,7 @@ function loadLatestEvaluation() {
             return;
         }
         
-        // 評価結果を表示
+        // 評価結果を表示（既存のコード）
         if (data.details) {
             displayEvaluationResult(data.details, data.summary.timestamp);
             
@@ -504,8 +533,9 @@ function loadLatestEvaluation() {
         const placeholder = document.getElementById('evaluationPlaceholder');
         if (placeholder) {
             placeholder.innerHTML = `
-                <div class="alert alert-danger">
-                    <p>エラーが発生しました: ${error.message}</p>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <p>評価データを読み込めませんでした。アノテーションデータがリセットされたか、まだ実行されていない可能性があります。</p>
                 </div>
             `;
             placeholder.classList.remove('d-none');
@@ -736,7 +766,25 @@ function displayAnnotationAnalysis(data) {
     // プレースホルダーを非表示、結果を表示
     const placeholder = document.getElementById('annotationPlaceholder');
     const result = document.getElementById('annotationResult');
-   
+    const dataset = data.dataset || {};
+
+    // 基本情報の設定
+    setElementText('maleTotalCount', dataset.male_total || 0);
+    setElementText('maleAnnotatedCount', dataset.male_annotated || 0);
+    setElementText('femaleTotalCount', dataset.female_total || 0);
+    setElementText('femaleAnnotatedCount', dataset.female_annotated || 0);
+
+    // 警告表示（もしあれば）
+    if (dataset.warning) {
+        const warningElement = document.createElement('div');
+        warningElement.className = 'alert alert-warning mt-3';
+        warningElement.innerHTML = `
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>警告:</strong> ${dataset.warning}
+        `;
+        document.getElementById('annotationChartContainer').appendChild(warningElement);
+    }
+
     if (placeholder) placeholder.classList.add('d-none');
     if (result) result.classList.remove('d-none');
    
@@ -922,4 +970,81 @@ function renderAnnotationChart(dataset) {
     } catch (error) {
         console.error('アノテーショングラフ描画エラー:', error);
     }
+}
+
+/**
+* アノテーションデータをリセットする
+*/
+function resetAnnotationData() {
+    const confirmationText = document.getElementById('resetConfirmation').value;
+    
+    if (confirmationText !== "DELETE ANNOTATION") {
+        showErrorMessage('確認テキストが正しくありません。「DELETE ANNOTATION」と正確に入力してください。');
+        return;
+    }
+    
+    // 最終確認ダイアログ
+    if (!confirm('すべてのアノテーションデータを削除します。この操作は取り消せません。本当に続行しますか？')) {
+        return;
+    }
+    
+    // ローディング表示
+    showLoading();
+    
+    // リクエスト送信
+    fetch('/evaluation/reset-annotations', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            confirmation: confirmationText
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        
+        if (data.success) {
+            // 入力欄をクリア
+            document.getElementById('resetConfirmation').value = '';
+            
+            // 成功メッセージの表示
+            showSuccessMessage(data.message);
+            
+            // 履歴の再読み込み
+            loadEvaluationHistory();
+            
+            // 結果表示を隠して、プレースホルダーを表示
+            document.getElementById('evaluationResult').classList.add('d-none');
+            document.getElementById('evaluationPlaceholder').classList.remove('d-none');
+            document.getElementById('evaluationPlaceholder').innerHTML = `
+                <div class="text-center py-5">
+                    <i class="fas fa-check-circle fa-3x mb-3 text-success" aria-hidden="true"></i>
+                    <p>アノテーションデータが正常にリセットされました。</p>
+                    <p class="text-muted mt-3">新しいアノテーションを作成するには、サンプル分析ページに移動してください。</p>
+                    <a href="/sample/analyze-samples" class="btn btn-primary mt-3">
+                        <i class="fas fa-microscope me-2" aria-hidden="true"></i> サンプル分析ページへ
+                    </a>
+                </div>
+            `;
+            
+            // アノテーション結果も隠す
+            document.getElementById('annotationResult').classList.add('d-none');
+            document.getElementById('annotationPlaceholder').classList.remove('d-none');
+            document.getElementById('annotationPlaceholder').innerHTML = `
+                <div class="text-center py-5">
+                    <i class="fas fa-tag fa-3x mb-3 text-muted" aria-hidden="true"></i>
+                    <p class="text-muted">アノテーションデータはリセットされました。新しいアノテーションを作成してください。</p>
+                </div>
+            `;
+        } else {
+            showErrorMessage(data.message);
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        console.error('リセット処理エラー:', error);
+        showErrorMessage('リセット処理中にエラーが発生しました: ' + error);
+    });
 }

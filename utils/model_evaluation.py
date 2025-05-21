@@ -496,6 +496,31 @@ def analyze_annotation_impact(dataset_dir, model_path, output_dir='static/evalua
             print(f"モデル読み込みエラー: {str(e)}")
             traceback.print_exc()
         
+        # アノテーション率の計算
+        total_annotations = male_annotated + female_annotated
+        total_images = len(male_files) + len(female_files)
+        
+        # 警告フラグの初期化
+        warning = None
+        
+        if total_images == 0:
+            if total_annotations == 0:
+                # ケース1: 画像もアノテーションもない → 0%
+                annotation_rate = 0.0
+            else:
+                # ケース2: 画像はないがアノテーションがある → データ不整合
+                annotation_rate = 0.0
+                warning = "データセット画像がないのにアノテーションが存在します"
+                print(f"警告: {warning} ({total_annotations}件)")
+        elif total_annotations > total_images:
+            # ケース3: アノテーション数がデータセット画像数を超えている → クリップして警告
+            annotation_rate = 1.0
+            warning = "アノテーション数がデータセット画像数を超えています"
+            print(f"警告: {warning} (アノテーション: {total_annotations}, 画像: {total_images})")
+        else:
+            # ケース4: 通常のケース → 率の計算
+            annotation_rate = total_annotations / total_images
+        
         # 分析結果の作成
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         analysis = {
@@ -505,7 +530,8 @@ def analyze_annotation_impact(dataset_dir, model_path, output_dir='static/evalua
                 "female_total": len(female_files),
                 "male_annotated": male_annotated,
                 "female_annotated": female_annotated,
-                "annotation_rate": (male_annotated + female_annotated) / max(1, len(male_files) + len(female_files))
+                "annotation_rate": annotation_rate,
+                "warning": warning
             },
             "model_loaded": model_loaded,
             "model_path": model_path
@@ -528,7 +554,12 @@ def analyze_annotation_impact(dataset_dir, model_path, output_dir='static/evalua
             plt.figure(figsize=(10, 6))
             labels = ['オス', 'メス', '合計']
             annotated = [male_annotated, female_annotated, male_annotated + female_annotated]
-            total = [len(male_files), len(female_files), len(male_files) + len(female_files)]
+            
+            # データの整合性を確保（グラフ表示用）
+            total = [max(len(male_files), male_annotated), 
+                    max(len(female_files), female_annotated), 
+                    max(len(male_files) + len(female_files), male_annotated + female_annotated)]
+            
             non_annotated = [t - a for t, a in zip(total, annotated)]
             
             x = np.arange(len(labels))
@@ -538,7 +569,12 @@ def analyze_annotation_impact(dataset_dir, model_path, output_dir='static/evalua
             rects1 = ax.bar(x - width/2, annotated, width, label='アノテーション済み')
             rects2 = ax.bar(x + width/2, non_annotated, width, label='未アノテーション')
             
-            ax.set_title('データセットのアノテーション状況')
+            # グラフタイトルに警告を追加
+            title = 'データセットのアノテーション状況'
+            if warning:
+                title += f'\n（警告: {warning}）'
+            
+            ax.set_title(title)
             ax.set_ylabel('画像数')
             ax.set_xticks(x)
             ax.set_xticklabels(labels)

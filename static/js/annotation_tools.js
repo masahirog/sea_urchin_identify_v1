@@ -17,39 +17,37 @@ const annotationTools = {
 
 /**
  * アノテーションモーダルを開く
- * @param {string} [paramImagePath] - オプションの画像パス
+ * @param {string} paramImagePath - 画像パス
  */
 function openAnnotationModal(paramImagePath) {
-    // 現在選択されている画像のパスを取得
-    const selectedCard = document.querySelector('.sample-card.selected-sample');
-    if (!selectedCard) {
-        alert('先にサンプル画像を選択してください');
+    console.log('アノテーションモーダルを開く:', paramImagePath);
+    
+    if (!paramImagePath) {
+        alert('サンプル画像が指定されていません');
         return;
     }
     
-    const imagePath = 'samples/' + selectedCard.dataset.path;
-    annotationTools.selectedCard = selectedCard;
+    // 擬似カードオブジェクトを作成
+    annotationTools.selectedCard = {
+        dataset: {
+            path: paramImagePath
+        }
+    };
     
-    // モーダルがすでに存在する場合は削除
-    const existingModal = document.getElementById('annotationModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-    
-    // モーダルを作成して追加
+    // モーダルを作成
     createAnnotationModal();
     
-    // Bootstrapモーダルを初期化
+    // Bootstrapモーダルを初期化して表示
     const annotationModal = new bootstrap.Modal(document.getElementById('annotationModal'));
-    annotationModal.show();
     
     // キャンバスの設定
-    setupAnnotationCanvas(selectedCard);
+    setupAnnotationCanvas(annotationTools.selectedCard);
     
     // モーダルが閉じられたときのクリーンアップ
-    document.getElementById('annotationModal').addEventListener('hidden.bs.modal', function () {
-        cleanupAnnotationModal();
-    });
+    document.getElementById('annotationModal').addEventListener('hidden.bs.modal', cleanupAnnotationModal);
+    
+    // モーダルを表示
+    annotationModal.show();
 }
 
 /**
@@ -106,7 +104,7 @@ function createAnnotationModal() {
 
 /**
  * アノテーションキャンバスの設定
- * @param {HTMLElement} selectedCard - 選択されたサンプルカード
+ * @param {object} selectedCard - 選択されたカード情報
  */
 function setupAnnotationCanvas(selectedCard) {
     const canvas = document.getElementById('annotationCanvas');
@@ -129,12 +127,23 @@ function setupAnnotationCanvas(selectedCard) {
         initAnnotationEvents();
     };
     img.onerror = function() {
-        console.error('画像の読み込みに失敗しました');
-        alert('画像の読み込みに失敗しました。別の画像を試してください。');
+        console.error('画像の読み込みに失敗しました:', img.src);
+        alert('画像の読み込みに失敗しました');
     };
-    img.src = '/sample/' + selectedCard.dataset.path;
+    
+    // 画像パスの整形
+    let imagePath = selectedCard.dataset.path;
+    
+    // パスの先頭に/sampleを追加（必要に応じて）
+    if (!imagePath.startsWith('/')) {
+        imagePath = '/sample/' + imagePath;
+    } else {
+        imagePath = '/sample' + imagePath;
+    }
+    
+    console.log('読み込む画像パス:', imagePath);
+    img.src = imagePath;
 }
-
 /**
  * アノテーションツールのボタン初期化
  */

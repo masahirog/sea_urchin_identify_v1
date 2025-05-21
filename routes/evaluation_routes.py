@@ -114,6 +114,8 @@ def analyze_annotation_impact_route():
     - JSON: 分析タスクの情報
     """
     from app import app, processing_queue, processing_status
+    import os
+    import json
     
     try:
         # モデルとデータセットのパスを確認
@@ -130,6 +132,31 @@ def analyze_annotation_impact_route():
             return jsonify({
                 "error": "データセットディレクトリが見つかりません。"
             }), 404
+        
+        # アノテーションマッピングの整合性チェック（追加）
+        mapping_file = os.path.join('static', 'annotation_mapping.json')
+        mapping_entries = 0
+        
+        if os.path.exists(mapping_file):
+            try:
+                with open(mapping_file, 'r') as f:
+                    mapping = json.load(f)
+                    mapping_entries = len(mapping)
+                    
+                # 画像ファイル数のカウント
+                male_dir = os.path.join(dataset_dir, "male")
+                female_dir = os.path.join(dataset_dir, "female")
+                male_files = [f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))] if os.path.exists(male_dir) else []
+                female_files = [f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))] if os.path.exists(female_dir) else []
+                
+                total_images = len(male_files) + len(female_files)
+                
+                # 警告ログ（不整合がある場合）
+                if mapping_entries > total_images:
+                    current_app.logger.warning(f"アノテーションマッピング ({mapping_entries}件) がデータセット画像数 ({total_images}件) を超えています。古いマッピングが残っている可能性があります。")
+                
+            except Exception as e:
+                current_app.logger.error(f"マッピングファイル読み込みエラー: {str(e)}")
         
         # 処理タスクの作成
         task_id = str(uuid.uuid4())
@@ -404,3 +431,72 @@ def get_specific_evaluation_result(timestamp):
         current_app.logger.error(error_msg)
         current_app.logger.error(traceback.format_exc())
         return jsonify({"error": error_msg}), 500
+
+
+@evaluation_bp.route('/reset-annotations', methods=['POST'])
+def reset_annotations():
+    """
+    アノテーションデータをリセットする
+    
+    Request:
+    - confirmation: 確認テキスト（"DELETE ANNOTATION"である必要がある）
+    
+    Returns:
+    - JSON: リセット結果
+    """
+    from app import app
+    import os
+    import json
+    import shutil
+    
+    try:
+        # POSTデータの検証
+        data = request.json
+        confirmation = data.get('confirmation', '')
+        
+        if confirmation != "DELETE ANNOTATION":
+            return jsonify({
+                "success": False, 
+                "message": "確認テキストが正しくありません。'DELETE ANNOTATION'と入力してください。"
+            }), 400
+        
+        # 1. アノテーションマッピングのリセット
+        mapping_file = os.path.join('static', 'annotation_mapping.json')
+        with open(mapping_file, 'w') as f:
+            json.dump({}, f)
+        
+        # 2. アノテーション画像ディレクトリのクリア
+        annotations_dir = os.path.join('static', 'annotations')
+        if os.path.exists(annotations_dir):
+            # ディレクトリ内のファイルのみを削除
+            for filename in os.listdir(annotations_dir):
+                file_path = os.path.join(annotations_dir, filename)
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+        else:
+            # ディレクトリが存在しない場合は作成
+            os.makedirs(annotations_dir, exist_ok=True)
+        
+        # 3. アノテーション関連の評価ファイルの削除
+        evaluation_dir = os.path.join(app.config.get('STATIC_FOLDER', 'static'), 'evaluation')
+        if os.path.exists(evaluation_dir):
+            for filename in os.listdir(evaluation_dir):
+                if filename.startswith('annotation_impact_'):
+                    file_path = os.path.join(evaluation_dir, filename)
+                    if os.path.isfile(file_path):
+                        os.unlink(file_path)
+        
+        current_app.logger.info("アノテーションデータのリセットが完了しました")
+        
+        return jsonify({
+            "success": True, 
+            "message": "アノテーションデータのリセットが完了しました"
+        })
+    except Exception as e:
+        current_app.logger.error(f"アノテーションリセットエラー: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False, 
+            "message": f"リセット中にエラーが発生しました: {str(e)}"
+        }), 500
