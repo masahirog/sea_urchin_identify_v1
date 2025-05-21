@@ -87,22 +87,22 @@ def analyze_sample():
                 except Exception as e:
                     current_app.logger.error(f"マッピング読み込みエラー: {str(e)}")
         
-        # ★★★ ここを修正 ★★★
+        # ★★★ 修正されたパス変換ロジック ★★★
         # 画像パスの正しい処理
         full_image_path = None
-        
-        # パターン1: 'papillae/male/xxx.png' -> 'static/samples/papillae/male/xxx.png'
+
+        # パターン1: 'papillae/male/xxx.png' -> 'samples/papillae/male/xxx.png'
         if image_path.startswith('papillae/'):
-            full_image_path = os.path.join('static', 'samples', image_path)
-        # パターン2: 'samples/papillae/male/xxx.png' -> 'static/samples/papillae/male/xxx.png'  
+            full_image_path = os.path.join(app.config['SAMPLES_FOLDER'], image_path)
+        # パターン2: 'samples/papillae/male/xxx.png' -> そのまま使用  
         elif image_path.startswith('samples/'):
-            full_image_path = os.path.join('static', image_path)
+            full_image_path = image_path
         # パターン3: 絶対パスの場合はそのまま
         elif os.path.isabs(image_path):
             full_image_path = image_path
-        # パターン4: その他の場合は static/ を前に付ける
+        # パターン4: その他の場合は samples/ を前に付ける
         else:
-            full_image_path = os.path.join('static', image_path)
+            full_image_path = os.path.join(app.config['SAMPLES_FOLDER'], image_path)
         
         current_app.logger.info(f"フルパス: {full_image_path}, 存在チェック: {os.path.exists(full_image_path)}")
             
