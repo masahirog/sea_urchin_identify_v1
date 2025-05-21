@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="ウニ生殖乳頭の画像分析と雌雄判別を行うシステム">
     <title>ウニ生殖乳頭分析システム</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -11,58 +12,70 @@
 <body>
     <div class="container">
         <h1 class="text-center mb-4">ウニ生殖乳頭分析システム</h1>
+        
+        <!-- ナビゲーションリンク -->
         <div class="mb-3 d-flex justify-content-end">
-            <a href="{{ url_for('evaluation.index') }}" class="btn btn-outline-info me-2">
-                <i class="fas fa-chart-line"></i> モデル評価ダッシュボード
+            <a href="{{ url_for('evaluation.index') }}" class="btn btn-outline-info me-2" aria-label="モデル評価ダッシュボードへ移動">
+                <i class="fas fa-chart-line" aria-hidden="true"></i> モデル評価ダッシュボード
             </a>
-            <a href="{{ url_for('sample.analyze_samples_page') }}" class="btn btn-outline-primary">
-                <i class="fas fa-microscope"></i> 生殖乳頭サンプル分析
+            <a href="{{ url_for('sample.analyze_samples_page') }}" class="btn btn-outline-primary" aria-label="生殖乳頭サンプル分析へ移動">
+                <i class="fas fa-microscope" aria-hidden="true"></i> 生殖乳頭サンプル分析
             </a>
         </div>
-        <ul class="nav nav-tabs" id="myTab" role="tablist">
+        
+        <!-- メインタブナビゲーション -->
+        <ul class="nav nav-tabs" id="mainTab" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="extract-tab" data-bs-toggle="tab" data-bs-target="#extract" type="button" role="tab" aria-controls="extract" aria-selected="true">
-                    <i class="fas fa-video"></i> 画像抽出
+                <button class="nav-link active" id="extract-tab" data-bs-toggle="tab" data-bs-target="#extract" 
+                        type="button" role="tab" aria-controls="extract" aria-selected="true">
+                    <i class="fas fa-video" aria-hidden="true"></i> 画像抽出
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="classify-tab" data-bs-toggle="tab" data-bs-target="#classify" type="button" role="tab" aria-controls="classify" aria-selected="false">
-                    <i class="fas fa-vial"></i> 雌雄判別
+                <button class="nav-link" id="classify-tab" data-bs-toggle="tab" data-bs-target="#classify" 
+                        type="button" role="tab" aria-controls="classify" aria-selected="false">
+                    <i class="fas fa-vial" aria-hidden="true"></i> 雌雄判別
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="train-tab" data-bs-toggle="tab" data-bs-target="#train" type="button" role="tab" aria-controls="train" aria-selected="false">
-                    <i class="fas fa-brain"></i> モデル訓練
+                <button class="nav-link" id="train-tab" data-bs-toggle="tab" data-bs-target="#train" 
+                        type="button" role="tab" aria-controls="train" aria-selected="false">
+                    <i class="fas fa-brain" aria-hidden="true"></i> モデル訓練
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab" aria-controls="history" aria-selected="false">
-                    <i class="fas fa-history"></i> 履歴
+                <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" 
+                        type="button" role="tab" aria-controls="history" aria-selected="false">
+                    <i class="fas fa-history" aria-hidden="true"></i> 履歴
                 </button>
             </li>
         </ul>
         
-        <div class="tab-content" id="myTabContent">
+        <div class="tab-content" id="mainTabContent">
             <!-- 画像抽出タブ -->
             <div class="tab-pane fade show active" id="extract" role="tabpanel" aria-labelledby="extract-tab">
                 <div class="row">
                     <div class="col-md-4">
-                        <div class="card">
+                        <div class="card mb-4">
                             <div class="card-header">
-                                <h5><i class="fas fa-cog"></i> 処理設定</h5>
+                                <h5><i class="fas fa-cog" aria-hidden="true"></i> 処理設定</h5>
                             </div>
                             <div class="card-body">
-                                <form id="videoForm">
+                                <form id="video-form">
                                     <div class="mb-3">
-                                        <label for="videoFile" class="form-label">動画ファイル</label>
-                                        <input class="form-control" type="file" id="videoFile" accept=".mp4,.avi,.mov,.mkv">
+                                        <label for="video-file" class="form-label">動画ファイル</label>
+                                        <input class="form-control" type="file" id="video-file" accept=".mp4,.avi,.mov,.mkv" 
+                                               aria-describedby="video-file-help">
+                                        <div id="video-file-help" class="form-text">処理するウニの動画ファイルを選択してください。</div>
                                     </div>
                                     <div class="mb-3">
-                                        <label for="maxImages" class="form-label">最大抽出画像数</label>
-                                        <input type="number" class="form-control" id="maxImages" min="1" max="50" value="10">
+                                        <label for="max-images" class="form-label">最大抽出画像数</label>
+                                        <input type="number" class="form-control" id="max-images" min="1" max="50" value="10"
+                                               aria-describedby="max-images-help">
+                                        <div id="max-images-help" class="form-text">動画から抽出する最大画像数を設定します。</div>
                                     </div>
                                     <button type="submit" class="btn btn-primary w-100">
-                                        <i class="fas fa-play"></i> 処理開始
+                                        <i class="fas fa-play" aria-hidden="true"></i> 処理開始
                                     </button>
                                 </form>
                             </div>
@@ -70,14 +83,15 @@
                         
                         <div class="card">
                             <div class="card-header">
-                                <h5><i class="fas fa-info-circle"></i> 処理状況</h5>
+                                <h5><i class="fas fa-info-circle" aria-hidden="true"></i> 処理状況</h5>
                             </div>
                             <div class="card-body">
-                                <div id="processingStatus" class="alert alert-info d-none">
+                                <div id="processing-status" class="alert alert-info d-none" role="alert">
                                     処理を開始してください
                                 </div>
-                                <div class="progress mb-3 d-none" id="progressContainer">
-                                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                                <div class="progress mb-3 d-none" id="progress-container">
+                                    <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                         role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                                 </div>
                             </div>
                         </div>
@@ -86,15 +100,15 @@
                     <div class="col-md-8">
                         <div class="card">
                             <div class="card-header d-flex justify-content-between align-items-center">
-                                <h5><i class="fas fa-images"></i> 抽出された画像</h5>
+                                <h5><i class="fas fa-images" aria-hidden="true"></i> 抽出された画像</h5>
                                 <div>
-                                    <span id="currentImage" class="badge bg-secondary">0/0</span>
+                                    <span id="image-counter" class="badge bg-secondary">0枚</span>
                                 </div>
                             </div>
                             <div class="card-body">
-                                <div id="extractedImagesContainer" class="image-container">
+                                <div id="extracted-images-container" class="image-container">
                                     <div class="text-center text-muted py-5 w-100">
-                                        <i class="fas fa-photo-video fa-3x mb-3"></i>
+                                        <i class="fas fa-photo-video fa-3x mb-3" aria-hidden="true"></i>
                                         <p>動画を処理すると、抽出された画像がここに表示されます</p>
                                     </div>
                                 </div>
@@ -110,16 +124,18 @@
                     <div class="col-md-4">
                         <div class="card">
                             <div class="card-header">
-                                <h5><i class="fas fa-upload"></i> 画像アップロード</h5>
+                                <h5><i class="fas fa-upload" aria-hidden="true"></i> 画像アップロード</h5>
                             </div>
                             <div class="card-body">
-                                <form id="classifyForm">
+                                <form id="classify-form">
                                     <div class="mb-3">
-                                        <label for="imageFile" class="form-label">判別する画像</label>
-                                        <input class="form-control" type="file" id="imageFile" accept=".jpg,.jpeg,.png">
+                                        <label for="image-file" class="form-label">判別する画像</label>
+                                        <input class="form-control" type="file" id="image-file" accept=".jpg,.jpeg,.png"
+                                               aria-describedby="image-file-help">
+                                        <div id="image-file-help" class="form-text">雌雄判別する生殖乳頭の画像をアップロードしてください。</div>
                                     </div>
                                     <button type="submit" class="btn btn-primary w-100">
-                                        <i class="fas fa-vial"></i> 判別開始
+                                        <i class="fas fa-vial" aria-hidden="true"></i> 判別開始
                                     </button>
                                 </form>
                             </div>
@@ -129,26 +145,26 @@
                     <div class="col-md-8">
                         <div class="card">
                             <div class="card-header">
-                                <h5><i class="fas fa-microscope"></i> 判別結果</h5>
+                                <h5><i class="fas fa-microscope" aria-hidden="true"></i> 判別結果</h5>
                             </div>
                             <div class="card-body">
-                                <div id="classifyResult" class="d-none">
+                                <div id="classify-result" class="d-none">
                                     <div class="text-center mb-4">
-                                        <img id="resultImage" src="" alt="判別結果" class="result-image">
+                                        <img id="result-image" src="" alt="判別結果" class="result-image">
                                     </div>
                                     
-                                    <div class="alert" id="genderResult" role="alert">
+                                    <div class="alert" id="gender-result" role="alert">
                                         判別結果を表示します
                                     </div>
                                     
                                     <h5>判別に使用された特徴</h5>
-                                    <div id="featureImportance">
+                                    <div id="feature-importance">
                                         <!-- 特徴重要度バーがここに表示されます -->
                                     </div>
                                 </div>
                                 
-                                <div id="classifyPlaceholder" class="text-center text-muted py-5">
-                                    <i class="fas fa-vial fa-3x mb-3"></i>
+                                <div id="classify-placeholder" class="text-center text-muted py-5">
+                                    <i class="fas fa-vial fa-3x mb-3" aria-hidden="true"></i>
                                     <p>画像をアップロードすると、判別結果がここに表示されます</p>
                                 </div>
                             </div>
@@ -163,49 +179,52 @@
                     <div class="col-md-4">
                         <div class="card">
                             <div class="card-header">
-                                <h5><i class="fas fa-database"></i> データセット情報</h5>
+                                <h5><i class="fas fa-database" aria-hidden="true"></i> データセット情報</h5>
                             </div>
                             <div class="card-body">
-                                <div id="datasetInfo">
+                                <div id="dataset-info">
                                     <div class="d-flex justify-content-between mb-2">
                                         <span>オス画像:</span>
-                                        <span id="maleCount">0</span>
+                                        <span id="male-count">0</span>
                                     </div>
                                     <div class="d-flex justify-content-between mb-2">
                                         <span>メス画像:</span>
-                                        <span id="femaleCount">0</span>
+                                        <span id="female-count">0</span>
                                     </div>
                                     <div class="d-flex justify-content-between mb-3">
                                         <span>合計:</span>
-                                        <span id="totalCount">0</span>
+                                        <span id="total-count">0</span>
                                     </div>
                                     
                                     <div class="progress mb-3">
-                                        <div id="datasetMaleBar" class="progress-bar bg-info" role="progressbar" style="width: 0%"></div>
-                                        <div id="datasetFemaleBar" class="progress-bar bg-danger" role="progressbar" style="width: 0%"></div>
+                                        <div id="dataset-male-bar" class="progress-bar bg-info" role="progressbar" style="width: 0%" 
+                                             aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                        <div id="dataset-female-bar" class="progress-bar bg-danger" role="progressbar" style="width: 0%" 
+                                             aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                                     </div>
                                     
-                                    <button id="refreshDatasetBtn" class="btn btn-sm btn-outline-secondary w-100">
-                                        <i class="fas fa-sync-alt"></i> 情報を更新
+                                    <button id="refresh-dataset-btn" class="btn btn-sm btn-outline-secondary w-100">
+                                        <i class="fas fa-sync-alt" aria-hidden="true"></i> 情報を更新
                                     </button>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="card">
+                        <div class="card mt-4">
                             <div class="card-header">
-                                <h5><i class="fas fa-brain"></i> モデル訓練</h5>
+                                <h5><i class="fas fa-brain" aria-hidden="true"></i> モデル訓練</h5>
                             </div>
                             <div class="card-body">
-                                <button id="trainModelBtn" class="btn btn-primary w-100 mb-3">
-                                    <i class="fas fa-play"></i> モデル訓練開始
+                                <button id="train-model-btn" class="btn btn-primary w-100 mb-3">
+                                    <i class="fas fa-play" aria-hidden="true"></i> モデル訓練開始
                                 </button>
                                 
-                                <div id="trainingStatus" class="alert alert-info d-none">
+                                <div id="training-status" class="alert alert-info d-none" role="alert">
                                     訓練を開始してください
                                 </div>
-                                <div class="progress mb-3 d-none" id="trainingProgressContainer">
-                                    <div id="trainingProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                                <div class="progress mb-3 d-none" id="training-progress-container">
+                                    <div id="training-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                         role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                                 </div>
                             </div>
                         </div>
@@ -214,16 +233,16 @@
                     <div class="col-md-8">
                         <div class="card">
                             <div class="card-header">
-                                <h5><i class="fas fa-chart-bar"></i> モデル情報</h5>
+                                <h5><i class="fas fa-chart-bar" aria-hidden="true"></i> モデル情報</h5>
                             </div>
                             <div class="card-body">
-                                <div id="modelInfo" class="d-none">
-                                    <div class="alert alert-success mb-4" id="modelAccuracy">
-                                        モデル精度: <span id="accuracyValue">-</span>
+                                <div id="model-info" class="d-none">
+                                    <div class="alert alert-success mb-4" id="model-accuracy">
+                                        モデル精度: <span id="accuracy-value">-</span>
                                     </div>
                                     
                                     <h5>特徴重要度</h5>
-                                    <div id="modelFeatureImportance">
+                                    <div id="model-feature-importance">
                                         <!-- 特徴重要度バーがここに表示されます -->
                                     </div>
                                     
@@ -234,15 +253,15 @@
                                                 <tbody>
                                                     <tr>
                                                         <th>訓練サンプル数:</th>
-                                                        <td id="trainSamples">-</td>
+                                                        <td id="train-samples">-</td>
                                                     </tr>
                                                     <tr>
                                                         <th>オス画像:</th>
-                                                        <td id="modelMaleImages">-</td>
+                                                        <td id="model-male-images">-</td>
                                                     </tr>
                                                     <tr>
                                                         <th>メス画像:</th>
-                                                        <td id="modelFemaleImages">-</td>
+                                                        <td id="model-female-images">-</td>
                                                     </tr>
                                                 </tbody>
                                             </table>
@@ -250,8 +269,8 @@
                                     </div>
                                 </div>
                                 
-                                <div id="modelPlaceholder" class="text-center text-muted py-5">
-                                    <i class="fas fa-brain fa-3x mb-3"></i>
+                                <div id="model-placeholder" class="text-center text-muted py-5">
+                                    <i class="fas fa-brain fa-3x mb-3" aria-hidden="true"></i>
                                     <p>モデルを訓練すると、モデル情報がここに表示されます</p>
                                 </div>
                             </div>
@@ -260,18 +279,17 @@
                 </div>
             </div>
 
-
             <!-- 履歴タブ -->
             <div class="tab-pane fade" id="history" role="tabpanel" aria-labelledby="history-tab">
                 <div class="row">
                     <div class="col-md-12">
                         <div class="card">
                             <div class="card-header">
-                                <h5><i class="fas fa-history"></i> 処理履歴</h5>
+                                <h5><i class="fas fa-history" aria-hidden="true"></i> 処理履歴</h5>
                             </div>
                             <div class="card-body">
                                 <div class="table-responsive">
-                                    <table class="table table-hover" id="taskHistoryTable">
+                                    <table class="table table-hover" id="task-history-table">
                                         <thead>
                                             <tr>
                                                 <th>処理日時</th>
@@ -300,13 +318,13 @@
                     <div class="col-md-12">
                         <div class="card">
                             <div class="card-header d-flex justify-content-between align-items-center">
-                                <h5><i class="fas fa-images"></i> 履歴画像</h5>
-                                <span id="historyImageCount" class="badge bg-secondary">0/0</span>
+                                <h5><i class="fas fa-images" aria-hidden="true"></i> 履歴画像</h5>
+                                <span id="history-image-count" class="badge bg-secondary">0枚</span>
                             </div>
                             <div class="card-body">
-                                <div id="historyImagesContainer" class="image-container">
+                                <div id="history-images-container" class="image-container">
                                     <div class="text-center text-muted py-5 w-100">
-                                        <i class="fas fa-photo-video fa-3x mb-3"></i>
+                                        <i class="fas fa-photo-video fa-3x mb-3" aria-hidden="true"></i>
                                         <p>履歴から項目を選択すると、画像がここに表示されます</p>
                                     </div>
                                 </div>
@@ -315,29 +333,28 @@
                     </div>
                 </div>
             </div>
-
         </div>
     </div>
     
     <!-- 画像詳細モーダル -->
-    <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal fade" id="image-modal" tabindex="-1" aria-labelledby="image-modal-label" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="imageModalLabel">画像詳細</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <h5 class="modal-title" id="image-modal-label">画像詳細</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
                 </div>
                 <div class="modal-body">
                     <div class="text-center mb-3">
-                        <img id="modalImage" src="" alt="拡大画像" style="max-width: 100%; max-height: 60vh;">
+                        <img id="modal-image" src="" alt="拡大画像" style="max-width: 100%; max-height: 60vh;">
                     </div>
                     <div class="d-flex justify-content-center">
-                        <div class="btn-group" role="group">
-                            <button type="button" class="btn btn-outline-primary" id="saveMaleBtn">
-                                <i class="fas fa-mars"></i> オスとして保存
+                        <div class="btn-group" role="group" aria-label="画像操作">
+                            <button type="button" class="btn btn-outline-primary" id="save-male-btn">
+                                <i class="fas fa-mars" aria-hidden="true"></i> オスとして保存
                             </button>
-                            <button type="button" class="btn btn-outline-danger" id="saveFemaleBtn">
-                                <i class="fas fa-venus"></i> メスとして保存
+                            <button type="button" class="btn btn-outline-danger" id="save-female-btn">
+                                <i class="fas fa-venus" aria-hidden="true"></i> メスとして保存
                             </button>
                         </div>
                     </div>
@@ -348,48 +365,48 @@
 
 
     <!-- 生殖乳頭マーキングモーダル -->
-    <div class="modal fade" id="markingModal" tabindex="-1" aria-labelledby="markingModalLabel" aria-hidden="true">
+    <div class="modal fade" id="marking-modal" tabindex="-1" aria-labelledby="marking-modal-label" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="markingModalLabel">生殖乳頭マーキング</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <h5 class="modal-title" id="marking-modal-label">生殖乳頭マーキング</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
                 </div>
                 <div class="modal-body">
                     <div class="text-center mb-3">
-                        <canvas id="markingCanvas" style="max-width: 100%; border: 1px solid #ddd;"></canvas>
+                        <canvas id="marking-canvas" style="max-width: 100%; border: 1px solid #ddd;"></canvas>
                     </div>
                     <div class="d-flex justify-content-center mb-3">
-                        <div class="btn-group" role="group">
-                            <button type="button" class="btn btn-outline-primary" id="markerTool">
-                                <i class="fas fa-pen"></i> マーカー
+                        <div class="btn-group" role="group" aria-label="マーキングツール">
+                            <button type="button" class="btn btn-outline-primary" id="marker-tool">
+                                <i class="fas fa-pen" aria-hidden="true"></i> マーカー
                             </button>
-                            <button type="button" class="btn btn-outline-danger" id="eraserTool">
-                                <i class="fas fa-eraser"></i> 消しゴム
+                            <button type="button" class="btn btn-outline-danger" id="eraser-tool">
+                                <i class="fas fa-eraser" aria-hidden="true"></i> 消しゴム
                             </button>
-                            <button type="button" class="btn btn-outline-secondary" id="clearCanvas">
-                                <i class="fas fa-trash-alt"></i> クリア
+                            <button type="button" class="btn btn-outline-secondary" id="clear-canvas">
+                                <i class="fas fa-trash-alt" aria-hidden="true"></i> クリア
                             </button>
                         </div>
                     </div>
-                    <div class="form-group mb-3">
-                        <label for="markerSize" class="form-label">マーカーサイズ: <span id="markerSizeValue">5</span>px</label>
-                        <input type="range" class="form-range" id="markerSize" min="1" max="20" value="5">
+                    <div class="mb-3">
+                        <label for="marker-size" class="form-label">マーカーサイズ: <span id="marker-size-value">5</span>px</label>
+                        <input type="range" class="form-range" id="marker-size" min="1" max="20" value="5">
                     </div>
-                    <div class="form-group mb-3">
-                        <label for="markerOpacity" class="form-label">マーカー不透明度: <span id="markerOpacityValue">0.5</span></label>
-                        <input type="range" class="form-range" id="markerOpacity" min="0.1" max="1" step="0.1" value="0.5">
+                    <div class="mb-3">
+                        <label for="marker-opacity" class="form-label">マーカー不透明度: <span id="marker-opacity-value">0.5</span></label>
+                        <input type="range" class="form-range" id="marker-opacity" min="0.1" max="1" step="0.1" value="0.5">
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
-                    <button type="button" class="btn btn-primary" id="saveMarkedImage">マーキングを保存</button>
-                    <div class="btn-group" id="saveToDatasetGroup">
-                        <button type="button" class="btn btn-success" id="saveMarkedMale">
-                            <i class="fas fa-mars"></i> オスとして保存
+                    <button type="button" class="btn btn-primary" id="save-marked-image">マーキングを保存</button>
+                    <div class="btn-group" id="save-to-dataset-group">
+                        <button type="button" class="btn btn-success" id="save-marked-male">
+                            <i class="fas fa-mars" aria-hidden="true"></i> オスとして保存
                         </button>
-                        <button type="button" class="btn btn-danger" id="saveMarkedFemale">
-                            <i class="fas fa-venus"></i> メスとして保存
+                        <button type="button" class="btn btn-danger" id="save-marked-female">
+                            <i class="fas fa-venus" aria-hidden="true"></i> メスとして保存
                         </button>
                     </div>
                 </div>
@@ -399,12 +416,21 @@
 
 
     <!-- ローディングオーバーレイ -->
-    <div id="loadingOverlay" class="d-none">
-        <div class="spinner-border text-light me-3" role="status"></div>
+    <div id="loading-overlay" class="d-none">
+        <div class="spinner-border text-light me-3" role="status">
+            <span class="visually-hidden">処理中...</span>
+        </div>
         処理中...
     </div>
 
+    <!-- JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/utilities.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/video-processor.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/image-classifier.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/model-trainer.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/task-manager.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/marking-tools.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

@@ -3,51 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="ウニ生殖乳頭分析システムのモデル評価ダッシュボード - モデル精度やアノテーション影響の分析">
     <title>モデル評価ダッシュボード</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <style>
-        .metric-card {
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
-        }
-        .metric-card:hover {
-            transform: translateY(-5px);
-        }
-        .metric-value {
-            font-size: 2rem;
-            font-weight: bold;
-        }
-        .metric-label {
-            color: #777;
-            font-size: 0.9rem;
-            margin-top: 5px;
-        }
-        .chart-container {
-            position: relative;
-            height: 300px;
-            margin-bottom: 20px;
-        }
-        .evaluation-img {
-            max-width: 100%;
-            border-radius: 5px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .history-item {
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .history-item:hover {
-            background-color: #f8f9fa;
-        }
-        .history-item.active {
-            background-color: #e9ecef;
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/model_evaluation.css') }}">
 </head>
 <body>
     <div class="container mt-3 mb-5">
@@ -55,35 +16,36 @@
         
         <div class="mb-3">
             <a href="/" class="btn btn-outline-secondary">
-                <i class="fas fa-arrow-left"></i> メインページに戻る
+                <i class="fas fa-arrow-left" aria-hidden="true"></i> メインページに戻る
             </a>
         </div>
         
         <!-- 操作パネル -->
         <div class="card mb-4">
             <div class="card-header bg-primary text-white">
-                <h5><i class="fas fa-cogs"></i> モデル評価操作</h5>
+                <h5><i class="fas fa-cogs" aria-hidden="true"></i> モデル評価操作</h5>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
-                        <button id="runEvaluationBtn" class="btn btn-primary mb-3 w-100">
-                            <i class="fas fa-play"></i> 新しいモデル評価を実行
+                        <button id="run-evaluation-btn" class="btn btn-primary mb-3 w-100">
+                            <i class="fas fa-play" aria-hidden="true"></i> 新しいモデル評価を実行
                         </button>
                         <p class="small text-muted">現在のデータセットとモデルを使用して包括的な評価を実行します。</p>
                     </div>
                     <div class="col-md-6">
-                        <button id="analyzeAnnotationsBtn" class="btn btn-success mb-3 w-100">
-                            <i class="fas fa-search"></i> アノテーション影響分析を実行
+                        <button id="analyze-annotations-btn" class="btn btn-success mb-3 w-100">
+                            <i class="fas fa-search" aria-hidden="true"></i> アノテーション影響分析を実行
                         </button>
                         <p class="small text-muted">アノテーションデータがモデルの学習・精度に与える影響を分析します。</p>
                     </div>
                 </div>
-                <div id="evaluationStatus" class="alert alert-info d-none">
+                <div id="evaluation-status" class="alert alert-info d-none" role="alert">
                     処理を開始してください
                 </div>
-                <div class="progress mb-3 d-none" id="evaluationProgressContainer">
-                    <div id="evaluationProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+                <div class="progress mb-3 d-none" id="evaluation-progress-container">
+                    <div id="evaluation-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                 </div>
             </div>
         </div>
@@ -93,32 +55,32 @@
             <div class="col-md-8">
                 <div class="card">
                     <div class="card-header">
-                        <h5><i class="fas fa-chart-line"></i> モデル評価結果</h5>
+                        <h5><i class="fas fa-chart-line" aria-hidden="true"></i> モデル評価結果</h5>
                     </div>
                     <div class="card-body">
-                        <div id="evaluationPlaceholder" class="text-center py-5">
-                            <i class="fas fa-chart-bar fa-3x mb-3 text-muted"></i>
+                        <div id="evaluation-placeholder" class="text-center py-5">
+                            <i class="fas fa-chart-bar fa-3x mb-3 text-muted" aria-hidden="true"></i>
                             <p class="text-muted">評価を実行するか、履歴から結果を選択してください</p>
                         </div>
                         
-                        <div id="evaluationResult" class="d-none">
+                        <div id="evaluation-result" class="d-none">
                             <!-- メトリクス概要 -->
                             <div class="row mb-4">
                                 <div class="col-md-4">
                                     <div class="metric-card bg-light">
-                                        <div class="metric-value" id="accuracyValue">0%</div>
+                                        <div class="metric-value" id="accuracy-value">0%</div>
                                         <div class="metric-label">精度 (Accuracy)</div>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="metric-card bg-light">
-                                        <div class="metric-value" id="precisionValue">0%</div>
+                                        <div class="metric-value" id="precision-value">0%</div>
                                         <div class="metric-label">適合率 (Precision)</div>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="metric-card bg-light">
-                                        <div class="metric-value" id="recallValue">0%</div>
+                                        <div class="metric-value" id="recall-value">0%</div>
                                         <div class="metric-label">再現率 (Recall)</div>
                                     </div>
                                 </div>
@@ -128,14 +90,14 @@
                             <div class="row mb-4">
                                 <div class="col-md-6">
                                     <h6>学習曲線</h6>
-                                    <div id="learningCurveContainer" class="mb-3">
-                                        <img id="learningCurveImg" class="evaluation-img" src="" alt="学習曲線">
+                                    <div id="learning-curve-container" class="mb-3">
+                                        <img id="learning-curve-img" class="evaluation-img" src="" alt="学習曲線">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <h6>混同行列</h6>
-                                    <div id="confusionMatrixContainer" class="mb-3">
-                                        <img id="confusionMatrixImg" class="evaluation-img" src="" alt="混同行列">
+                                    <div id="confusion-matrix-container" class="mb-3">
+                                        <img id="confusion-matrix-img" class="evaluation-img" src="" alt="混同行列">
                                     </div>
                                 </div>
                             </div>
@@ -144,32 +106,32 @@
                             <div class="row mb-4">
                                 <div class="col-md-6">
                                     <h6>ROCカーブ</h6>
-                                    <div id="rocCurveContainer" class="mb-3">
-                                        <img id="rocCurveImg" class="evaluation-img" src="" alt="ROCカーブ">
+                                    <div id="roc-curve-container" class="mb-3">
+                                        <img id="roc-curve-img" class="evaluation-img" src="" alt="ROCカーブ">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <h6>クロスバリデーションスコア</h6>
-                                    <div id="cvScoresContainer" class="mb-3">
+                                    <div id="cv-scores-container" class="mb-3">
                                         <div class="table-responsive">
                                             <table class="table table-sm">
                                                 <thead>
                                                     <tr>
-                                                        <th>分割</th>
-                                                        <th>精度</th>
+                                                        <th scope="col">分割</th>
+                                                        <th scope="col">精度</th>
                                                     </tr>
                                                 </thead>
-                                                <tbody id="cvScoresTableBody">
+                                                <tbody id="cv-scores-table-body">
                                                     <!-- クロスバリデーションスコアがここに表示されます -->
                                                 </tbody>
                                                 <tfoot>
                                                     <tr class="table-secondary">
-                                                        <th>平均</th>
-                                                        <th id="cvMeanValue">-</th>
+                                                        <th scope="row">平均</th>
+                                                        <td id="cv-mean-value">-</td>
                                                     </tr>
                                                     <tr>
-                                                        <th>標準偏差</th>
-                                                        <th id="cvStdValue">-</th>
+                                                        <th scope="row">標準偏差</th>
+                                                        <td id="cv-std-value">-</td>
                                                     </tr>
                                                 </tfoot>
                                             </table>
@@ -186,36 +148,36 @@
                                         <table class="table table-bordered">
                                             <thead>
                                                 <tr>
-                                                    <th>クラス</th>
-                                                    <th>適合率</th>
-                                                    <th>再現率</th>
-                                                    <th>F1スコア</th>
-                                                    <th>サポート</th>
+                                                    <th scope="col">クラス</th>
+                                                    <th scope="col">適合率</th>
+                                                    <th scope="col">再現率</th>
+                                                    <th scope="col">F1スコア</th>
+                                                    <th scope="col">サポート</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 <tr>
-                                                    <th>オス (male)</th>
-                                                    <td id="malePrecision">-</td>
-                                                    <td id="maleRecall">-</td>
-                                                    <td id="maleF1">-</td>
-                                                    <td id="maleSupport">-</td>
+                                                    <th scope="row">オス (male)</th>
+                                                    <td id="male-precision">-</td>
+                                                    <td id="male-recall">-</td>
+                                                    <td id="male-f1">-</td>
+                                                    <td id="male-support">-</td>
                                                 </tr>
                                                 <tr>
-                                                    <th>メス (female)</th>
-                                                    <td id="femalePrecision">-</td>
-                                                    <td id="femaleRecall">-</td>
-                                                    <td id="femaleF1">-</td>
-                                                    <td id="femaleSupport">-</td>
+                                                    <th scope="row">メス (female)</th>
+                                                    <td id="female-precision">-</td>
+                                                    <td id="female-recall">-</td>
+                                                    <td id="female-f1">-</td>
+                                                    <td id="female-support">-</td>
                                                 </tr>
                                             </tbody>
                                             <tfoot>
                                                 <tr class="table-secondary">
-                                                    <th>平均/合計</th>
-                                                    <td id="avgPrecision">-</td>
-                                                    <td id="avgRecall">-</td>
-                                                    <td id="avgF1">-</td>
-                                                    <td id="totalSupport">-</td>
+                                                    <th scope="row">平均/合計</th>
+                                                    <td id="avg-precision">-</td>
+                                                    <td id="avg-recall">-</td>
+                                                    <td id="avg-f1">-</td>
+                                                    <td id="total-support">-</td>
                                                 </tr>
                                             </tfoot>
                                         </table>
@@ -229,19 +191,19 @@
                 <!-- アノテーション影響分析 -->
                 <div class="card mt-4">
                     <div class="card-header">
-                        <h5><i class="fas fa-tags"></i> アノテーション影響分析</h5>
+                        <h5><i class="fas fa-tags" aria-hidden="true"></i> アノテーション影響分析</h5>
                     </div>
                     <div class="card-body">
-                        <div id="annotationPlaceholder" class="text-center py-5">
-                            <i class="fas fa-tag fa-3x mb-3 text-muted"></i>
+                        <div id="annotation-placeholder" class="text-center py-5">
+                            <i class="fas fa-tag fa-3x mb-3 text-muted" aria-hidden="true"></i>
                             <p class="text-muted">アノテーション影響分析を実行してください</p>
                         </div>
                         
-                        <div id="annotationResult" class="d-none">
+                        <div id="annotation-result" class="d-none">
                             <div class="row mb-4">
                                 <div class="col-md-6">
-                                    <div id="annotationChartContainer" class="mb-3">
-                                        <img id="annotationImpactImg" class="evaluation-img" src="" alt="アノテーション影響">
+                                    <div id="annotation-chart-container" class="mb-3">
+                                        <img id="annotation-impact-img" class="evaluation-img" src="" alt="アノテーション影響">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -250,24 +212,24 @@
                                         <table class="table table-sm">
                                             <tbody>
                                                 <tr>
-                                                    <th>オス画像数</th>
-                                                    <td id="maleTotalCount">-</td>
+                                                    <th scope="row">オス画像数</th>
+                                                    <td id="male-total-count">-</td>
                                                 </tr>
                                                 <tr>
-                                                    <th>アノテーション済みオス画像数</th>
-                                                    <td id="maleAnnotatedCount">-</td>
+                                                    <th scope="row">アノテーション済みオス画像数</th>
+                                                    <td id="male-annotated-count">-</td>
                                                 </tr>
                                                 <tr>
-                                                    <th>メス画像数</th>
-                                                    <td id="femaleTotalCount">-</td>
+                                                    <th scope="row">メス画像数</th>
+                                                    <td id="female-total-count">-</td>
                                                 </tr>
                                                 <tr>
-                                                    <th>アノテーション済みメス画像数</th>
-                                                    <td id="femaleAnnotatedCount">-</td>
+                                                    <th scope="row">アノテーション済みメス画像数</th>
+                                                    <td id="female-annotated-count">-</td>
                                                 </tr>
                                                 <tr class="table-secondary">
-                                                    <th>アノテーション率</th>
-                                                    <td id="annotationRate">-</td>
+                                                    <th scope="row">アノテーション率</th>
+                                                    <td id="annotation-rate">-</td>
                                                 </tr>
                                             </tbody>
                                         </table>
@@ -276,13 +238,13 @@
                             </div>
                             
                             <div class="alert alert-info">
-                                <i class="fas fa-info-circle me-2"></i>
-                                <span id="annotationInsight">アノテーションデータが学習に影響を与えています。</span>
+                                <i class="fas fa-info-circle me-2" aria-hidden="true"></i>
+                                <span id="annotation-insight">アノテーションデータが学習に影響を与えています。</span>
                             </div>
                             
                             <div class="text-center">
                                 <a href="{{ url_for('sample.analyze_samples_page') }}" class="btn btn-primary">
-                                    <i class="fas fa-pen"></i> サンプルアノテーションページへ
+                                    <i class="fas fa-pen" aria-hidden="true"></i> サンプルアノテーションページへ
                                 </a>
                             </div>
                         </div>
@@ -294,10 +256,10 @@
             <div class="col-md-4">
                 <div class="card">
                     <div class="card-header">
-                        <h5><i class="fas fa-history"></i> 評価履歴</h5>
+                        <h5><i class="fas fa-history" aria-hidden="true"></i> 評価履歴</h5>
                     </div>
                     <div class="card-body">
-                        <div id="historyList" class="list-group">
+                        <div id="history-list" class="list-group" role="list" aria-label="評価履歴リスト">
                             <div class="text-center py-3">
                                 <div class="spinner-border text-primary" role="status">
                                     <span class="visually-hidden">読み込み中...</span>
@@ -312,437 +274,17 @@
     </div>
     
     <!-- ローディングオーバーレイ -->
-    <div id="loadingOverlay" class="d-none">
-        <div class="spinner-border text-light me-3" role="status"></div>
+    <div id="loading-overlay" class="d-none" aria-live="polite">
+        <div class="spinner-border text-light me-3" role="status">
+            <span class="visually-hidden">処理中...</span>
+        </div>
         処理中...
     </div>
+
+    <!-- JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="{{ url_for('static', filename='js/utilities.js') }}"></script>
     <script src="{{ url_for('static', filename='js/model_evaluation.js') }}"></script>
-    <script>
-        // グローバル変数
-        let currentTaskId = null;
-        let statusCheckInterval = null;
-        let currentEvaluationId = null;
-
-        // DOMが読み込まれたら実行
-        document.addEventListener('DOMContentLoaded', function() {
-            // 評価実行ボタン
-            document.getElementById('runEvaluationBtn').addEventListener('click', function() {
-                runModelEvaluation();
-            });
-            
-            // アノテーション分析ボタン
-            document.getElementById('analyzeAnnotationsBtn').addEventListener('click', function() {
-                analyzeAnnotationImpact();
-            });
-            
-            // 履歴読み込み
-            loadEvaluationHistory();
-            
-            // 最新の評価結果を取得
-            loadLatestEvaluation();
-        });
-
-        // モデル評価の実行
-        function runModelEvaluation() {
-            // ローディング表示
-            showLoading();
-            
-            // リクエスト送信
-            fetch('/evaluation/run_evaluation', {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(data => {
-                hideLoading();
-                
-                if (data.error) {
-                    alert('エラー: ' + data.error);
-                    return;
-                }
-                
-                // タスクIDの保存
-                currentTaskId = data.task_id;
-                
-                // 状態表示の初期化
-                document.getElementById('evaluationStatus').classList.remove('d-none');
-                document.getElementById('evaluationStatus').textContent = '評価を開始しました...';
-                document.getElementById('evaluationProgressContainer').classList.remove('d-none');
-                document.getElementById('evaluationProgressBar').style.width = '0%';
-                
-                // 状態チェックの開始
-                startStatusCheck();
-            })
-            .catch(error => {
-                hideLoading();
-                alert('エラー: ' + error);
-            });
-        }
-
-        // アノテーション影響分析の実行
-        function analyzeAnnotationImpact() {
-            // ローディング表示
-            showLoading();
-            
-            // リクエスト送信
-            fetch('/evaluation/analyze-annotation-impact', {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(data => {
-                hideLoading();
-                
-                if (data.error) {
-                    alert('エラー: ' + data.error);
-                    return;
-                }
-                
-                // 結果の表示
-                displayAnnotationAnalysis(data.result);
-            })
-            .catch(error => {
-                hideLoading();
-                alert('エラー: ' + error);
-            });
-        }
-
-        // 状態チェックの開始
-        function startStatusCheck() {
-            // 既存のタイマーをクリア
-            if (statusCheckInterval) {
-                clearInterval(statusCheckInterval);
-            }
-            
-            // 新しいタイマーの設定
-            statusCheckInterval = setInterval(checkTaskStatus, 1000);
-        }
-
-        // タスク状態のチェック
-        function checkTaskStatus() {
-            if (!currentTaskId) return;
-            
-            // APIエンドポイントのパスを修正
-            fetch('/api/task-status/' + currentTaskId)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('状態取得に失敗しました: ' + response.status);
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('タスク状態:', data);
-                // 状態の表示
-                updateTaskStatus(data);
-                
-                // 完了または失敗時の処理
-                if (data.status === 'completed' || data.status === 'error' || 
-                    data.status === 'failed') {
-                    // タイマーの停止
-                    clearInterval(statusCheckInterval);
-                    statusCheckInterval = null;
-                    
-                    // 完了時は結果を更新
-                    if (data.status === 'completed') {
-                        // 評価履歴を再読み込み
-                        loadEvaluationHistory();
-                        
-                        // 最新の評価結果を表示
-                        loadLatestEvaluation();
-                    }
-                }
-            })
-            .catch(error => {
-                console.error('状態チェックエラー:', error);
-                
-                // エラーカウントを追加
-                if (!window.taskStatusErrorCount) {
-                    window.taskStatusErrorCount = 1;
-                } else {
-                    window.taskStatusErrorCount++;
-                }
-                
-                // エラーが続く場合は停止（5回でギブアップ）
-                if (window.taskStatusErrorCount >= 5) {
-                    clearInterval(statusCheckInterval);
-                    statusCheckInterval = null;
-                    
-                    const statusElement = document.getElementById('evaluationStatus');
-                    if (statusElement) {
-                        statusElement.className = 'alert alert-danger';
-                        statusElement.textContent = '状態取得中にエラーが発生しました。処理は継続している可能性があります。';
-                    }
-                }
-            });
-        }
-
-        // タスク状態の更新
-        function updateTaskStatus(data) {
-            const statusElement = document.getElementById('evaluationStatus');
-            const progressElement = document.getElementById('evaluationProgressBar');
-            
-            if (!statusElement || !progressElement) return;
-            
-            // ステータスのデータ形式を確認
-            let status, message, progress;
-            
-            if (data.status && typeof data.status === 'object') {
-                // status オブジェクトが返された場合
-                status = data.status.status;
-                message = data.status.message;
-                progress = data.status.progress || 0;
-            } else {
-                // 直接データが返された場合
-                status = data.status;
-                message = data.message;
-                progress = data.progress || 0;
-            }
-            
-            // ステータスメッセージ
-            statusElement.textContent = message || '処理中...';
-            
-            // ステータスクラス
-            statusElement.className = 'alert';
-            if (status === 'processing' || status === 'queued' || status === 'running') {
-                statusElement.classList.add('alert-info');
-            } else if (status === 'completed') {
-                statusElement.classList.add('alert-success');
-            } else if (status === 'error' || status === 'failed') {
-                statusElement.classList.add('alert-danger');
-            }
-            
-            // プログレスバー
-            if (progress !== undefined) {
-                progressElement.style.width = progress + '%';
-                progressElement.textContent = Math.round(progress) + '%';
-            }
-        }
-
-
-
-        // 評価履歴の読み込み
-        function loadEvaluationHistory() {
-            fetch('/evaluation/history')
-            .then(response => response.json())
-            .then(data => {
-                const historyList = document.getElementById('historyList');
-                
-                // リストのクリア
-                historyList.innerHTML = '';
-                
-                if (!data.history || data.history.length === 0) {
-                    historyList.innerHTML = `
-                        <div class="text-center py-3 text-muted">
-                            <i class="fas fa-info-circle fa-2x mb-2"></i>
-                            <p>評価履歴がありません</p>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                // 履歴項目の作成
-                data.history.forEach(item => {
-                    const date = new Date(item.timestamp.replace(/_/g, 'T').substring(0, 4) + "-" +
-                                         item.timestamp.substring(4, 6) + "-" +
-                                         item.timestamp.substring(6, 8) + "T" +
-                                         item.timestamp.substring(9, 11) + ":" +
-                                         item.timestamp.substring(11, 13) + ":" +
-                                         item.timestamp.substring(13, 15));
-                    
-                    const dateStr = date.toLocaleString();
-                    const accuracy = (item.cv_mean * 100).toFixed(1) + '%';
-                    
-                    const historyItem = document.createElement('a');
-                    historyItem.href = '#';
-                    historyItem.className = 'list-group-item list-group-item-action history-item';
-                    historyItem.dataset.id = item.timestamp;
-                    
-                    historyItem.innerHTML = `
-                        <div class="d-flex w-100 justify-content-between">
-                            <h6 class="mb-1">${dateStr}</h6>
-                            <span class="badge bg-primary">${accuracy}</span>
-                        </div>
-                        <p class="mb-1 small">モデル評価結果</p>
-                    `;
-                    
-                    historyItem.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        
-                        // 選択状態の更新
-                        document.querySelectorAll('.history-item').forEach(item => {
-                            item.classList.remove('active');
-                        });
-                        this.classList.add('active');
-                        
-                        // 評価結果の表示
-                        loadEvaluationResult(item.timestamp);
-                    });
-                    
-                    historyList.appendChild(historyItem);
-                });
-            })
-            .catch(error => {
-                console.error('履歴読み込みエラー:', error);
-                
-                const historyList = document.getElementById('historyList');
-                historyList.innerHTML = `
-                    <div class="text-center py-3 text-danger">
-                        <i class="fas fa-exclamation-circle fa-2x mb-2"></i>
-                        <p>履歴の読み込み中にエラーが発生しました</p>
-                    </div>
-                `;
-            });
-        }
-
-        // 最新の評価結果を読み込む
-        function loadLatestEvaluation() {
-            fetch('/evaluation/get-latest-result')
-            .then(response => {
-                if (!response.ok) {
-                    // 評価結果がない場合は無視
-                    if (response.status === 404) {
-                        return null;
-                    }
-                    throw new Error('サーバーレスポンスが不正です: ' + response.status);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (!data) return;
-                
-                // 評価結果を表示
-                displayEvaluationResult(data.details, data.summary.timestamp);
-                
-                // 履歴リストの該当項目をアクティブに
-                document.querySelectorAll('.history-item').forEach(item => {
-                    item.classList.remove('active');
-                    if (item.dataset.id === data.summary.timestamp) {
-                        item.classList.add('active');
-                    }
-                });
-            })
-            .catch(error => {
-                console.error('最新評価結果読み込みエラー:', error);
-            });
-        }
-
-        // 特定の評価結果を読み込む
-        function loadEvaluationResult(timestamp) {
-            fetch('/evaluation/static/evaluation/eval_' + timestamp + '.json')
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('サーバーレスポンスが不正です: ' + response.status);
-                }
-                return response.json();
-            })
-            .then(data => {
-                // 評価結果を表示
-                displayEvaluationResult(data, timestamp);
-            })
-            .catch(error => {
-                console.error('評価結果読み込みエラー:', error);
-                alert('評価結果の読み込みに失敗しました: ' + error);
-            });
-        }
-
-        // 評価結果の表示
-        function displayEvaluationResult(data, timestamp) {
-            // プレースホルダーを非表示、結果を表示
-            document.getElementById('evaluationPlaceholder').classList.add('d-none');
-            document.getElementById('evaluationResult').classList.remove('d-none');
-            
-            // 現在の評価IDを保存
-            currentEvaluationId = timestamp;
-            
-            // メトリクス値の設定
-            document.getElementById('accuracyValue').textContent = (data.cv_mean * 100).toFixed(1) + '%';
-            
-            // 分類レポートから適合率と再現率を設定
-            const report = data.classification_report;
-            if (report) {
-                // オスクラス
-                document.getElementById('malePrecision').textContent = (report.male.precision * 100).toFixed(1) + '%';
-                document.getElementById('maleRecall').textContent = (report.male.recall * 100).toFixed(1) + '%';
-                document.getElementById('maleF1').textContent = (report.male.f1_score * 100).toFixed(1) + '%';
-                document.getElementById('maleSupport').textContent = report.male.support;
-                
-                // メスクラス
-                document.getElementById('femalePrecision').textContent = (report.female.precision * 100).toFixed(1) + '%';
-                document.getElementById('femaleRecall').textContent = (report.female.recall * 100).toFixed(1) + '%';
-                document.getElementById('femaleF1').textContent = (report.female.f1_score * 100).toFixed(1) + '%';
-                document.getElementById('femaleSupport').textContent = report.female.support;
-                
-                // 平均/合計
-                document.getElementById('avgPrecision').textContent = (report.weighted avg.precision * 100).toFixed(1) + '%';
-                document.getElementById('avgRecall').textContent = (report.weighted avg.recall * 100).toFixed(1) + '%';
-                document.getElementById('avgF1').textContent = (report.weighted avg.f1_score * 100).toFixed(1) + '%';
-                document.getElementById('totalSupport').textContent = report.weighted avg.support;
-                
-                // メイン指標に適合率と再現率を設定
-                document.getElementById('precisionValue').textContent = (report.weighted avg.precision * 100).toFixed(1) + '%';
-                document.getElementById('recallValue').textContent = (report.weighted avg.recall * 100).toFixed(1) + '%';
-            }
-            
-            // 学習曲線の画像
-            document.getElementById('learningCurveImg').src = '/evaluation/static/evaluation/learning_curve_' + timestamp + '.png';
-            
-            // 混同行列の画像
-            document.getElementById('confusionMatrixImg').src = '/evaluation/static/evaluation/confusion_matrix_' + timestamp + '.png';
-            
-            // ROCカーブの画像
-            document.getElementById('rocCurveImg').src = '/evaluation/static/evaluation/roc_curve_' + timestamp + '.png';
-            
-            // クロスバリデーションスコア
-            const cvScoresTableBody = document.getElementById('cvScoresTableBody');
-            cvScoresTableBody.innerHTML = '';
-            
-            if (data.cv_scores) {
-                data.cv_scores.forEach((score, index) => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>分割 ${index + 1}</td>
-                        <td>${(score * 100).toFixed(1)}%</td>
-                    `;
-                    cvScoresTableBody.appendChild(row);
-                });
-                
-                document.getElementById('cvMeanValue').textContent = (data.cv_mean * 100).toFixed(1) + '%';
-                document.getElementById('cvStdValue').textContent = (data.cv_std * 100).toFixed(1) + '%';
-            }
-        }
-
-        // アノテーション分析結果の表示
-        function displayAnnotationAnalysis(data) {
-            // プレースホルダーを非表示、結果を表示
-            document.getElementById('annotationPlaceholder').classList.add('d-none');
-            document.getElementById('annotationResult').classList.remove('d-none');
-            
-            // データセット情報を表示
-            const dataset = data.dataset;
-            document.getElementById('maleTotalCount').textContent = dataset.male_total;
-            document.getElementById('maleAnnotatedCount').textContent = dataset.male_annotated;
-            document.getElementById('femaleTotalCount').textContent = dataset.female_total;
-            document.getElementById('femaleAnnotatedCount').textContent = dataset.female_annotated;
-            document.getElementById('annotationRate').textContent = (dataset.annotation_rate * 100).toFixed(1) + '%';
-            
-            // アノテーション影響の画像
-            document.getElementById('annotationImpactImg').src = '/evaluation/static/evaluation/annotation_impact_' + data.timestamp + '.png';
-            
-            // アノテーションのインサイト
-            const annotationRate = dataset.annotation_rate;
-            let insightMessage = '';
-            
-            if (annotationRate < 0.3) {
-                insightMessage = 'アノテーション率が低いため、モデルの性能が十分に発揮されていない可能性があります。より多くの画像にアノテーションを追加することで性能が向上する可能性があります。';
-            } else if (annotationRate < 0.7) {
-                insightMessage = 'アノテーションの割合は中程度です。より多くのアノテーションを追加することで、モデルの性能向上が期待できます。';
-            } else {
-                insightMessage = 'アノテーション率が高く、モデルの学習に十分なデータが提供されています。このまま継続して新しいサンプルのアノテーションを行うことで、モデルの精度を維持・向上できるでしょう。';
-            }
-            
-            document.getElementById('annotationInsight').textContent = insightMessage;
-        }
-    </script>
 </body>
 </html>

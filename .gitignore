@@ -1,30 +1,22 @@
 # Python関連
 __pycache__/
 *.py[cod]
-*.class
 *.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
 *.egg
-
-# 仮想環境
+*.egg-info/
+dist/
+build/
 venv/
 ENV/
 
-# モデルと画像ファイル
+# 開発環境
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# アプリケーションデータ
 models/saved/*.pkl
 uploads/*
 extracted_images/*
@@ -34,84 +26,31 @@ static/uploads/
 static/images/
 static/evaluation/
 static/annotations/
+samples/*
 
-# IDE/エディタファイル
-.idea/
-.vscode/
-*.swp
-*.swo
+# ログファイル
+*.log
+app.log
+logs/
 
-# OSファイル
-.DS_Store
-Thumbs.db
-
-# データベースファイル
+# データファイル（開発/テスト用を除く）
 *.db
 *.sqlite
 *.sqlite3
-
-# ログと生成されたレポート
-logs/
-*.log
-log.txt
-reports/
-
-# フロントエンド関連（必要に応じて）
-node_modules/
-package-lock.json
-yarn.lock
-.npm
-.yarn-integrity
-yarn-error.log
-
-# バックアップファイル
-*.bak
-*.backup
-*~
-
-# 機密情報
-.env
-.env.local
-secrets.json
-credentials.json
-
-# テスト関連
-.coverage
-coverage/
-.pytest_cache/
-.cache/
-htmlcov/
-
-# 一時ファイル
-tmp/
-temp/
-.tmp/
-.temp/
-
-# Jupyter Notebook
-.ipynb_checkpoints/
-
-# 追加のデータファイル形式
 *.h5
 *.npy
-*.npz
 *.csv
 *.xlsx
-*.xls
 *.json
-*.geojson
-*.xml
-*.pdf
-*.html
-*.txt
+!static/js/*.json
+!static/annotation_mapping.json
 
-# 追加の画像ファイル形式
+# メディアファイル（開発/テスト用を除く）
 *.jpg
 *.jpeg
 *.png
 *.gif
-*.bmp
-*.tif
-*.tiff
-*.svg
-*.ico
+*.mp4
+*.avi
+*.mov
+*.mkv

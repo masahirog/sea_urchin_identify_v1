@@ -3,6 +3,7 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="description" content="ウニ生殖乳頭のサンプル画像分析と学習データの作成">
         <title>ウニ生殖乳頭サンプル分析</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -14,15 +15,15 @@
             <h1 class="text-center mb-4">ウニ生殖乳頭サンプル分析</h1>
             
             <div class="mb-3">
-                <a href="/" class="btn btn-outline-secondary">
-                    <i class="fas fa-arrow-left"></i> メインページに戻る
+                <a href="/" class="btn btn-outline-secondary" aria-label="メインページに戻る">
+                    <i class="fas fa-arrow-left" aria-hidden="true"></i> メインページに戻る
                 </a>
             </div>
             
             <!-- ワークフロー説明 -->
             <div class="card mb-4">
                 <div class="card-header bg-info text-white">
-                    <h5><i class="fas fa-info-circle"></i> 分析の流れ</h5>
+                    <h5><i class="fas fa-info-circle" aria-hidden="true"></i> 分析の流れ</h5>
                 </div>
                 <div class="card-body">
                     <div class="row">
@@ -53,25 +54,32 @@
             
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white">
-                    <h5><i class="fas fa-upload"></i> 新規サンプルのアップロード</h5>
+                    <h5><i class="fas fa-upload" aria-hidden="true"></i> 新規サンプルのアップロード</h5>
                 </div>
                 <div class="card-body">
-                    <form id="uploadSampleForm" class="row g-3">
+                    <form id="upload-sample-form" class="row g-3">
                         <div class="col-md-6">
-                            <label for="sampleFile" class="form-label">サンプル画像</label>
-                            <input class="form-control" type="file" id="sampleFile" accept=".jpg,.jpeg,.png">
+                            <label for="sample-file" class="form-label">サンプル画像</label>
+                            <input class="form-control" type="file" id="sample-file" accept=".jpg,.jpeg,.png" 
+                                   aria-describedby="sample-file-help">
+                            <div id="sample-file-help" class="form-text">
+                                アップロードするウニの生殖乳頭サンプル画像を選択してください。
+                            </div>
                         </div>
                         <div class="col-md-4">
-                            <label for="sampleGender" class="form-label">性別</label>
-                            <select class="form-select" id="sampleGender">
+                            <label for="sample-gender" class="form-label">性別</label>
+                            <select class="form-select" id="sample-gender" aria-describedby="sample-gender-help">
                                 <option value="male">オス</option>
                                 <option value="female">メス</option>
                                 <option value="unknown">不明</option>
                             </select>
+                            <div id="sample-gender-help" class="form-text">
+                                サンプルの性別を選択してください。不明な場合は「不明」を選びます。
+                            </div>
                         </div>
                         <div class="col-md-2 d-flex align-items-end">
                             <button type="submit" class="btn btn-primary w-100">
-                                <i class="fas fa-upload"></i> アップロード
+                                <i class="fas fa-upload" aria-hidden="true"></i> アップロード
                             </button>
                         </div>
                     </form>
@@ -82,13 +90,17 @@
                 <div class="col-md-6">
                     <div class="card">
                         <div class="card-header bg-primary text-white">
-                            <h5><i class="fas fa-mars"></i> オスの生殖乳頭サンプル ({{ male_samples|length }}枚)</h5>
+                            <h5>
+                                <i class="fas fa-mars" aria-hidden="true"></i> 
+                                オスの生殖乳頭サンプル ({{ male_samples|length }}枚)
+                            </h5>
                         </div>
                         <div class="card-body">
                             <div class="row">
                                 {% for sample in male_samples %}
                                 <div class="col-md-4 mb-3">
-                                    <div class="card sample-card" data-path="papillae/male/{{ sample }}">
+                                    <div class="card sample-card" data-path="papillae/male/{{ sample }}" 
+                                         tabindex="0" role="button" aria-label="オスサンプル: {{ sample }}">
                                         <img src="{{ url_for('sample.get_sample', path='papillae/male/' + sample) }}" 
                                             class="card-img-top sample-image" alt="{{ sample }}">
                                         <div class="card-body p-2">
@@ -100,7 +112,7 @@
                                 
                                 {% if male_samples|length == 0 %}
                                 <div class="col-12 text-center text-muted py-4">
-                                    <i class="fas fa-info-circle fa-2x mb-2"></i>
+                                    <i class="fas fa-info-circle fa-2x mb-2" aria-hidden="true"></i>
                                     <p>オスのサンプルがありません</p>
                                 </div>
                                 {% endif %}
@@ -112,13 +124,17 @@
                 <div class="col-md-6">
                     <div class="card">
                         <div class="card-header bg-danger text-white">
-                            <h5><i class="fas fa-venus"></i> メスの生殖乳頭サンプル ({{ female_samples|length }}枚)</h5>
+                            <h5>
+                                <i class="fas fa-venus" aria-hidden="true"></i> 
+                                メスの生殖乳頭サンプル ({{ female_samples|length }}枚)
+                            </h5>
                         </div>
                         <div class="card-body">
                             <div class="row">
                                 {% for sample in female_samples %}
                                 <div class="col-md-4 mb-3">
-                                    <div class="card sample-card" data-path="papillae/female/{{ sample }}">
+                                    <div class="card sample-card" data-path="papillae/female/{{ sample }}" 
+                                         tabindex="0" role="button" aria-label="メスサンプル: {{ sample }}">
                                         <img src="{{ url_for('sample.get_sample', path='papillae/female/' + sample) }}" 
                                             class="card-img-top sample-image" alt="{{ sample }}">
                                         <div class="card-body p-2">
@@ -130,7 +146,7 @@
                                 
                                 {% if female_samples|length == 0 %}
                                 <div class="col-12 text-center text-muted py-4">
-                                    <i class="fas fa-info-circle fa-2x mb-2"></i>
+                                    <i class="fas fa-info-circle fa-2x mb-2" aria-hidden="true"></i>
                                     <p>メスのサンプルがありません</p>
                                 </div>
                                 {% endif %}
@@ -144,15 +160,15 @@
                 <div class="col-12">
                     <div class="card">
                         <div class="card-header">
-                            <h5><i class="fas fa-microscope"></i> サンプル分析</h5>
+                            <h5><i class="fas fa-microscope" aria-hidden="true"></i> サンプル分析</h5>
                         </div>
                         <div class="card-body">
-                            <div id="analysisPlaceholder" class="text-center text-muted py-5">
-                                <i class="fas fa-hand-pointer fa-3x mb-3"></i>
+                            <div id="analysis-placeholder" class="text-center text-muted py-5">
+                                <i class="fas fa-hand-pointer fa-3x mb-3" aria-hidden="true"></i>
                                 <p>サンプル画像をクリックすると分析結果が表示されます</p>
                             </div>
                             
-                            <div id="analysisResult" class="d-none">
+                            <div id="analysis-result" class="d-none">
                                 <!-- 分析結果がここに表示されます -->
                             </div>
                         </div>
@@ -162,10 +178,14 @@
         </div>
         
         <!-- ローディングオーバーレイ -->
-        <div id="loadingOverlay" class="d-none">
-            <div class="spinner-border text-light me-3" role="status"></div>
+        <div id="loading-overlay" class="d-none" aria-live="polite">
+            <div class="spinner-border text-light me-3" role="status">
+                <span class="visually-hidden">処理中...</span>
+            </div>
             処理中...
         </div>
+
+        <!-- JavaScript -->
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script src="{{ url_for('static', filename='js/utilities.js') }}"></script>
