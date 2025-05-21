@@ -55,3 +55,28 @@
 2025-05-21 16:08:20,860 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 16:08:20] "[36mGET /static/js/main.js HTTP/1.1[0m" 304 -
 2025-05-21 16:08:20,865 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 16:08:20] "GET /dataset-info HTTP/1.1" 200 -
 2025-05-21 16:08:20,899 - werkzeug - INFO - 127.0.0.1 - - [21/May/2025 16:08:20] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-05-21 17:00:09,128 - werkzeug - INFO -  * Detected change in '/Users/yamashitamasahiro/projects/sea_urchin_identify_v1/utils/worker.py', reloading
+2025-05-21 17:00:09,129 - apscheduler.scheduler - INFO - Scheduler has been shut down
+2025-05-21 17:00:09,129 - apscheduler.scheduler - INFO - Scheduler has been shut down
+2025-05-21 17:00:09,222 - werkzeug - INFO -  * Restarting with stat
+2025-05-21 17:00:14,256 - apscheduler.scheduler - INFO - Scheduler has been shut down
+2025-05-21 17:12:07,003 - __main__ - INFO - 起動時クリーンアップ: 0ファイルを削除しました
+2025-05-21 17:12:07,041 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-21 17:12:07,042 - apscheduler.scheduler - INFO - Added job "Temporary files cleanup" to job store "default"
+2025-05-21 17:12:07,042 - apscheduler.scheduler - INFO - Scheduler started
+2025-05-21 17:12:07,042 - utils.file_cleanup - INFO - 一時ファイルの定期クリーンアップをスケジュール（6時間ごと）
+2025-05-21 17:12:07,052 - __main__ - INFO - 初期化時クリーンアップ: 0ファイルを削除しました
+2025-05-21 17:12:07,086 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://192.168.11.4:8080
+2025-05-21 17:12:07,086 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-05-21 17:12:07,087 - werkzeug - INFO -  * Restarting with stat
+2025-05-21 17:12:08,002 - __main__ - INFO - 起動時クリーンアップ: 0ファイルを削除しました
+2025-05-21 17:12:08,012 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-05-21 17:12:08,012 - apscheduler.scheduler - INFO - Added job "Temporary files cleanup" to job store "default"
+2025-05-21 17:12:08,012 - apscheduler.scheduler - INFO - Scheduler started
+2025-05-21 17:12:08,012 - utils.file_cleanup - INFO - 一時ファイルの定期クリーンアップをスケジュール（6時間ごと）
+2025-05-21 17:12:08,016 - __main__ - INFO - 初期化時クリーンアップ: 0ファイルを削除しました
+2025-05-21 17:12:08,030 - werkzeug - WARNING -  * Debugger is active!
+2025-05-21 17:12:08,038 - werkzeug - INFO -  * Debugger PIN: 100-568-560

@@ -470,3 +470,283 @@ class UrchinPapillaeAnalyzer:
         """クラスメソッドとしてdetect_papillae_improvedを実装"""
         from utils.image_processing import detect_papillae_improved
         return detect_papillae_improved(image, min_area, max_area, circularity_threshold)
+
+
+
+
+
+
+
+def train_model(self, dataset_dir, task_id):
+        """モデルを訓練"""
+        # グローバル変数
+        try:
+            from app import processing_status
+            global_status = True
+        except ImportError:
+            global_status = False
+        
+        # 処理状態の更新
+        if global_status:
+            processing_status[task_id] = {"status": "processing", "progress": 0, "message": "モデル訓練を開始しました"}
+        
+        try:
+            # データセットの確認
+            male_dir = os.path.join(dataset_dir, "male")
+            female_dir = os.path.join(dataset_dir, "female")
+            
+            if not os.path.exists(male_dir) or not os.path.exists(female_dir):
+                if global_status:
+                    processing_status[task_id] = {"status": "error", "message": "データセットディレクトリが正しくありません"}
+                print("エラー: データセットディレクトリが正しくありません")
+                return False
+            
+            male_images = [f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+            female_images = [f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+            
+            if len(male_images) == 0 or len(female_images) == 0:
+                if global_status:
+                    processing_status[task_id] = {"status": "error", "message": "オスまたはメスの画像が見つかりません"}
+                print("エラー: オスまたはメスの画像が見つかりません")
+                return False
+            
+            print(f"データセット: オス画像 {len(male_images)}枚, メス画像 {len(female_images)}枚")
+            
+            # アノテーションマッピングの読み込み
+            annotation_mapping = {}
+            annotation_file = os.path.join('static', 'annotation_mapping.json')
+            if os.path.exists(annotation_file):
+                try:
+                    with open(annotation_file, 'r') as f:
+                        annotation_mapping = json.load(f)
+                    print(f"アノテーションマッピングを読み込みました: {len(annotation_mapping)}件")
+                except Exception as e:
+                    print(f"アノテーションマッピング読み込みエラー: {str(e)}")
+            
+            # 特徴量データセットの構築
+            X = []
+            y = []
+            
+            # アノテーション使用状況の追跡
+            male_annotated = 0
+            male_unannotated = 0
+            female_annotated = 0
+            female_unannotated = 0
+            
+            # オス画像の処理
+            for i, img_file in enumerate(male_images):
+                try:
+                    progress = (i / len(male_images)) * 50
+                    if global_status:
+                        processing_status[task_id] = {
+                            "status": "processing", 
+                            "progress": progress,
+                            "message": f"オス画像を処理中... {i+1}/{len(male_images)}"
+                        }
+                    print(f"オス画像を処理中... {i+1}/{len(male_images)}", end="\r")
+                    
+                    img_path = os.path.join(male_dir, img_file)
+                    
+                    # アノテーションの確認
+                    annotation_path = None
+                    rel_path = f"papillae/male/{img_file}"
+                    if rel_path in annotation_mapping:
+                        annotation_path = os.path.join('static', annotation_mapping[rel_path])
+                        if os.path.exists(annotation_path):
+                            # アノテーションから特徴量抽出を試みる
+                            try:
+                                from utils.image_analysis import analyze_shape_features
+                                shape_features = analyze_shape_features(annotation_path, {})
+                                if shape_features and len(shape_features) > 0:
+                                    # アノテーションベースの特徴量
+                                    features = [
+                                        shape_features.get('area', 0),
+                                        shape_features.get('perimeter', 0),
+                                        shape_features.get('circularity', 0),
+                                        0.8,  # デフォルトのsolidity
+                                        1.0   # デフォルトのアスペクト比
+                                    ]
+                                    X.append(features)
+                                    y.append(0)  # 0:オス
+                                    male_annotated += 1
+                                    continue
+                            except Exception as e:
+                                print(f"\nアノテーション処理エラー: {img_file} - {str(e)}")
+                    
+                    # 通常の画像処理（アノテーションがないか、アノテーション処理に失敗した場合）
+                    img = cv2.imread(img_path)
+                    if img is None:
+                        continue
+                        
+                    papillae_contours, gray = detect_papillae_improved(
+                        img, 
+                        min_area=self.min_contour_area,
+                        max_area=5000,
+                        circularity_threshold=0.3
+                    )
+                    
+                    if papillae_contours:
+                        features = extract_features(gray, papillae_contours)
+                        if features is not None:
+                            X.append(features)
+                            y.append(0)  # 0:オス
+                            male_unannotated += 1
+                    
+                except Exception as e:
+                    print(f"\n画像処理中にエラー: {img_file} - {str(e)}")
+            
+            print()  # 改行
+            
+            # メス画像の処理
+            for i, img_file in enumerate(female_images):
+                try:
+                    progress = 50 + (i / len(female_images)) * 50
+                    if global_status:
+                        processing_status[task_id] = {
+                            "status": "processing", 
+                            "progress": progress,
+                            "message": f"メス画像を処理中... {i+1}/{len(female_images)}"
+                        }
+                    print(f"メス画像を処理中... {i+1}/{len(female_images)}", end="\r")
+                    
+                    img_path = os.path.join(female_dir, img_file)
+                    
+                    # アノテーションの確認
+                    annotation_path = None
+                    rel_path = f"papillae/female/{img_file}"
+                    if rel_path in annotation_mapping:
+                        annotation_path = os.path.join('static', annotation_mapping[rel_path])
+                        if os.path.exists(annotation_path):
+                            # アノテーションから特徴量抽出を試みる
+                            try:
+                                from utils.image_analysis import analyze_shape_features
+                                shape_features = analyze_shape_features(annotation_path, {})
+                                if shape_features and len(shape_features) > 0:
+                                    # アノテーションベースの特徴量
+                                    features = [
+                                        shape_features.get('area', 0),
+                                        shape_features.get('perimeter', 0),
+                                        shape_features.get('circularity', 0),
+                                        0.8,  # デフォルトのsolidity
+                                        1.0   # デフォルトのアスペクト比
+                                    ]
+                                    X.append(features)
+                                    y.append(1)  # 1:メス
+                                    female_annotated += 1
+                                    continue
+                            except Exception as e:
+                                print(f"\nアノテーション処理エラー: {img_file} - {str(e)}")
+                    
+                    # 通常の画像処理（アノテーションがないか、アノテーション処理に失敗した場合）
+                    img = cv2.imread(img_path)
+                    if img is None:
+                        continue
+                        
+                    papillae_contours, gray = detect_papillae_improved(
+                        img, 
+                        min_area=self.min_contour_area,
+                        max_area=5000,
+                        circularity_threshold=0.3
+                    )
+                    
+                    if papillae_contours:
+                        features = extract_features(gray, papillae_contours)
+                        if features is not None:
+                            X.append(features)
+                            y.append(1)  # 1:メス
+                            female_unannotated += 1
+                    
+                except Exception as e:
+                    print(f"\n画像処理中にエラー: {img_file} - {str(e)}")
+            
+            print()  # 改行
+            
+            # モデルの訓練
+            if len(X) > 0 and len(y) > 0:
+                X = np.array(X)
+                y = np.array(y)
+                
+                print(f"学習データ: {len(X)}サンプル")
+                print(f"アノテーション使用: オス {male_annotated}枚, メス {female_annotated}枚")
+                print(f"自動検出使用: オス {male_unannotated}枚, メス {female_unannotated}枚")
+                
+                # データのシャッフルと分割
+                from sklearn.model_selection import train_test_split
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+                
+                # 特徴量のスケーリング
+                from sklearn.preprocessing import StandardScaler
+                self.scaler = StandardScaler()
+                X_train_scaled = self.scaler.fit_transform(X_train)
+                X_test_scaled = self.scaler.transform(X_test)
+                
+                # ランダムフォレスト分類器
+                from sklearn.ensemble import RandomForestClassifier
+                self.rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
+                self.rf_model.fit(X_train_scaled, y_train)
+                
+                # モデル評価
+                from sklearn.metrics import accuracy_score, classification_report
+                y_pred = self.rf_model.predict(X_test_scaled)
+                accuracy = accuracy_score(y_test, y_pred)
+                
+                print(f"モデル精度: {accuracy:.2f}")
+                class_report = classification_report(y_test, y_pred, target_names=["male", "female"])
+                print(class_report)
+                
+                # モデルの保存
+                os.makedirs('models/saved', exist_ok=True)
+                model_path = os.path.join('models/saved', "sea_urchin_rf_model.pkl")
+                joblib.dump((self.rf_model, self.scaler), model_path)
+                
+                # 特徴量の重要度
+                feature_names = ["Area", "Perimeter", "Circularity", "Solidity", "Aspect Ratio"]
+                importance = dict(zip(feature_names, self.rf_model.feature_importances_))
+                
+                # アノテーション効果の分析
+                annotation_effect = None
+                if male_annotated + female_annotated > 0:
+                    annotation_effect = {
+                        "used_count": male_annotated + female_annotated,
+                        "total_count": len(X),
+                        "ratio": (male_annotated + female_annotated) / len(X),
+                        "distribution": {
+                            "male_annotated": male_annotated,
+                            "male_unannotated": male_unannotated,
+                            "female_annotated": female_annotated,
+                            "female_unannotated": female_unannotated
+                        }
+                    }
+                
+                if global_status:
+                    processing_status[task_id] = {
+                        "status": "completed", 
+                        "message": f"モデルの訓練が完了しました（精度: {accuracy:.2f}）",
+                        "accuracy": float(accuracy),
+                        "feature_importance": importance,
+                        "male_images": len(male_images),
+                        "female_images": len(female_images),
+                        "train_samples": len(X_train),
+                        "annotation_effect": annotation_effect
+                    }
+                
+                return True
+            else:
+                if global_status:
+                    processing_status[task_id] = {
+                        "status": "error", 
+                        "message": "特徴量を抽出できませんでした。データセットを確認してください。"
+                    }
+                print("エラー: 特徴量を抽出できませんでした。データセットを確認してください。")
+                return False
+                
+        except Exception as e:
+            import traceback
+            error_msg = f"モデル訓練中にエラーが発生しました: {str(e)}\n{traceback.format_exc()}"
+            if global_status:
+                processing_status[task_id] = {
+                    "status": "error", 
+                    "message": error_msg
+                }
+            print(f"エラー: {error_msg}")
+            return False

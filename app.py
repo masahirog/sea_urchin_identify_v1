@@ -26,6 +26,9 @@ app.config['ALLOWED_EXTENSIONS'] = {'mp4', 'avi', 'mov', 'mkv', 'jpg', 'jpeg', '
 app.config['SAMPLES_FOLDER'] = 'samples'
 app.config['TEMP_FILES_FOLDER'] = 'static/uploads'
 app.config['TEMP_FILES_MAX_AGE'] = 24  # 時間単位
+app.config['STATIC_FOLDER'] = 'static'  # 静的ファイル用フォルダ
+
+
 
 # 必要なディレクトリの作成
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -36,6 +39,9 @@ os.makedirs(app.config['MODEL_FOLDER'], exist_ok=True)
 os.makedirs(os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', 'male'), exist_ok=True)
 os.makedirs(os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', 'female'), exist_ok=True)
 os.makedirs(app.config['TEMP_FILES_FOLDER'], exist_ok=True)  # 一時ファイルフォルダの作成を追加
+os.makedirs(os.path.join(app.config['STATIC_FOLDER'], 'evaluation'), exist_ok=True)  # 評価結果フォルダを追加
+
+
 
 # グローバル変数
 processing_queue = queue.Queue()
@@ -64,10 +70,13 @@ from routes.main_routes import main_bp
 from routes.video_routes import video_bp
 from routes.image_routes import image_bp
 from routes.sample_routes import sample_bp
+from routes.evaluation_routes import evaluation_bp
 app.register_blueprint(main_bp)
 app.register_blueprint(video_bp, url_prefix='/video')
 app.register_blueprint(image_bp, url_prefix='/image')
 app.register_blueprint(sample_bp, url_prefix='/sample')
+app.register_blueprint(evaluation_bp, url_prefix='/evaluation')
+
 
 @app.route('/uploads/<filename>')
 def get_uploaded_file(filename):
