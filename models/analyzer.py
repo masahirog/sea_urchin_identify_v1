@@ -189,82 +189,95 @@ class UrchinPapillaeAnalyzer:
         print(f"\n処理が完了しました。{len(extracted_images)}枚の画像を抽出しました。")
         return extracted_images
 
-    def classify_image(self, image_path):
-        """画像の性別を判別"""
-        if not os.path.exists(image_path):
-            return {"error": f"画像ファイル '{image_path}' が見つかりません"}
+    def classify_image(self, image_path, extract_only=False):
+        """
+        画像を分類する
         
-        if self.rf_model is None or self.scaler is None:
-            return {"error": "モデルが読み込まれていません"}
+        Parameters:
+        - image_path: 分類する画像ファイルのパス
+        - extract_only: Trueの場合、特徴量の抽出のみを行う
         
+        Returns:
+        - result: 分類結果の辞書（クラスとその確率）
+        """
         try:
+            if extract_only:
+                print(f"特徴量抽出のみモード: {image_path}")
+            
             # 画像の読み込み
-            image = cv2.imread(image_path)
-            if image is None:
-                return {"error": f"画像 '{image_path}' の読み込みに失敗しました"}
+            img = cv2.imread(image_path)
+            if img is None:
+                raise ValueError(f"画像の読み込みに失敗しました: {image_path}")
             
-            # 生殖乳頭の検出
-            papillae_contours, processed = detect_papillae_improved(
-                image, 
-                min_area=self.min_contour_area, 
-                max_area=5000,
-                circularity_threshold=0.3
-            )
-            gray = processed 
+            # 前処理（グレースケールに変換）
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             
-            if not papillae_contours:
-                return {"error": "生殖乳頭が検出されませんでした"}
+            # 画像の二値化
+            _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
             
-            # 特徴量の抽出
-            features = extract_features(gray, papillae_contours)
-            if features is None:
-                return {"error": "特徴量の抽出に失敗しました"}
+            # 輪郭検出
+            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            if not contours:
+                raise ValueError("輪郭が検出されませんでした。")
+            
+            # 最大の輪郭を取得
+            largest_contour = max(contours, key=cv2.contourArea)
+            
+            # 特徴量の計算
+            area = cv2.contourArea(largest_contour)
+            perimeter = cv2.arcLength(largest_contour, True)
+            
+            # 円形度: 4π×(面積)/(周囲長)²
+            circularity = 4 * np.pi * area / (perimeter ** 2) if perimeter > 0 else 0
+            
+            # 凸包を計算
+            hull = cv2.convexHull(largest_contour)
+            hull_area = cv2.contourArea(hull)
+            
+            # 充実度: 面積/凸包の面積
+            solidity = area / hull_area if hull_area > 0 else 0
+            
+            # 境界矩形を計算
+            x, y, w, h = cv2.boundingRect(largest_contour)
+            
+            # アスペクト比: 幅/高さ
+            aspect_ratio = w / h if h > 0 else 0
+            
+            # 特徴量ベクトルの作成
+            features = [area, perimeter, circularity, solidity, aspect_ratio]
+            
+            if extract_only:
+                print(f"抽出した特徴量: {features}")
+                return {"features": features}
+            
+            # モデルが読み込まれていない場合はロード
+            if self.rf_model is None:
+                self.load_model()
             
             # 特徴量のスケーリング
-            scaled_features = self.scaler.transform([features])
+            features_scaled = self.scaler.transform([features])
             
-            # 予測
-            prediction = self.rf_model.predict(scaled_features)[0]
-            prediction_prob = self.rf_model.predict_proba(scaled_features)[0]
+            # 予測の実行
+            prediction = self.rf_model.predict(features_scaled)[0]
+            probabilities = self.rf_model.predict_proba(features_scaled)[0]
             
-            # 特徴量の重要度
-            feature_names = ["Area", "Perimeter", "Circularity", "Solidity", "Aspect Ratio"]
-            importance = dict(zip(feature_names, self.rf_model.feature_importances_))
+            # クラスラベルの取得
+            class_label = "male" if prediction == 0 else "female"
+            class_proba = probabilities[0] if prediction == 0 else probabilities[1]
             
-            # 検出された乳頭を描画して保存
-            overlay = image.copy()
-            cv2.drawContours(overlay, papillae_contours, -1, (0, 255, 0), 2)
-            
-            # 半透明のオーバーレイを適用
-            alpha = 0.4
-            marked_image = cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0)
-            
-            # 判定結果を描画
-            gender = "female" if prediction == 1 else "male"
-            confidence = prediction_prob[1] if prediction == 1 else prediction_prob[0]
-            color = (0, 0, 255) if gender == "female" else (0, 255, 0)  # 赤=メス、緑=オス
-            
-            cv2.putText(marked_image, f"{gender.upper()} ({confidence:.2f})", (10, 30), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-            
-            # 一時ファイルとして保存
-            output_filename = f"result_{uuid.uuid4().hex}.jpg"
-            output_path = os.path.join('uploads', output_filename)
-            cv2.imwrite(output_path, marked_image)
-            
-            result = {
-                "gender": gender,
-                "confidence": float(confidence),
-                "feature_importance": importance,
-                "marked_image_path": output_path,
-                "original_image_path": image_path
+            return {
+                "class": class_label,
+                "probability": float(class_proba),
+                "features": features
             }
             
-            return result
-            
         except Exception as e:
+            print(f"分類エラー: {str(e)}")
             import traceback
-            return {"error": f"画像分析中にエラーが発生しました: {str(e)}\n{traceback.format_exc()}"}
+            print(traceback.format_exc())
+            return None
+
 
     def train_model(self, dataset_dir, task_id):
         """モデルを訓練"""

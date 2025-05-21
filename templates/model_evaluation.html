@@ -316,11 +316,10 @@
         <div class="spinner-border text-light me-3" role="status"></div>
         処理中...
     </div>
-    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="{{ url_for('static', filename='js/utilities.js') }}"></script>
     <script src="{{ url_for('static', filename='js/model_evaluation.js') }}"></script>
-
     <script>
         // グローバル変数
         let currentTaskId = null;
@@ -424,14 +423,22 @@
         function checkTaskStatus() {
             if (!currentTaskId) return;
             
-            fetch('/task-status/' + currentTaskId)
-            .then(response => response.json())
+            // APIエンドポイントのパスを修正
+            fetch('/api/task-status/' + currentTaskId)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('状態取得に失敗しました: ' + response.status);
+                }
+                return response.json();
+            })
             .then(data => {
+                console.log('タスク状態:', data);
                 // 状態の表示
                 updateTaskStatus(data);
                 
                 // 完了または失敗時の処理
-                if (data.status === 'completed' || data.status === 'error') {
+                if (data.status === 'completed' || data.status === 'error' || 
+                    data.status === 'failed') {
                     // タイマーの停止
                     clearInterval(statusCheckInterval);
                     statusCheckInterval = null;
@@ -448,6 +455,25 @@
             })
             .catch(error => {
                 console.error('状態チェックエラー:', error);
+                
+                // エラーカウントを追加
+                if (!window.taskStatusErrorCount) {
+                    window.taskStatusErrorCount = 1;
+                } else {
+                    window.taskStatusErrorCount++;
+                }
+                
+                // エラーが続く場合は停止（5回でギブアップ）
+                if (window.taskStatusErrorCount >= 5) {
+                    clearInterval(statusCheckInterval);
+                    statusCheckInterval = null;
+                    
+                    const statusElement = document.getElementById('evaluationStatus');
+                    if (statusElement) {
+                        statusElement.className = 'alert alert-danger';
+                        statusElement.textContent = '状態取得中にエラーが発生しました。処理は継続している可能性があります。';
+                    }
+                }
             });
         }
 
@@ -458,25 +484,42 @@
             
             if (!statusElement || !progressElement) return;
             
+            // ステータスのデータ形式を確認
+            let status, message, progress;
+            
+            if (data.status && typeof data.status === 'object') {
+                // status オブジェクトが返された場合
+                status = data.status.status;
+                message = data.status.message;
+                progress = data.status.progress || 0;
+            } else {
+                // 直接データが返された場合
+                status = data.status;
+                message = data.message;
+                progress = data.progress || 0;
+            }
+            
             // ステータスメッセージ
-            statusElement.textContent = data.message || '処理中...';
+            statusElement.textContent = message || '処理中...';
             
             // ステータスクラス
             statusElement.className = 'alert';
-            if (data.status === 'processing' || data.status === 'queued') {
+            if (status === 'processing' || status === 'queued' || status === 'running') {
                 statusElement.classList.add('alert-info');
-            } else if (data.status === 'completed') {
+            } else if (status === 'completed') {
                 statusElement.classList.add('alert-success');
-            } else if (data.status === 'error') {
+            } else if (status === 'error' || status === 'failed') {
                 statusElement.classList.add('alert-danger');
             }
             
             // プログレスバー
-            if (data.progress !== undefined) {
-                progressElement.style.width = data.progress + '%';
-                progressElement.textContent = Math.round(data.progress) + '%';
+            if (progress !== undefined) {
+                progressElement.style.width = progress + '%';
+                progressElement.textContent = Math.round(progress) + '%';
             }
         }
+
+
 
         // 評価履歴の読み込み
         function loadEvaluationHistory() {

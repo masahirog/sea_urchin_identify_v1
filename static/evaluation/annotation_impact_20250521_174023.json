@@ -1,0 +1,11 @@
+{
+  "timestamp": "20250521_174023",
+  "dataset": {
+    "male_total": 0,
+    "female_total": 0,
+    "male_annotated": 2,
+    "female_annotated": 0,
+    "annotation_rate": 2.0
+  },
+  "model_loaded": false
+}

@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 # アプリケーションの初期化
 app = Flask(__name__, static_folder='static', static_url_path='/static')
+
+# 設定
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['EXTRACTED_FOLDER'] = 'extracted_images'
 app.config['DATASET_FOLDER'] = 'dataset'
@@ -28,20 +30,32 @@ app.config['TEMP_FILES_FOLDER'] = 'static/uploads'
 app.config['TEMP_FILES_MAX_AGE'] = 24  # 時間単位
 app.config['STATIC_FOLDER'] = 'static'  # 静的ファイル用フォルダ
 
-
+# 変数として取得（ディレクトリ作成用）
+UPLOAD_FOLDER = app.config['UPLOAD_FOLDER']
+DATASET_FOLDER = app.config['DATASET_FOLDER']
+STATIC_FOLDER = app.config['STATIC_FOLDER']
+MODEL_FOLDER = app.config['MODEL_FOLDER']
+EXTRACTED_FOLDER = app.config['EXTRACTED_FOLDER']
+SAMPLES_FOLDER = app.config['SAMPLES_FOLDER']
+TEMP_FILES_FOLDER = app.config['TEMP_FILES_FOLDER']
 
 # 必要なディレクトリの作成
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-os.makedirs(app.config['EXTRACTED_FOLDER'], exist_ok=True)
-os.makedirs(os.path.join(app.config['DATASET_FOLDER'], 'male'), exist_ok=True)
-os.makedirs(os.path.join(app.config['DATASET_FOLDER'], 'female'), exist_ok=True)
-os.makedirs(app.config['MODEL_FOLDER'], exist_ok=True)
-os.makedirs(os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', 'male'), exist_ok=True)
-os.makedirs(os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', 'female'), exist_ok=True)
-os.makedirs(app.config['TEMP_FILES_FOLDER'], exist_ok=True)  # 一時ファイルフォルダの作成を追加
-os.makedirs(os.path.join(app.config['STATIC_FOLDER'], 'evaluation'), exist_ok=True)  # 評価結果フォルダを追加
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(EXTRACTED_FOLDER, exist_ok=True)
+os.makedirs(os.path.join(DATASET_FOLDER, 'male'), exist_ok=True)
+os.makedirs(os.path.join(DATASET_FOLDER, 'female'), exist_ok=True)
+os.makedirs(MODEL_FOLDER, exist_ok=True)
+os.makedirs(os.path.join(SAMPLES_FOLDER, 'papillae', 'male'), exist_ok=True)
+os.makedirs(os.path.join(SAMPLES_FOLDER, 'papillae', 'female'), exist_ok=True)
+os.makedirs(TEMP_FILES_FOLDER, exist_ok=True)  # 一時ファイルフォルダの作成を追加
+os.makedirs(os.path.join(STATIC_FOLDER, 'evaluation'), exist_ok=True)  # 評価結果フォルダを追加
 
-
+# モデルファイルの存在確認、なければテストモデルを生成
+model_path = os.path.join(MODEL_FOLDER, 'sea_urchin_rf_model.pkl')
+if not os.path.exists(model_path):
+    print("モデルファイルが見つかりません。テストモデルを生成します。")
+    from utils.create_test_model import create_test_model
+    create_test_model(MODEL_FOLDER)
 
 # グローバル変数
 processing_queue = queue.Queue()
@@ -71,12 +85,14 @@ from routes.video_routes import video_bp
 from routes.image_routes import image_bp
 from routes.sample_routes import sample_bp
 from routes.evaluation_routes import evaluation_bp
+from routes.api_routes import api_bp
+
 app.register_blueprint(main_bp)
 app.register_blueprint(video_bp, url_prefix='/video')
 app.register_blueprint(image_bp, url_prefix='/image')
 app.register_blueprint(sample_bp, url_prefix='/sample')
 app.register_blueprint(evaluation_bp, url_prefix='/evaluation')
-
+app.register_blueprint(api_bp, url_prefix='/api')
 
 @app.route('/uploads/<filename>')
 def get_uploaded_file(filename):
