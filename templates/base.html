@@ -17,39 +17,57 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- 簡素化されたナビゲーションバー -->
+    <!-- ナビゲーションバー -->
     <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom mb-4">
         <div class="container">
-            <!-- ブランドロゴ/タイトル -->
+            <!-- ブランドロゴ -->
             <span class="navbar-brand fw-bold">
+                <i class="fas fa-microscope me-2 text-primary"></i>
                 ウニ生殖乳頭分析システム
             </span>
             
             <!-- モバイル用ハンバーガーメニュー -->
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
-                    aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    aria-controls="navbarNav" aria-expanded="false" aria-label="メニュー">
                 <span class="navbar-toggler-icon"></span>
             </button>
             
-            <!-- 3つのメイン機能に簡素化 -->
+            <!-- メイン機能ナビゲーション -->
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
+                <!-- システム状態表示 -->
+                <div class="navbar-text me-auto d-none d-lg-block">
+                    <small id="system-status" class="text-muted">
+                        <i class="fas fa-circle text-success me-1"></i>システム正常
+                    </small>
+                </div>
+                
+                <ul class="navbar-nav">
+                    <!-- 雌雄判定 -->
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}" 
-                           href="{{ url_for('main.index') }}">
-                            <i class="fas fa-search me-1"></i> 雌雄判定
+                           href="{{ url_for('main.index') }}" title="単一画像の雌雄判定">
+                            <i class="fas fa-search me-1"></i> 
+                            <span class="d-none d-md-inline">雌雄</span>判定
                         </a>
                     </li>
+                    
+                    <!-- 動画処理 -->
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'video.processing_page' %}active{% endif %}" 
-                           href="{{ url_for('video.processing_page') }}">
-                            <i class="fas fa-video me-1"></i> 動画処理
+                           href="{{ url_for('video.processing_page') }}" title="動画から画像を一括抽出">
+                            <i class="fas fa-video me-1"></i> 
+                            <span class="d-none d-md-inline">動画</span>処理
                         </a>
                     </li>
+                    
+                    <!-- 統合学習システム -->
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'learning.management_page' %}active{% endif %}" 
-                           href="{{ url_for('learning.management_page') }}">
-                            <i class="fas fa-graduation-cap me-1"></i> 学習管理
+                           href="{{ url_for('learning.management_page') }}" title="AI学習とモデル改善">
+                            <i class="fas fa-graduation-cap me-1"></i> 
+                            <span class="d-none d-md-inline">AI</span>学習
+                            <!-- データ準備状況バッジ -->
+                            <span id="learning-status-badge" class="badge bg-secondary ms-1 d-none">0</span>
                         </a>
                     </li>
                 </ul>
@@ -57,17 +75,30 @@
         </div>
     </nav>
 
-    <!-- メインコンテンツ -->
+    <!-- メインコンテンツエリア -->
     <div class="container">
+        <!-- システム通知エリア（全ページ共通） -->
+        <div id="system-notifications" class="alert-container mb-3">
+            <!-- 動的通知がここに表示される -->
+        </div>
+        
         {% block content %}{% endblock %}
     </div>
 
-    <!-- ローディングオーバーレイ -->
+    <!-- ローディングオーバーレイ（改良版） -->
     <div id="loadingOverlay" class="d-none">
-        <div class="spinner-border text-light me-3" role="status">
-            <span class="visually-hidden">処理中...</span>
+        <div class="loading-content">
+            <div class="spinner-border text-light mb-3" role="status">
+                <span class="visually-hidden">処理中...</span>
+            </div>
+            <div class="loading-message">処理中...</div>
+            <div class="loading-progress mt-2">
+                <div class="progress" style="width: 200px;">
+                    <div id="loading-progress-bar" class="progress-bar" style="width: 0%"></div>
+                </div>
+                <small id="loading-progress-text" class="text-light mt-1">準備中...</small>
+            </div>
         </div>
-        処理中...
     </div>
 
     <!-- 共通モーダル領域 -->
@@ -80,7 +111,184 @@
     <!-- 共通JS -->
     <script src="{{ url_for('static', filename='js/utilities.js') }}"></script>
     
+    <!-- システム状態監視（全ページ共通） -->
+    <script>
+    // システム状態の監視とナビゲーション更新
+    class SystemStatusMonitor {
+        constructor() {
+            this.updateInterval = 30000; // 30秒間隔
+            this.statusElement = document.getElementById('system-status');
+            this.badgeElement = document.getElementById('learning-status-badge');
+            this.notificationArea = document.getElementById('system-notifications');
+            
+            this.startMonitoring();
+        }
+        
+        async startMonitoring() {
+            await this.updateStatus();
+            setInterval(() => this.updateStatus(), this.updateInterval);
+        }
+        
+        async updateStatus() {
+            try {
+                const response = await fetch('/api/system-status');
+                if (!response.ok) throw new Error('ステータス取得失敗');
+                
+                const status = await response.json();
+                this.updateStatusDisplay(status);
+                this.updateLearningBadge(status);
+                
+            } catch (error) {
+                console.error('システム状態監視エラー:', error);
+                this.showOfflineStatus();
+            }
+        }
+        
+        updateStatusDisplay(status) {
+            if (!this.statusElement) return;
+            
+            const isHealthy = status.system?.status === 'healthy';
+            const hasActiveTasks = status.tasks?.active > 0;
+            
+            if (hasActiveTasks) {
+                this.statusElement.innerHTML = `
+                    <i class="fas fa-sync fa-spin text-warning me-1"></i>
+                    処理中 (${status.tasks.active}件)
+                `;
+            } else if (isHealthy) {
+                this.statusElement.innerHTML = `
+                    <i class="fas fa-circle text-success me-1"></i>
+                    システム正常
+                `;
+            } else {
+                this.statusElement.innerHTML = `
+                    <i class="fas fa-exclamation-triangle text-danger me-1"></i>
+                    要確認
+                `;
+            }
+        }
+        
+        updateLearningBadge(status) {
+            if (!this.badgeElement) return;
+            
+            const totalData = status.dataset?.total_count || 0;
+            
+            if (totalData > 0) {
+                this.badgeElement.textContent = totalData;
+                this.badgeElement.classList.remove('d-none');
+                
+                // データ量に応じてバッジ色を変更
+                this.badgeElement.className = 'badge ms-1 ' + 
+                    (totalData >= 20 ? 'bg-success' : 
+                     totalData >= 10 ? 'bg-warning' : 'bg-secondary');
+            } else {
+                this.badgeElement.classList.add('d-none');
+            }
+        }
+        
+        showOfflineStatus() {
+            if (this.statusElement) {
+                this.statusElement.innerHTML = `
+                    <i class="fas fa-wifi text-muted me-1"></i>
+                    <span class="text-muted">オフライン</span>
+                `;
+            }
+        }
+    }
+    
+    // DOMが読み込まれたら監視開始
+    document.addEventListener('DOMContentLoaded', function() {
+        new SystemStatusMonitor();
+    });
+    
+    // グローバル通知システム
+    window.showSystemNotification = function(message, type = 'info', duration = 5000) {
+        const container = document.getElementById('system-notifications');
+        if (!container) return;
+        
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        container.appendChild(alertDiv);
+        
+        // 自動削除
+        if (duration > 0) {
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, duration);
+        }
+    };
+    
+    // 改良版ローディング表示
+    window.showLoadingWithProgress = function(message = '処理中...', progress = 0) {
+        const overlay = document.getElementById('loadingOverlay');
+        const messageEl = document.querySelector('.loading-message');
+        const progressBar = document.getElementById('loading-progress-bar');
+        const progressText = document.getElementById('loading-progress-text');
+        
+        if (overlay) {
+            overlay.classList.remove('d-none');
+            if (messageEl) messageEl.textContent = message;
+            if (progressBar) progressBar.style.width = `${progress}%`;
+            if (progressText) progressText.textContent = `${Math.round(progress)}%`;
+        }
+    };
+    
+    window.updateLoadingProgress = function(progress, message = null) {
+        const progressBar = document.getElementById('loading-progress-bar');
+        const progressText = document.getElementById('loading-progress-text');
+        const messageEl = document.querySelector('.loading-message');
+        
+        if (progressBar) progressBar.style.width = `${progress}%`;
+        if (progressText) progressText.textContent = `${Math.round(progress)}%`;
+        if (message && messageEl) messageEl.textContent = message;
+    };
+    </script>
+    
     <!-- ページ固有JS -->
     {% block extra_js %}{% endblock %}
+    
+    <!-- ★修正: パフォーマンス監視の改善 -->
+    <script>
+    // 開発用: ページパフォーマンス監視（修正版）
+    window.addEventListener('load', function() {
+        try {
+            // ★修正: より安全なパフォーマンス測定
+            if (typeof performance !== 'undefined' && performance.timing) {
+                const timing = performance.timing;
+                
+                // 各タイミングが有効な値かチェック
+                if (timing.loadEventEnd > 0 && timing.navigationStart > 0 && 
+                    timing.loadEventEnd > timing.navigationStart) {
+                    
+                    const loadTime = timing.loadEventEnd - timing.navigationStart;
+                    
+                    // 異常値のチェック（10秒以上は異常とみなす）
+                    if (loadTime > 0 && loadTime < 10000) {
+                        console.log(`ページロード時間: ${loadTime}ms`);
+                        
+                        if (loadTime > 3000) {
+                            console.warn('ページロードが遅いです。最適化を検討してください。');
+                        }
+                    } else {
+                        console.log('パフォーマンス測定: 値が異常なためスキップ');
+                    }
+                } else {
+                    console.log('パフォーマンス測定: タイミング値が無効');
+                }
+            } else {
+                console.log('パフォーマンス測定: Performance APIが利用できません');
+            }
+        } catch (error) {
+            console.error('パフォーマンス測定エラー:', error);
+        }
+    });
+    </script>
 </body>
 </html>

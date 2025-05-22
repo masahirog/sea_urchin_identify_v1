@@ -1,13 +1,13 @@
-# app.py の設定部分を統一修正
+# app.py - 最終統合版（重複削除・最適化）
 import os
 import logging
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, jsonify
 import threading
 import queue
 from utils.file_cleanup import cleanup_temp_files, schedule_cleanup
 from config import * 
 
-# ロギングの設定
+# ロギング設定
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -18,23 +18,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# アプリケーションの初期化
+# アプリケーション初期化
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
-# ★統一: 新しいディレクトリ構造のみを使用
-app.config['UPLOAD_FOLDER'] = UPLOAD_DIR                    # data/uploads (一時)
-app.config['EXTRACTED_FOLDER'] = EXTRACTED_DIR              # data/extracted_frames
-app.config['DATASET_FOLDER'] = DATASET_DIR                  # data/dataset
-app.config['MODEL_FOLDER'] = os.path.join(MODELS_DIR, 'saved')
-app.config['SAMPLES_FOLDER'] = STATIC_SAMPLES_DIR           # static/images/samples (恒久)
-app.config['ALLOWED_EXTENSIONS'] = {'mp4', 'avi', 'mov', 'mkv', 'jpg', 'jpeg', 'png'}
-app.config['TEMP_FILES_MAX_AGE'] = 24  # 時間単位
+# ★統合: 設定の一元化
+app.config.update({
+    'UPLOAD_FOLDER': UPLOAD_DIR,
+    'EXTRACTED_FOLDER': EXTRACTED_DIR,
+    'DATASET_FOLDER': DATASET_DIR,
+    'MODEL_FOLDER': os.path.join(MODELS_DIR, 'saved'),
+    'SAMPLES_FOLDER': STATIC_SAMPLES_DIR,
+    'ALLOWED_EXTENSIONS': {'mp4', 'avi', 'mov', 'mkv', 'jpg', 'jpeg', 'png'},
+    'TEMP_FILES_MAX_AGE': 24,
+    'SECRET_KEY': SECRET_KEY,
+    'MAX_CONTENT_LENGTH': MAX_CONTENT_LENGTH
+})
 
-# 必要なディレクトリの作成と移行
+# 必要なディレクトリの作成
 ensure_directories()
-migrate_legacy_directories()  # 初回のみ実行される
+migrate_legacy_directories()
 
-# モデルファイルの存在確認、なければテストモデルを生成
+# モデルファイル確認・生成
 model_path = os.path.join(app.config['MODEL_FOLDER'], 'sea_urchin_rf_model.pkl')
 if not os.path.exists(model_path):
     logger.info("モデルファイルが見つかりません。テストモデルを生成します。")
@@ -42,23 +46,23 @@ if not os.path.exists(model_path):
     create_test_model(app.config['MODEL_FOLDER'])
     logger.info(f"テストモデル生成完了: {model_path}")
 
-# グローバル変数
+# ★統合: グローバル変数の一元化
 processing_queue = queue.Queue()
 processing_results = {}
 processing_status = {}
 
-# 起動時に一度クリーンアップを実行（一時アップロードフォルダのみ）
+# 起動時クリーンアップ
 with app.app_context():
     cleanup_count = cleanup_temp_files(
-        directory=app.config['UPLOAD_FOLDER'],  # data/uploads
+        directory=app.config['UPLOAD_FOLDER'],
         max_age_hours=app.config['TEMP_FILES_MAX_AGE']
     )
     logger.info(f"起動時クリーンアップ: {cleanup_count}ファイルを削除しました")
 
-# 定期的なクリーンアップをスケジュール
+# 定期クリーンアップ
 schedule_cleanup(app, interval_hours=6)
 
-# ワーカースレッドの開始
+# ワーカースレッド開始
 from utils.worker import processing_worker
 processing_thread = threading.Thread(
     target=processing_worker, 
@@ -68,68 +72,91 @@ processing_thread.daemon = True
 processing_thread.start()
 logger.info("処理ワーカースレッドを開始しました")
 
-# ルートの登録
+# ★統合: ルート登録（重複削除・最適化）
 from routes.main_routes import main_bp
 from routes.video_routes import video_bp
 from routes.image_routes import image_bp
-from routes.learning_routes import learning_bp  # ★追加
+from routes.learning_routes import learning_bp
 from routes.api_routes import api_bp
 
 app.register_blueprint(main_bp)
 app.register_blueprint(video_bp, url_prefix='/video')
 app.register_blueprint(image_bp, url_prefix='/image')
-app.register_blueprint(learning_bp, url_prefix='/learning')  # ★追加
+app.register_blueprint(learning_bp, url_prefix='/learning')
 app.register_blueprint(api_bp, url_prefix='/api')
 
-# ★統一: アップロードファイル配信（一時ファイル用）
+# ★統合: ファイル配信ルートの一元化
 @app.route('/uploads/<filename>')
 def get_uploaded_file(filename):
-    """一時アップロードファイルを提供するルート"""
+    """一時アップロードファイル配信"""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
-
 
 @app.route('/static/images/<path:filename>')
 def serve_static_images(filename):
-    """
-    静的画像ファイル（アノテーション、検出結果など）を配信
-    
-    Parameters:
-    - filename: 画像ファイルのパス（annotations/xxx.png など）
-    
-    Returns:
-    - Response: 画像ファイル
-    """
-    from config import STATIC_IMAGES_DIR
+    """静的画像ファイル配信（アノテーション・検出結果など）"""
     return send_from_directory(STATIC_IMAGES_DIR, filename)
 
-# ★追加: 評価画像配信ルート  
 @app.route('/evaluation/images/<filename>')
 def serve_evaluation_images(filename):
-    """
-    評価結果画像を配信
-    
-    Parameters:
-    - filename: 評価画像ファイル名
-    
-    Returns:
-    - Response: 評価画像ファイル
-    """
-    from config import STATIC_EVALUATION_DIR
+    """評価結果画像配信"""
     return send_from_directory(STATIC_EVALUATION_DIR, filename)
 
-
-
-# ★統一: サンプル画像配信（恒久ファイル用）
 @app.route('/sample/<path:filename>')
 def serve_sample_image(filename):
-    """サンプル画像の配信"""
+    """サンプル画像配信"""
     return send_from_directory(STATIC_SAMPLES_DIR, filename)
 
-# デバッグ用：登録されたルートを出力
+# ★統合: システム状態API
+@app.route('/api/system-status')
+def system_status():
+    """システム全体の状態を取得"""
+    try:
+        # データセット統計
+        male_dir = os.path.join(app.config['DATASET_FOLDER'], 'male')
+        female_dir = os.path.join(app.config['DATASET_FOLDER'], 'female')
+        
+        male_count = len([f for f in os.listdir(male_dir) 
+                         if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(male_dir) else 0
+        female_count = len([f for f in os.listdir(female_dir) 
+                           if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(female_dir) else 0
+        
+        # アクティブタスク数
+        active_tasks = len([t for t in processing_status.values() 
+                          if t.get('status') in ['processing', 'queued', 'running']])
+        
+        # モデル存在確認
+        model_exists = os.path.exists(model_path)
+        
+        return jsonify({
+            'dataset': {
+                'male_count': male_count,
+                'female_count': female_count,
+                'total_count': male_count + female_count
+            },
+            'tasks': {
+                'active': active_tasks,
+                'total': len(processing_status)
+            },
+            'model': {
+                'exists': model_exists,
+                'path': model_path
+            },
+            'system': {
+                'version': '1.0.0',
+                'status': 'healthy'
+            }
+        })
+    except Exception as e:
+        logger.error(f"システム状態取得エラー: {str(e)}")
+        return jsonify({'error': 'システム状態の取得に失敗しました'}), 500
+
+# デバッグ用ルート（開発時のみ）
 @app.route('/debug/routes')
 def debug_routes():
-    """デバッグ用：登録されているルートを表示"""
+    """デバッグ用：登録ルート表示"""
+    if not app.config.get('DEBUG', False):
+        return jsonify({'error': 'デバッグモードでのみ利用可能'}), 403
+        
     routes = []
     for rule in app.url_map.iter_rules():
         routes.append({
@@ -137,12 +164,27 @@ def debug_routes():
             'methods': list(rule.methods),
             'rule': str(rule)
         })
-    return jsonify(routes)
+    return jsonify({'routes': routes, 'count': len(routes)})
 
+# エラーハンドラー
+@app.errorhandler(404)
+def not_found_error(error):
+    return jsonify({'error': 'ページが見つかりません'}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    logger.error(f"内部サーバーエラー: {str(error)}")
+    return jsonify({'error': '内部サーバーエラーが発生しました'}), 500
+
+@app.errorhandler(413)
+def too_large(error):
+    return jsonify({'error': 'ファイルサイズが大きすぎます'}), 413
+
+# アプリケーション起動
 if __name__ == '__main__':
     logger.info("登録されているルート:")
     for rule in app.url_map.iter_rules():
         logger.info(f"  {rule} -> {rule.endpoint} [{', '.join(rule.methods)}]")
     
     logger.info("アプリケーションを起動します")
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=DEBUG)
