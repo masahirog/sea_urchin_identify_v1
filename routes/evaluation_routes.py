@@ -120,9 +120,9 @@ def analyze_annotation_impact_route():
     try:
         current_app.logger.info("アノテーション影響分析実行リクエスト受信")
         
-        # モデルとデータセットのパスを確認
+        # ★ 修正: モデルとデータセットのパスを正しく取得
         model_path = os.path.join(app.config['MODEL_FOLDER'], "sea_urchin_rf_model.pkl")
-        dataset_dir = app.config['DATASET_FOLDER']
+        dataset_dir = app.config['DATASET_FOLDER']  # data/dataset を正しく取得
         
         current_app.logger.info(f"モデルパス: {model_path} (存在: {os.path.exists(model_path)})")
         current_app.logger.info(f"データセットディレクトリ: {dataset_dir} (存在: {os.path.exists(dataset_dir)})")
@@ -134,9 +134,16 @@ def analyze_annotation_impact_route():
             }), 404
             
         if not os.path.exists(dataset_dir):
-            return jsonify({
-                "error": "データセットディレクトリが見つかりません。"
-            }), 404
+            # ★ データセットディレクトリが存在しない場合は作成
+            try:
+                from config import ensure_directories
+                ensure_directories()
+                current_app.logger.info(f"データセットディレクトリを作成しました: {dataset_dir}")
+            except Exception as e:
+                current_app.logger.error(f"ディレクトリ作成エラー: {str(e)}")
+                return jsonify({
+                    "error": f"データセットディレクトリが見つからず、作成もできませんでした: {dataset_dir}"
+                }), 404
         
         # アノテーションマッピングの整合性チェック（追加）
         mapping_file = os.path.join('static', 'annotation_mapping.json')

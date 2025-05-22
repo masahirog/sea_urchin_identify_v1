@@ -1,3 +1,4 @@
+# app.py の設定部分を修正
 import os
 import logging
 from flask import Flask, send_from_directory
@@ -20,32 +21,19 @@ logger = logging.getLogger(__name__)
 # アプリケーションの初期化
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
-# 設定
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['EXTRACTED_FOLDER'] = 'extracted_images'
-app.config['DATASET_FOLDER'] = 'dataset'
-app.config['MODEL_FOLDER'] = 'models/saved'
+# ★ 修正: 設定をconfig.pyの定数を使用するように変更
+app.config['UPLOAD_FOLDER'] = UPLOAD_DIR
+app.config['EXTRACTED_FOLDER'] = EXTRACTED_DIR
+app.config['DATASET_FOLDER'] = DATASET_DIR  # ★ ここが重要: data/dataset を指定
+app.config['MODEL_FOLDER'] = os.path.join(MODELS_DIR, 'saved')
 app.config['ALLOWED_EXTENSIONS'] = {'mp4', 'avi', 'mov', 'mkv', 'jpg', 'jpeg', 'png'}
-app.config['SAMPLES_FOLDER'] = 'samples'
-app.config['TEMP_FILES_FOLDER'] = 'static/uploads'
+app.config['SAMPLES_FOLDER'] = LEGACY_SAMPLES_DIR
+app.config['TEMP_FILES_FOLDER'] = LEGACY_STATIC_UPLOADS_DIR
 app.config['TEMP_FILES_MAX_AGE'] = 24  # 時間単位
 app.config['STATIC_FOLDER'] = 'static'  # 静的ファイル用フォルダ
 
 # 必要なディレクトリの作成
-for directory in [
-    app.config['UPLOAD_FOLDER'], 
-    app.config['EXTRACTED_FOLDER'],
-    os.path.join(app.config['DATASET_FOLDER'], 'male'),
-    os.path.join(app.config['DATASET_FOLDER'], 'female'),
-    app.config['MODEL_FOLDER'],
-    os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', 'male'),
-    os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', 'female'),
-    app.config['TEMP_FILES_FOLDER'],
-    os.path.join(app.config['STATIC_FOLDER'], 'evaluation')
-]:
-    # os.makedirs(directory, exist_ok=True)
-    ensure_directories()
-    logger.debug(f"ディレクトリ作成確認: {directory}")
+ensure_directories()  # ★ config.pyの関数を使用
 
 # モデルファイルの存在確認、なければテストモデルを生成
 model_path = os.path.join(app.config['MODEL_FOLDER'], 'sea_urchin_rf_model.pkl')
