@@ -617,6 +617,9 @@ def execute_detailed_analysis_phase(task_id, dataset_dir, status_dict, evaluatio
                     X, y, model_path=model_path, save_results=True
                 )
                 
+                # ★追加: タイムスタンプを保存
+                status_dict[task_id]['evaluation_timestamp'] = eval_results.get('timestamp')
+                
                 # 進捗更新
                 status_dict[task_id].update({
                     "message": "詳細分析完了",
@@ -644,6 +647,7 @@ def execute_detailed_analysis_phase(task_id, dataset_dir, status_dict, evaluatio
         print(f"詳細分析エラー (継続): {str(e)}")
         return evaluation_result
 
+
 def execute_annotation_impact_phase(task_id, dataset_dir, status_dict):
     """
     フェーズ5: アノテーション効果分析
@@ -664,10 +668,13 @@ def execute_annotation_impact_phase(task_id, dataset_dir, status_dict):
         # 正しいデータセットディレクトリを使用
         actual_dataset_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
         
-        # ★修正: UnifiedEvaluatorを使用
+        # ★修正: 評価フェーズのタイムスタンプを取得して渡す
+        evaluation_timestamp = status_dict[task_id].get('evaluation_timestamp')
+        
+        # ★修正: UnifiedEvaluatorを使用（タイムスタンプを渡す）
         evaluator = UnifiedEvaluator()
         annotation_result = evaluator.analyze_annotation_impact(
-            actual_dataset_dir, model_path, save_results=True
+            actual_dataset_dir, model_path, save_results=True, timestamp=evaluation_timestamp
         )
         
         # 進捗更新
@@ -715,6 +722,21 @@ def create_unified_result(training_result, evaluation_result, detailed_result, a
     # アノテーション情報
     annotation_dataset = annotation_result.get('dataset', {})
     
+    # ★修正: detailed_resultからタイムスタンプを取得
+    timestamp = detailed_result.get('timestamp', datetime.now().isoformat())
+    
+    # ★追加: アノテーション画像用のタイムスタンプを取得
+    # annotation_resultにtimestampがあればそれを使用、なければtimestampから生成
+    if 'timestamp' in annotation_result:
+        annotation_timestamp = annotation_result['timestamp']
+    else:
+        # ISO形式から YYYYMMDD_HHMMSS 形式に変換
+        try:
+            dt = datetime.fromisoformat(timestamp)
+            annotation_timestamp = dt.strftime("%Y%m%d_%H%M%S")
+        except:
+            annotation_timestamp = timestamp.replace('-', '').replace('T', '_').replace(':', '').split('.')[0]
+    
     # 統合結果の構築
     unified_result = {
         "summary": {
@@ -744,13 +766,15 @@ def create_unified_result(training_result, evaluation_result, detailed_result, a
         "annotation_analysis": {
             "dataset": annotation_dataset,
             "impact_score": calculate_annotation_impact_score(annotation_dataset),
-            "recommendations": generate_annotation_recommendations(annotation_dataset)
+            "recommendations": generate_annotation_recommendations(annotation_dataset),
+            # ★修正: アノテーション画像のタイムスタンプ情報
+            "annotation_timestamp": annotation_timestamp
         },
         "improvement_suggestions": generate_improvement_suggestions(
             accuracy, annotation_dataset, detailed_result.get('sample_count', 0)
         ),
         "metadata": {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": timestamp,  # ★修正: 評価時のタイムスタンプを使用
             "model_type": "RandomForest",
             "feature_count": 5,
             "training_method": "unified"

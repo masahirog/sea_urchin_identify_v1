@@ -766,6 +766,9 @@ class UnifiedLearningSystem {
         const evaluation = this.learningResults.evaluation || {};
         const timestamp = this.learningResults.metadata?.timestamp || Date.now();
         
+        // ★修正: アノテーション用のタイムスタンプを取得
+        const annotationTimestamp = this.learningResults.annotation_analysis?.annotation_timestamp || timestamp;
+        
         // グラフ画像の表示
         const graphsHTML = `
             <div class="row">
@@ -791,7 +794,7 @@ class UnifiedLearningSystem {
                 </div>
                 <div class="col-md-6 mb-3">
                     <h6>アノテーション効果</h6>
-                    <img src="/evaluation/images/annotation_impact_${timestamp}.png" 
+                    <img src="/evaluation/images/annotation_impact_${annotationTimestamp}.png" 
                          class="img-fluid rounded" alt="アノテーション効果"
                          onerror="this.parentElement.innerHTML='<p class=text-muted>グラフが利用できません</p>'">
                 </div>
@@ -800,6 +803,8 @@ class UnifiedLearningSystem {
         
         container.innerHTML = graphsHTML;
     }
+
+
 
     /**
      * 改善提案表示

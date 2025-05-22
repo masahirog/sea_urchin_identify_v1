@@ -729,10 +729,65 @@ def evaluate_model(X, y, model, model_path=None, output_dir=None):
     evaluator = UnifiedEvaluator()
     return evaluator.evaluate_model(X, y, model, model_path)
 
-def analyze_annotation_impact(dataset_dir, model_path, output_dir=None):
-    """後方互換性用のアノテーション影響分析関数"""
-    evaluator = UnifiedEvaluator()
-    return evaluator.analyze_annotation_impact(dataset_dir, model_path)
+def analyze_annotation_impact(self, dataset_dir, model_path=None, save_results=True, timestamp=None):
+    """
+    アノテーション影響分析
+    
+    Args:
+        dataset_dir: データセットディレクトリ
+        model_path: モデルファイルパス
+        save_results: 結果を保存するかどうか
+        timestamp: 使用するタイムスタンプ（オプション）
+        
+    Returns:
+        dict: 分析結果
+    """
+    try:
+        print(f"アノテーション影響分析開始 - データセット: {dataset_dir}")
+        
+        # アノテーションデータ取得
+        annotation_data = self._load_annotation_data()
+        
+        # データセット統計計算
+        dataset_stats = self._calculate_dataset_stats(dataset_dir, annotation_data)
+        
+        # モデル情報取得
+        model_info = self._get_model_info(model_path)
+        
+        # 分析結果作成（タイムスタンプを渡す）
+        analysis = self._create_annotation_analysis(dataset_stats, model_info, timestamp)
+        
+        # 結果保存
+        if save_results:
+            saved_results = self._save_annotation_analysis(analysis)
+            analysis.update(saved_results)
+        
+        print("アノテーション影響分析完了")
+        return analysis
+        
+    except Exception as e:
+        error_msg = f"アノテーション影響分析エラー: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        return {"error": error_msg}
+
+
+def _create_annotation_analysis(self, dataset_stats, model_info, timestamp=None):
+    """アノテーション分析結果の作成"""
+    # ★修正: 外部から指定されたタイムスタンプを使用、なければ新規生成
+    if timestamp:
+        # ISO形式のタイムスタンプをYYYYMMDD_HHMMSS形式に変換
+        from datetime import datetime
+        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00') if 'Z' in timestamp else timestamp)
+        formatted_timestamp = dt.strftime("%Y%m%d_%H%M%S")
+    else:
+        formatted_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    return {
+        "timestamp": formatted_timestamp,
+        "dataset": dataset_stats,
+        **model_info
+    }
 
 def get_model_evaluation_history(evaluation_dir=None):
     """後方互換性用の評価履歴取得関数"""
