@@ -13,6 +13,7 @@ const sampleAnalysis = {
  * ページ初期化処理
  */
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOMContentLoaded - サンプル分析ページ初期化開始');
     initSampleAnalysisPage();
 });
 
@@ -20,6 +21,8 @@ document.addEventListener('DOMContentLoaded', function() {
  * サンプル分析ページの初期化
  */
 function initSampleAnalysisPage() {
+    console.log('サンプル分析ページの初期化開始');
+    
     // 前回選択されていたサンプルを復元
     restoreLastSelectedSample();
     
@@ -29,8 +32,13 @@ function initSampleAnalysisPage() {
     // サンプル画像アップロードフォーム
     initSampleUploadForm();
     
+    // ファイル選択の表示更新
+    initFileInputDisplay();
+    
     // ページタイトルにサンプル数を表示
     updatePageTitle();
+    
+    console.log('サンプル分析ページの初期化完了');
 }
 
 /**
@@ -39,6 +47,7 @@ function initSampleAnalysisPage() {
 function restoreLastSelectedSample() {
     const lastSelectedSample = getFromSession('lastSelectedSample');
     if (lastSelectedSample) {
+        console.log('前回選択サンプルを復元:', lastSelectedSample);
         const sampleCard = document.querySelector(`.sample-card[data-path="${lastSelectedSample}"]`);
         if (sampleCard) {
             sampleCard.classList.add('selected-sample');
@@ -53,8 +62,16 @@ function restoreLastSelectedSample() {
  * サンプルカードのクリックイベント設定
  */
 function initSampleCardEvents() {
-    document.querySelectorAll('.sample-card').forEach(card => {
-        card.addEventListener('click', function() {
+    const sampleCards = document.querySelectorAll('.sample-card');
+    console.log(`サンプルカード数: ${sampleCards.length}`);
+    
+    sampleCards.forEach((card, index) => {
+        console.log(`サンプルカード ${index + 1}: data-path="${card.dataset.path}"`);
+        
+        card.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('サンプルカードクリック:', this.dataset.path);
+            
             // 選択状態の更新
             document.querySelectorAll('.sample-card').forEach(c => {
                 c.classList.remove('selected-sample');
@@ -63,10 +80,22 @@ function initSampleCardEvents() {
             
             // サンプルデータを保存
             sampleAnalysis.currentSample = this.dataset.path;
+            console.log('現在のサンプル設定:', sampleAnalysis.currentSample);
             
             // サンプル分析
             analyzeSample(this.dataset.path);
         });
+        
+        // キーボードアクセシビリティ対応
+        card.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                this.click();
+            }
+        });
+        
+        // フォーカス可能にする
+        card.setAttribute('tabindex', '0');
     });
 }
 
@@ -76,9 +105,27 @@ function initSampleCardEvents() {
 function initSampleUploadForm() {
     const uploadForm = document.getElementById('uploadSampleForm');
     if (uploadForm) {
+        console.log('アップロードフォームイベント設定');
         uploadForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            uploadSample(this);
+            console.log('アップロードフォーム送信');
+            uploadSample();
+        });
+    }
+}
+
+/**
+ * ファイル選択の表示更新
+ */
+function initFileInputDisplay() {
+    const fileInput = document.getElementById('sampleFile');
+    const fileNameDisplay = document.querySelector('.file-name');
+    
+    if (fileInput && fileNameDisplay) {
+        fileInput.addEventListener('change', function() {
+            const fileName = this.files.length > 0 ? this.files[0].name : '選択されていません';
+            fileNameDisplay.textContent = fileName;
+            console.log('ファイル選択:', fileName);
         });
     }
 }
@@ -88,10 +135,18 @@ function initSampleUploadForm() {
  * @param {string} imagePath - 分析する画像のパス
  */
 function analyzeSample(imagePath) {
-    if (!imagePath) return;
+    if (!imagePath) {
+        console.error('画像パスが指定されていません');
+        return;
+    }
+    
+    console.log('サンプル分析開始:', imagePath);
     
     // 分析中の場合は処理をキャンセル
-    if (sampleAnalysis.analysisInProgress) return;
+    if (sampleAnalysis.analysisInProgress) {
+        console.log('分析実行中のため処理をスキップ');
+        return;
+    }
     sampleAnalysis.analysisInProgress = true;
     
     // プレースホルダーを非表示、分析結果を表示
@@ -105,14 +160,13 @@ function analyzeSample(imagePath) {
         // ローディング表示
         resultElement.innerHTML = `
             <div class="text-center py-4">
-                <div class="spinner-border text-primary" role="status"></div>
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">分析中...</span>
+                </div>
                 <p class="mt-2">サンプルを分析しています...</p>
             </div>
         `;
     }
-    let processedImagePath = imagePath;
-    console.log("分析送信パス:", processedImagePath);
-
     
     // 分析リクエスト
     fetch('/sample/analyze-sample', {
@@ -121,18 +175,20 @@ function analyzeSample(imagePath) {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            'image_path': processedImagePath
+            'image_path': imagePath
         })
     })
     .then(response => {
+        console.log('サーバーレスポンス受信:', response.status, response.ok);
         if (!response.ok) {
-            throw new Error('サーバーレスポンスが不正です: ' + response.status);
+            throw new Error(`サーバーエラー: ${response.status}`);
         }
         return response.json();
     })
     .then(data => {
         console.log('サーバーからのレスポンス:', data);
         if (data.error) {
+            console.error('分析エラー:', data.error);
             showError('analysisResult', data.error);
             return;
         }
@@ -142,10 +198,11 @@ function analyzeSample(imagePath) {
     })
     .catch(error => {
         console.error('分析エラー:', error);
-        showError('analysisResult', '分析中にエラーが発生しました: ' + error);
+        showError('analysisResult', '分析中にエラーが発生しました: ' + error.message);
     })
     .finally(() => {
         sampleAnalysis.analysisInProgress = false;
+        console.log('サンプル分析処理完了');
     });
 }
 
@@ -155,222 +212,235 @@ function analyzeSample(imagePath) {
  * @param {Object} data - 分析結果データ
  */
 function displayAnalysisResult(imagePath, data) {
+    console.log('分析結果表示開始:', data);
+    
     const resultElement = document.getElementById('analysisResult');
-    if (!resultElement) return;
+    if (!resultElement) {
+        console.error('分析結果表示要素が見つかりません');
+        return;
+    }
     
     // データの構造を確認
     if (!data || !data.basic_stats) {
+        console.error('データの形式が不正です:', data);
         showError('analysisResult', 'データの形式が不正です');
         return;
     }
     
-    // 基本情報セクション
-    let html = createBasicInfoSection(imagePath, data);
+    // HTML生成
+    let html = createAnalysisResultHTML(imagePath, data);
     
-    // 検出情報セクション
-    html += createDetectionInfoSection(data);
-
     // 結果の表示
     resultElement.innerHTML = html;
-    resultElement.classList.remove('d-none'); // 表示状態に変更
-
+    resultElement.classList.remove('d-none');
+    
     // 結果表示後、アノテーション開始ボタンにイベントリスナーを追加
-    addAnnotationButtonListener();
+    setTimeout(() => {
+        addAnnotationButtonListener();
+    }, 100);
+    
+    console.log('分析結果表示完了');
 }
 
 /**
- * 基本情報セクションHTMLの作成
+ * 分析結果のHTML生成
  * @param {string} imagePath - 画像パス
  * @param {Object} data - 分析データ
  * @returns {string} HTML文字列
  */
-function createBasicInfoSection(imagePath, data) {
-    return `
-        <div class="row">
-            <div class="col-md-5">
-                <div class="text-center mb-3">
-                    <img src="/sample/${imagePath}" class="img-fluid" style="max-height: 300px;" alt="サンプル画像">
-                </div>
-                <div class="card">
-                    <div class="card-header bg-light">
-                        <h6 class="mb-0">画像情報</h6>
-                    </div>
-                    <div class="card-body">
-                        <table class="table table-sm">
-                            <tr>
-                                <th style="width: 130px;">ファイル</th>
-                                <td>${imagePath.split('/').pop()}</td>
-                            </tr>
-                            <tr>
-                                <th>サイズ</th>
-                                <td>${data.basic_stats.size[1]} x ${data.basic_stats.size[0]} ピクセル</td>
-                            </tr>
-                            <tr>
-                                <th>平均輝度</th>
-                                <td>${data.basic_stats.mean.toFixed(2)}</td>
-                            </tr>
-                            <tr>
-                                <th>標準偏差</th>
-                                <td>${data.basic_stats.std.toFixed(2)}</td>
-                            </tr>
-                        </table>
+function createAnalysisResultHTML(imagePath, data) {
+    const fileName = imagePath.split('/').pop();
+    const hasAnnotation = data.shape_features && Object.keys(data.shape_features).length > 0;
+    
+    let html = `
+        <div class="analysis-content">
+            <h3>分析結果: ${fileName}</h3>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="text-center mb-3">
+                        <img src="/sample/${imagePath}" class="img-fluid rounded" style="max-height: 300px;" alt="サンプル画像">
                     </div>
                 </div>
-            </div>
-            <div class="col-md-7">
-                <div class="card">
-                    <div class="card-header bg-light">
-                        <h6 class="mb-0">検出情報</h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-4">
-                            <table class="table table-sm">
-                                <tr>
-                                    <th style="width: 130px;">生殖乳頭検出数</th>
-                                    <td>${data.detection_result.papillae_count}</td>
-                                </tr>
-                            </table>
+                <div class="col-md-6">
+                    <div class="analysis-grid">
+                        <!-- 基本統計情報 -->
+                        <div class="analysis-card">
+                            <h4><i class="fas fa-chart-bar"></i> 基本統計</h4>
+                            <p><strong>画像サイズ:</strong> ${data.basic_stats.size[1]} × ${data.basic_stats.size[0]} px</p>
+                            <p><strong>平均輝度:</strong> ${data.basic_stats.mean.toFixed(2)}</p>
+                            <p><strong>標準偏差:</strong> ${data.basic_stats.std.toFixed(2)}</p>
                         </div>
-    `;
-}
-
-/**
-* 検出情報セクションHTMLの作成
-* @param {Object} data - 分析データ
-* @returns {string} HTML文字列
-*/
-function createDetectionInfoSection(data) {
-    let html = '';
-   
-    // アノテーション状態に応じた表示
-    if (data.shape_features && Object.keys(data.shape_features).length > 0) {
-        html += `
-            <div class="alert alert-success">
-                <i class="fas fa-check-circle me-2"></i>
-                このサンプルはアノテーション済みです
-            </div>
-            <div class="mb-4">
-                <h6>形状特性</h6>
-                <table class="table table-sm">
-                    <tr>
-                        <th style="width: 130px;">面積</th>
-                        <td>${data.shape_features.area.toFixed(2)} px²</td>
-                    </tr>
-                    <tr>
-                        <th>周囲長</th>
-                        <td>${data.shape_features.perimeter.toFixed(2)} px</td>
-                    </tr>
-                    <tr>
-                        <th>円形度</th>
-                        <td>${data.shape_features.circularity.toFixed(4)}</td>
-                    </tr>
-                </table>
-            </div>
-
-            <div class="mb-3">
-                <h6>アノテーション結果</h6>
-                <div class="text-center p-2 border rounded">
-                    <img src="/static/${data.annotation_path}" class="img-fluid" style="max-height: 300px;" alt="アノテーション画像">
+                        
+                        <!-- 検出結果 -->
+                        <div class="analysis-card">
+                            <h4><i class="fas fa-search"></i> 検出結果</h4>
+                            <p><strong>生殖乳頭検出数:</strong> ${data.detection_result.papillae_count}個</p>
+                        </div>
+                        
+                        <!-- エッジ特徴 -->
+                        <div class="analysis-card">
+                            <h4><i class="fas fa-vector-square"></i> エッジ特徴</h4>
+                            <p><strong>エッジ数:</strong> ${data.edge_features.edge_count}</p>
+                            <p><strong>エッジ密度:</strong> ${(data.edge_features.edge_density * 100).toFixed(2)}%</p>
+                        </div>
+                        
+                        <!-- テクスチャ特徴 -->
+                        <div class="analysis-card">
+                            <h4><i class="fas fa-texture"></i> テクスチャ特徴</h4>
+                            <p><strong>コントラスト:</strong> ${data.texture_features.contrast.toFixed(2)}</p>
+                            <p><strong>均一性:</strong> ${data.texture_features.uniformity.toFixed(4)}</p>
+                        </div>
+                    </div>
                 </div>
             </div>
-       
-            <button type="button" class="btn btn-outline-primary" id="startAnnotationBtn">
-                <i class="fas fa-edit me-1"></i> アノテーションを編集
-            </button>
+    `;
+    
+    // アノテーション状態に応じた表示
+    if (hasAnnotation) {
+        html += `
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle me-2"></i>
+                        このサンプルはアノテーション済みです
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5><i class="fas fa-shapes"></i> 形状特性</h5>
+                            <div class="analysis-card">
+                                <p><strong>面積:</strong> ${data.shape_features.area.toFixed(2)} px²</p>
+                                <p><strong>周囲長:</strong> ${data.shape_features.perimeter.toFixed(2)} px</p>
+                                <p><strong>円形度:</strong> ${data.shape_features.circularity.toFixed(4)}</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h5><i class="fas fa-image"></i> アノテーション結果</h5>
+                            <div class="text-center p-2 border rounded">
+                                <img src="/static/${data.annotation_path}" class="img-fluid" style="max-height: 200px;" alt="アノテーション画像">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center mt-3">
+                        <button type="button" class="btn btn-outline-primary" id="startAnnotationBtn">
+                            <i class="fas fa-edit me-1"></i> アノテーションを編集
+                        </button>
+                    </div>
+                </div>
+            </div>
         `;
     } else {
         html += `
-            <div class="alert alert-warning">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                このサンプルには生殖乳頭のアノテーションが必要です
-            </div>
-            <p class="text-muted mb-3">生殖乳頭の輪郭を手動でマークすることで、より正確な分析と将来の自動検出精度向上に貢献できます。</p>
-            <button type="button" class="btn btn-primary" id="startAnnotationBtn">
-                <i class="fas fa-pen me-1"></i> アノテーション開始
-            </button>
-        `;
-    }
-
-    html += `
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        このサンプルには生殖乳頭のアノテーションが必要です
+                    </div>
+                    <p class="text-muted mb-3">生殖乳頭の輪郭を手動でマークすることで、より正確な分析と将来の自動検出精度向上に貢献できます。</p>
+                    <div class="text-center">
+                        <button type="button" class="btn btn-primary" id="startAnnotationBtn">
+                            <i class="fas fa-pen me-1"></i> アノテーション開始
+                        </button>
                     </div>
                 </div>
-                <div class="card mt-3">
-                    <div class="card-header bg-light">
-                        <h6 class="mb-0"><i class="fas fa-info-circle me-1"></i> 次のステップ</h6>
-                    </div>
-                    <div class="card-body">
-                        <ol class="mb-0">
-                            <li>アノテーションを行って生殖乳頭を正確にマークする</li>
-                            <li>データを保存して学習データセットに追加する</li>
-                            <li>複数のサンプルを処理して、システムの精度を向上させる</li>
-                        </ol>
+            </div>
+        `;
+    }
+    
+    html += `
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0"><i class="fas fa-info-circle me-1"></i> 次のステップ</h6>
+                            </div>
+                            <div class="card-body">
+                                <ol class="mb-0">
+                                    <li>アノテーションを行って生殖乳頭を正確にマークする</li>
+                                    <li>データを保存して学習データセットに追加する</li>
+                                    <li>複数のサンプルを処理して、システムの精度を向上させる</li>
+                                </ol>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     `;
-   
+    
     return html;
 }
 
 /**
-* アノテーション開始ボタンにイベントリスナーを追加
-*/
+ * アノテーション開始ボタンにイベントリスナーを追加
+ */
 function addAnnotationButtonListener() {
     const startAnnotationBtn = document.getElementById('startAnnotationBtn');
     if (startAnnotationBtn) {
+        console.log('アノテーションボタンにイベントリスナー追加');
         startAnnotationBtn.addEventListener('click', function() {
+            console.log('アノテーション開始ボタンクリック');
             if (typeof openAnnotationModal === 'function') {
+                console.log('アノテーションモーダルを開く:', sampleAnalysis.currentSample);
                 openAnnotationModal(sampleAnalysis.currentSample);
             } else {
                 console.error('openAnnotationModal関数が見つかりません');
                 alert('アノテーション機能が利用できません。ページを再読み込みしてください。');
             }
         });
+    } else {
+        console.warn('アノテーション開始ボタンが見つかりません');
     }
 }
 
 /**
-* サンプル画像のアップロード処理
-* @param {HTMLFormElement} formElement - アップロードフォーム要素
-* @returns {boolean} 常にfalse（フォームのデフォルト送信を防止）
-*/
-function uploadSample(formElement) {
+ * サンプル画像のアップロード処理
+ */
+function uploadSample() {
+    console.log('サンプルアップロード開始');
+    
     const sampleFile = document.getElementById('sampleFile').files[0];
     const gender = document.getElementById('sampleGender').value;
-   
+    
     if (!sampleFile) {
         alert('サンプル画像を選択してください');
-        return false;
+        return;
     }
-   
+    
+    console.log('アップロード対象:', sampleFile.name, '性別:', gender);
+    
     // フォームデータの作成
     const formData = new FormData();
     formData.append('image', sampleFile);
     formData.append('gender', gender);
-   
+    
     // ローディング表示
     showLoading();
-   
+    
     // AJAX送信
     fetch('/sample/upload-sample', {
         method: 'POST',
         body: formData
     })
     .then(response => {
+        console.log('アップロードレスポンス:', response.status);
         if (!response.ok) {
-            throw new Error('サーバーレスポンスが不正です: ' + response.status);
+            throw new Error(`サーバーエラー: ${response.status}`);
         }
         return response.json();
     })
     .then(data => {
+        console.log('アップロード結果:', data);
         hideLoading();
-       
+        
         if (data.error) {
             alert('エラー: ' + data.error);
             return;
         }
-       
+        
         // 成功メッセージと画面更新
         alert(data.message);
         location.reload(); // 画面を更新してサンプル一覧を更新
@@ -378,19 +448,19 @@ function uploadSample(formElement) {
     .catch(error => {
         hideLoading();
         console.error('アップロードエラー:', error);
-        alert('エラー: ' + error);
+        alert('エラー: ' + error.message);
     });
-   
-    return false; // フォームのデフォルト送信を防止
 }
 
 /**
-* ページタイトルの更新（サンプル数表示）
-*/
+ * ページタイトルの更新（サンプル数表示）
+ */
 function updatePageTitle() {
-    const maleSamples = document.querySelectorAll('.sample-card[data-path^="papillae/male/"]').length;
-    const femaleSamples = document.querySelectorAll('.sample-card[data-path^="papillae/female/"]').length;
+    const maleSamples = document.querySelectorAll('.sample-card[data-path*="male/"]').length;
+    const femaleSamples = document.querySelectorAll('.sample-card[data-path*="female/"]').length;
     const totalSamples = maleSamples + femaleSamples;
-   
+    
+    console.log(`サンプル数 - オス: ${maleSamples}, メス: ${femaleSamples}, 合計: ${totalSamples}`);
+    
     document.title = `ウニ生殖乳頭サンプル分析 (${totalSamples}件)`;
 }

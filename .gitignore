@@ -8,6 +8,8 @@ dist/
 build/
 venv/
 ENV/
+env/
+.venv/
 
 # 開発環境
 .idea/
@@ -16,24 +18,33 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# アプリケーションデータ
+# アプリケーションデータ（ユーザーデータを除外）
 models/saved/*.pkl
 uploads/*
 extracted_images/*
 dataset/*
-static/papillae/
-static/uploads/
-static/images/
-static/evaluation/
-static/annotations/
-samples/*
+static/uploads/*
+static/evaluation/*
+static/annotations/*
+samples/papillae/*
+
+# ディレクトリ構造は保持
+!uploads/.gitkeep
+!extracted_images/.gitkeep
+!dataset/male/.gitkeep
+!dataset/female/.gitkeep
+!static/uploads/.gitkeep
+!static/evaluation/.gitkeep
+!static/annotations/.gitkeep
+!samples/papillae/male/.gitkeep
+!samples/papillae/female/.gitkeep
 
 # ログファイル
 *.log
 app.log
 logs/
 
-# データファイル（開発/テスト用を除く）
+# データファイル（設定ファイルを除く）
 *.db
 *.sqlite
 *.sqlite3
@@ -41,11 +52,8 @@ logs/
 *.npy
 *.csv
 *.xlsx
-*.json
-!static/js/*.json
-!static/annotation_mapping.json
 
-# メディアファイル（開発/テスト用を除く）
+# メディアファイル
 *.jpg
 *.jpeg
 *.png
@@ -54,3 +62,16 @@ logs/
 *.avi
 *.mov
 *.mkv
+
+# 保持するJSONファイル
+!static/js/*.json
+!static/annotation_mapping.json
+
+# OS固有ファイル
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*~

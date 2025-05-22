@@ -11,9 +11,35 @@ import base64
 import traceback
 import uuid
 
-sample_bp = Blueprint('sample', __name__)
-print("sample_routes.py が読み込まれました")
-
+def normalize_image_path(image_path):
+    """
+    画像パスを正規化する
+    
+    Parameters:
+    - image_path: 正規化する画像パス
+    
+    Returns:
+    - str: 正規化されたパス
+    """
+    # 先頭のスラッシュを除去
+    path = image_path.lstrip('/')
+    
+    # /sample/プレフィックスを正確に除去
+    if path.startswith('sample/'):
+        path = path[7:]  # 'sample/' を除去
+    
+    # papillae/ で始まることを確認
+    if not path.startswith('papillae/'):
+        # パスが不完全な場合の修正を試行
+        if '/male/' in path or '/female/' in path:
+            # 'illae/male/xxx.png' のようなケースを修正
+            if 'illae/' in path:
+                path = path.replace('illae/', 'papillae/')
+            elif not path.startswith('papillae/'):
+                path = 'papillae/' + path
+    
+    current_app.logger.debug(f"パス正規化: {image_path} -> {path}")
+    return path
 
 @sample_bp.route('/analyze-samples', methods=['GET'])
 def analyze_samples_page():
@@ -56,10 +82,9 @@ def analyze_sample():
         
         if not data or 'image_path' not in data:
             return jsonify({"error": "画像パスが指定されていません"}), 400
-        
-        image_path = data['image_path']
-        current_app.logger.info(f"分析対象画像パス: {image_path}")
-        
+        raw_image_path = data['image_path']
+        normalized_path = normalize_image_path(raw_image_path)
+        current_app.logger.info(f"正規化されたパス: {raw_image_path} -> {normalized_path}")
         # パスの検証
         if '..' in image_path:
             current_app.logger.warning(f"不正なパスへのアクセス試行: {image_path}")
@@ -260,7 +285,9 @@ def save_annotation():
         
         # Base64データを取得
         image_data = data['image_data']
-        original_path = data['original_path'].lstrip('/sample/')
+        original_path = data['original_path']
+        if original_path.startswith('/sample/'):
+            original_path = original_path[8:]  # '/sample/' を除去
         
         current_app.logger.debug(f"元画像パス: {original_path}")
         

@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>サンプル分析 - ウニ生殖乳頭分析システム</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/analyze_samples.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
     <div class="container">
@@ -49,11 +50,11 @@
             <div class="upload-section">
                 <h2><i class="fas fa-cloud-upload-alt"></i> 新規サンプルのアップロード</h2>
                 
-                <div class="upload-form">
+                <form id="uploadSampleForm" class="upload-form">
                     <div class="form-group">
-                        <label for="image-upload">サンプル画像</label>
+                        <label for="sampleFile">サンプル画像</label>
                         <div class="file-input-wrapper">
-                            <input type="file" id="image-upload" name="image" accept="image/*" class="file-input">
+                            <input type="file" id="sampleFile" name="image" accept="image/*" class="file-input">
                             <div class="file-input-display">
                                 <i class="fas fa-image"></i>
                                 <span class="file-name">選択されていません</span>
@@ -63,18 +64,18 @@
                     </div>
                     
                     <div class="form-group">
-                        <label for="gender-select">性別</label>
-                        <select id="gender-select" name="gender" class="form-select">
+                        <label for="sampleGender">性別</label>
+                        <select id="sampleGender" name="gender" class="form-select">
                             <option value="male">オス</option>
                             <option value="female">メス</option>
                         </select>
-                        <small>サンプルの性別を選択してください。不明な場合は「不明」を選びます。</small>
+                        <small>サンプルの性別を選択してください。</small>
                     </div>
                     
-                    <button type="button" id="upload-btn" class="btn btn-primary">
+                    <button type="submit" class="btn btn-primary">
                         <i class="fas fa-upload"></i> アップロード
                     </button>
-                </div>
+                </form>
             </div>
 
             <!-- サンプル一覧 -->
@@ -85,7 +86,7 @@
                     <div class="sample-list">
                         {% if male_samples %}
                             {% for sample in male_samples %}
-                            <div class="sample-card" data-sample-path="papillae/male/{{ sample }}">
+                            <div class="sample-card" data-path="papillae/male/{{ sample }}">
                                 <img src="{{ url_for('sample.get_sample', path='papillae/male/' + sample) }}" 
                                      alt="{{ sample }}" class="sample-image">
                                 <div class="sample-info">
@@ -108,7 +109,7 @@
                     <div class="sample-list">
                         {% if female_samples %}
                             {% for sample in female_samples %}
-                            <div class="sample-card" data-sample-path="papillae/female/{{ sample }}">
+                            <div class="sample-card" data-path="papillae/female/{{ sample }}">
                                 <img src="{{ url_for('sample.get_sample', path='papillae/female/' + sample) }}" 
                                      alt="{{ sample }}" class="sample-image">
                                 <div class="sample-info">
@@ -131,103 +132,30 @@
                 <h2><i class="fas fa-chart-line"></i> サンプル分析</h2>
                 <p>サンプル画像をクリックすると分析結果が表示されます</p>
                 
-                <!-- 分析結果表示エリア -->
-                <div id="analysisResult" style="display: none;">
-                    <div class="analysis-content">
-                        <h3>分析結果</h3>
-                        <div class="analysis-grid">
-                            <!-- 基本統計情報 -->
-                            <div class="analysis-card">
-                                <h4>基本統計</h4>
-                                <div id="basicStats">
-                                    <p><strong>平均値:</strong> <span id="meanValue">-</span></p>
-                                    <p><strong>標準偏差:</strong> <span id="stdValue">-</span></p>
-                                    <p><strong>画像サイズ:</strong> <span id="imageSize">-</span></p>
-                                </div>
-                            </div>
-                            
-                            <!-- 検出結果 -->
-                            <div class="analysis-card">
-                                <h4>検出結果</h4>
-                                <div id="detectionResult">
-                                    <p><strong>乳頭数:</strong> <span id="papillaeCount">-</span></p>
-                                    <p><strong>検出詳細:</strong> <span id="detectionDetails">-</span></p>
-                                </div>
-                            </div>
-                            
-                            <!-- エッジ特徴 -->
-                            <div class="analysis-card">
-                                <h4>エッジ特徴</h4>
-                                <div id="edgeFeatures">
-                                    <p><strong>エッジ数:</strong> <span id="edgeCount">-</span></p>
-                                    <p><strong>エッジ密度:</strong> <span id="edgeDensity">-</span></p>
-                                </div>
-                            </div>
-                            
-                            <!-- テクスチャ特徴 -->
-                            <div class="analysis-card">
-                                <h4>テクスチャ特徴</h4>
-                                <div id="textureFeatures">
-                                    <p><strong>コントラスト:</strong> <span id="contrast">-</span></p>
-                                    <p><strong>均一性:</strong> <span id="uniformity">-</span></p>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- アノテーション開始ボタン -->
-                        <div class="annotation-controls">
-                            <button id="startAnnotationBtn" class="btn btn-primary">
-                                <i class="fas fa-edit"></i> アノテーション編集を開始
-                            </button>
-                        </div>
-                    </div>
+                <!-- プレースホルダー -->
+                <div id="analysisPlaceholder" class="text-center py-5">
+                    <i class="fas fa-mouse-pointer fa-3x mb-3 text-muted" aria-hidden="true"></i>
+                    <p class="text-muted">上のサンプル画像をクリックして分析を開始してください</p>
                 </div>
                 
-                <!-- アノテーション編集エリア -->
-                <div id="annotationEditor" style="display: none;">
-                    <div class="annotation-content">
-                        <h3>アノテーション編集</h3>
-                        
-                        <!-- アノテーション画像表示 -->
-                        <div class="annotation-image-container">
-                            <canvas id="annotationCanvas"></canvas>
-                        </div>
-                        
-                        <!-- アノテーションツール -->
-                        <div class="annotation-tools">
-                            <button id="brushTool" class="tool-btn active" data-tool="brush">
-                                <i class="fas fa-paint-brush"></i> ブラシ
-                            </button>
-                            <button id="eraserTool" class="tool-btn" data-tool="eraser">
-                                <i class="fas fa-eraser"></i> 消しゴム
-                            </button>
-                            <button id="clearCanvas" class="tool-btn">
-                                <i class="fas fa-trash"></i> クリア
-                            </button>
-                            
-                            <div class="tool-settings">
-                                <label>ブラシサイズ:</label>
-                                <input type="range" id="brushSize" min="1" max="20" value="5">
-                                <span id="brushSizeValue">5</span>px
-                            </div>
-                        </div>
-                        
-                        <!-- アノテーション保存 -->
-                        <div class="annotation-save">
-                            <button id="saveAnnotation" class="btn btn-success">
-                                <i class="fas fa-save"></i> アノテーションを保存
-                            </button>
-                            <button id="cancelAnnotation" class="btn btn-secondary">
-                                <i class="fas fa-times"></i> キャンセル
-                            </button>
-                        </div>
-                    </div>
+                <!-- 分析結果表示エリア -->
+                <div id="analysisResult" class="d-none">
+                    <!-- ここに分析結果が動的に表示されます -->
                 </div>
             </div>
         </main>
     </div>
 
+    <!-- ローディングオーバーレイ -->
+    <div id="loadingOverlay" class="d-none">
+        <div class="spinner-border text-light me-3" role="status">
+            <span class="visually-hidden">処理中...</span>
+        </div>
+        処理中...
+    </div>
+
     <!-- JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/utilities.js') }}"></script>
     <script src="{{ url_for('static', filename='js/annotation_tools.js') }}"></script>
     <script src="{{ url_for('static', filename='js/sample_analysis.js') }}"></script>
