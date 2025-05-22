@@ -34,7 +34,7 @@
                         <p class="small text-muted">現在のデータセットとモデルを使用して包括的な評価を実行します。</p>
                     </div>
                     <div class="col-md-6">
-                        <button id="analyze-annotations-btn" class="btn btn-success mb-3 w-100">
+                        <button id="analyzeAnnotationsBtn" class="btn btn-success mb-3 w-100">
                             <i class="fas fa-search" aria-hidden="true"></i> アノテーション影響分析を実行
                         </button>
                         <p class="small text-muted">アノテーションデータがモデルの学習・精度に与える影響を分析します。</p>
@@ -312,6 +312,10 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="{{ url_for('static', filename='js/utilities.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/model_evaluation.js') }}"></script>
+    
+    <!-- 評価モジュール群（依存関係順に読み込み） -->
+    <script src="{{ url_for('static', filename='js/evaluation/evaluation-utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/evaluation/annotation-analysis.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/evaluation/evaluation-core.js') }}"></script>
 </body>
 </html>

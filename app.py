@@ -82,6 +82,8 @@ processing_thread.start()
 logger.info("処理ワーカースレッドを開始しました")
 
 # ルートの登録
+# app.py のBlueprint登録部分に追加
+# ルートの登録
 from routes.main_routes import main_bp
 from routes.video_routes import video_bp
 from routes.image_routes import image_bp
@@ -96,6 +98,31 @@ app.register_blueprint(sample_bp, url_prefix='/sample')
 app.register_blueprint(evaluation_bp, url_prefix='/evaluation')
 app.register_blueprint(api_bp, url_prefix='/api')
 
+# デバッグ用：登録されたルートを出力
+@app.route('/debug/routes')
+def debug_routes():
+    """デバッグ用：登録されているルートを表示"""
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods': list(rule.methods),
+            'rule': str(rule)
+        })
+    return jsonify(routes)
+
+# 起動時にルート情報をログ出力
+if __name__ == '__main__':
+    logger.info("登録されているルート:")
+    for rule in app.url_map.iter_rules():
+        if 'evaluation' in str(rule):
+            logger.info(f"  {rule} -> {rule.endpoint} [{', '.join(rule.methods)}]")
+    
+    logger.info("アプリケーションを起動します")
+    app.run(host='0.0.0.0', port=8080, debug=True)
+
+
+
 @app.route('/uploads/<filename>')
 def get_uploaded_file(filename):
     """アップロードされたファイルを提供するルート"""
@@ -106,8 +133,3 @@ def get_uploaded_file(filename):
 def serve_sample_image(filename):
     """サンプル画像の配信"""
     return send_from_directory(STATIC_SAMPLES_DIR, filename)
-
-# アプリケーション起動
-if __name__ == '__main__':
-    logger.info("アプリケーションを起動します")
-    app.run(host='0.0.0.0', port=8080, debug=True)

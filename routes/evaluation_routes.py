@@ -118,9 +118,14 @@ def analyze_annotation_impact_route():
     import json
     
     try:
+        current_app.logger.info("アノテーション影響分析実行リクエスト受信")
+        
         # モデルとデータセットのパスを確認
         model_path = os.path.join(app.config['MODEL_FOLDER'], "sea_urchin_rf_model.pkl")
         dataset_dir = app.config['DATASET_FOLDER']
+        
+        current_app.logger.info(f"モデルパス: {model_path} (存在: {os.path.exists(model_path)})")
+        current_app.logger.info(f"データセットディレクトリ: {dataset_dir} (存在: {os.path.exists(dataset_dir)})")
         
         # ファイルとディレクトリの存在確認
         if not os.path.exists(model_path):
@@ -193,6 +198,13 @@ def analyze_annotation_impact_route():
         return jsonify({"error": error_msg}), 500
 
 
+# 念のため、アンダースコア版も追加（どちらかが動作するように）
+@evaluation_bp.route('/analyze_annotation_impact', methods=['POST'])
+def analyze_annotation_impact_route_underscore():
+    """
+    アノテーション影響分析を実行（アンダースコア版）
+    """
+    return analyze_annotation_impact_route()
 @evaluation_bp.route('/history')
 def get_evaluation_history():
     """

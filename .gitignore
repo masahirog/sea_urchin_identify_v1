@@ -24,7 +24,6 @@ uploads/*
 extracted_images/*
 dataset/*
 static/uploads/*
-static/evaluation/*
 static/annotations/*
 samples/papillae/*
 
