@@ -4,6 +4,7 @@ from flask import Flask, send_from_directory
 import threading
 import queue
 from utils.file_cleanup import cleanup_temp_files, schedule_cleanup
+from config import * 
 
 # ロギングの設定
 logging.basicConfig(
@@ -42,7 +43,8 @@ for directory in [
     app.config['TEMP_FILES_FOLDER'],
     os.path.join(app.config['STATIC_FOLDER'], 'evaluation')
 ]:
-    os.makedirs(directory, exist_ok=True)
+    # os.makedirs(directory, exist_ok=True)
+    ensure_directories()
     logger.debug(f"ディレクトリ作成確認: {directory}")
 
 # モデルファイルの存在確認、なければテストモデルを生成
@@ -98,6 +100,12 @@ app.register_blueprint(api_bp, url_prefix='/api')
 def get_uploaded_file(filename):
     """アップロードされたファイルを提供するルート"""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+# サンプル画像配信用ルート
+@app.route('/sample/<path:filename>')
+def serve_sample_image(filename):
+    """サンプル画像の配信"""
+    return send_from_directory(STATIC_SAMPLES_DIR, filename)
 
 # アプリケーション起動
 if __name__ == '__main__':

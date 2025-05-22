@@ -4,6 +4,10 @@
 """
 
 from flask import Blueprint, request, jsonify, render_template, send_from_directory, current_app
+from config import (
+    STATIC_SAMPLES_DIR, STATIC_ANNOTATIONS_DIR, STATIC_DETECTION_DIR,
+    DATASET_DIR, LEGACY_SAMPLES_DIR, LEGACY_ANNOTATIONS_DIR
+)
 from werkzeug.utils import secure_filename
 import os
 import json
@@ -11,15 +15,14 @@ import base64
 import traceback
 import uuid
 
+
+sample_bp = Blueprint('sample', __name__)
+print("sample_routes.py が読み込まれました")
+
+
 def normalize_image_path(image_path):
     """
     画像パスを正規化する
-    
-    Parameters:
-    - image_path: 正規化する画像パス
-    
-    Returns:
-    - str: 正規化されたパス
     """
     # 先頭のスラッシュを除去
     path = image_path.lstrip('/')
@@ -41,7 +44,24 @@ def normalize_image_path(image_path):
     current_app.logger.debug(f"パス正規化: {image_path} -> {path}")
     return path
 
-@sample_bp.route('/analyze-samples', methods=['GET'])
+def get_sample_image_path(relative_path):
+    """
+    サンプル画像の実際のパスを取得（新旧ディレクトリ対応）
+    """
+    # 新ディレクトリを優先
+    new_path = os.path.join(STATIC_SAMPLES_DIR, relative_path)
+    if os.path.exists(new_path):
+        return new_path
+    
+    # 旧ディレクトリをフォールバック
+    legacy_path = os.path.join(LEGACY_SAMPLES_DIR, relative_path)
+    if os.path.exists(legacy_path):
+        return legacy_path
+    
+    current_app.logger.warning(f"サンプル画像が見つかりません: {relative_path}")
+    return None
+
+@sample_bp.route('/analyze', methods=['GET'])
 def analyze_samples_page():
     """サンプル分析ページを表示"""
     print("analyze_samples_page が呼び出されました")
@@ -86,17 +106,12 @@ def analyze_sample():
         normalized_path = normalize_image_path(raw_image_path)
         current_app.logger.info(f"正規化されたパス: {raw_image_path} -> {normalized_path}")
         # パスの検証
-        if '..' in image_path:
-            current_app.logger.warning(f"不正なパスへのアクセス試行: {image_path}")
+        if '..' in normalized_path:
+            current_app.logger.warning(f"不正なパスへのアクセス試行: {normalized_path}")
             return jsonify({"error": "不正なパスです"}), 400
-        
-        # 元のパスから相対パスを取得
-        relative_path = image_path
-        if image_path.startswith('samples/'):
-            relative_path = image_path
-        elif image_path.startswith('/sample/'):
-            relative_path = image_path.lstrip('/sample/')
-        
+                
+        relative_path = normalized_path  # 既に正規化済みのパスを使用
+
         # アノテーションマッピング情報を取得
         annotation_path = None
         mapping_file = os.path.join('static', 'annotation_mapping.json')
@@ -117,23 +132,20 @@ def analyze_sample():
         full_image_path = None
 
         # パターン1: 'papillae/male/xxx.png' -> 'samples/papillae/male/xxx.png'
-        if image_path.startswith('papillae/'):
-            full_image_path = os.path.join(app.config['SAMPLES_FOLDER'], image_path)
-        # パターン2: 'samples/papillae/male/xxx.png' -> そのまま使用  
-        elif image_path.startswith('samples/'):
-            full_image_path = image_path
-        # パターン3: 絶対パスの場合はそのまま
-        elif os.path.isabs(image_path):
-            full_image_path = image_path
-        # パターン4: その他の場合は samples/ を前に付ける
+        if normalized_path.startswith('papillae/'):
+            full_image_path = os.path.join(app.config['SAMPLES_FOLDER'], normalized_path)
+        elif normalized_path.startswith('samples/'):
+            full_image_path = normalized_path
+        elif os.path.isabs(normalized_path):
+            full_image_path = normalized_path
         else:
-            full_image_path = os.path.join(app.config['SAMPLES_FOLDER'], image_path)
+            full_image_path = os.path.join(app.config['SAMPLES_FOLDER'], normalized_path)
         
         current_app.logger.info(f"フルパス: {full_image_path}, 存在チェック: {os.path.exists(full_image_path)}")
             
         if not os.path.exists(full_image_path):
-            return jsonify({"error": f"画像ファイルが見つかりません: {image_path} (変換先: {full_image_path})"}), 404
-        
+            return jsonify({"error": f"画像ファイルが見つかりません: {raw_image_path} (変換先: {full_image_path})"}), 404
+
         # 通常の画像分析を実行
         basic_stats = analyze_basic_stats(full_image_path, app.config)
         edge_features = analyze_edge_features(full_image_path, app.config)
@@ -285,10 +297,7 @@ def save_annotation():
         
         # Base64データを取得
         image_data = data['image_data']
-        original_path = data['original_path']
-        if original_path.startswith('/sample/'):
-            original_path = original_path[8:]  # '/sample/' を除去
-        
+        original_path = normalize_image_path(data['original_path'])
         current_app.logger.debug(f"元画像パス: {original_path}")
         
         # パスの検証
@@ -296,22 +305,21 @@ def save_annotation():
             current_app.logger.warning(f"不正なパスへのアクセス試行: {original_path}")
             return jsonify({"error": "不正なパスです"}), 400
         
-        # 保存先ディレクトリ作成
-        annotations_dir = os.path.join('static', 'annotations')
-        os.makedirs(annotations_dir, exist_ok=True)
-        
         # アノテーション画像のパス生成
         filename = os.path.basename(original_path)
         name, ext = os.path.splitext(filename)
         annotation_filename = f"{name}_annotation{ext}"
+
+        # 保存先ディレクトリ作成
+        annotation_path = os.path.join(STATIC_ANNOTATIONS_DIR, annotation_filename)
+        
         
         # 同名ファイルが存在する場合はユニークな名前に変更
-        annotation_path = os.path.join(annotations_dir, annotation_filename)
         if os.path.exists(annotation_path):
             unique_suffix = uuid.uuid4().hex[:8]
             annotation_filename = f"{name}_annotation_{unique_suffix}{ext}"
-            annotation_path = os.path.join(annotations_dir, annotation_filename)
-        
+            annotation_path = os.path.join(STATIC_ANNOTATIONS_DIR, annotation_filename)
+
         current_app.logger.debug(f"アノテーション保存先: {annotation_path}")
         
         # Base64データを画像ファイルとして保存
@@ -338,8 +346,7 @@ def save_annotation():
                         mapping = {}
             
             # マッピングを更新
-            mapping[original_path] = os.path.join('annotations', annotation_filename)
-            
+            mapping[original_path] = f"images/annotations/{annotation_filename}"
             with open(mapping_file, 'w') as f:
                 json.dump(mapping, f, indent=2)
             
