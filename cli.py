@@ -16,7 +16,7 @@ import argparse
 import sys
 
 # モデルインポート
-from models.analyzer import UrchinPapillaeAnalyzer
+from core.analyzer import UnifiedAnalyzer as UrchinPapillaeAnalyzer
 
 # ディレクトリ構造
 UPLOAD_FOLDER = 'uploads'

@@ -43,7 +43,7 @@ def processing_worker(queue, status_dict, app_config):
                 # タスクの種類に応じた処理
                 if task_type == 'process_video':
                     # 動画処理タスク
-                    from models.analyzer import UrchinPapillaeAnalyzer
+                    from core.analyzer import UnifiedAnalyzer as UrchinPapillaeAnalyzer
                     
                     # パラメータ取得
                     video_path = task.get('video_path')
@@ -66,7 +66,7 @@ def processing_worker(queue, status_dict, app_config):
                 
                 elif task_type == 'train_model':
                     # モデル訓練タスク
-                    from models.analyzer import UrchinPapillaeAnalyzer
+                    from core.analyzer import UnifiedAnalyzer as UrchinPapillaeAnalyzer
                     
                     # パラメータ取得
                     dataset_dir = task.get('dataset_dir')
@@ -284,7 +284,7 @@ def process_dataset_for_evaluation(dataset_dir):
             return create_test_data()
         
         # 特徴量抽出の初期化
-        from models.analyzer import UrchinPapillaeAnalyzer
+        from core.analyzer import UnifiedAnalyzer as UrchinPapillaeAnalyzer
         analyzer = UrchinPapillaeAnalyzer()
         
         # 各画像から特徴量を抽出
@@ -499,7 +499,7 @@ def execute_model_training_phase(task_id, dataset_dir, status_dict):
     })
     
     try:
-        from models.analyzer import UrchinPapillaeAnalyzer
+        from core.analyzer import UnifiedAnalyzer as UrchinPapillaeAnalyzer
         
         # モデル訓練実行
         analyzer = UrchinPapillaeAnalyzer()

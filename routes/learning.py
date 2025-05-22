@@ -1,7 +1,17 @@
-
 """
-統合学習ルート - learning_routes.py の拡張版
-既存機能を統合した新しいエンドポイントを追加
+routes/learning.py - 統合学習ルート
+
+統合対象:
+- routes/learning_routes.py (既存機能)
+- routes/api_routes.py (評価・タスク管理部分)
+→ 統合学習システムの完全版
+
+機能:
+- 学習データ管理
+- モデル訓練・評価
+- アノテーション機能  
+- タスク状態管理
+- 評価履歴
 """
 
 from flask import Blueprint, request, jsonify, render_template, send_from_directory, current_app
@@ -15,13 +25,323 @@ from datetime import datetime
 
 learning_bp = Blueprint('learning', __name__)
 
+# ================================
+# ページルート
+# ================================
 
+@learning_bp.route('/')
+def learning_page():
+    """統合学習システムのメインページ"""
+    return render_template('learning_management.html')
 
 @learning_bp.route('/management')
 def management_page():
-    """学習管理統合ページを表示"""
+    """学習管理ページ（リダイレクト用）"""
     return render_template('learning_management.html')
 
+@learning_bp.route('/unified-management')
+def unified_management_page():
+    """統合学習管理ページ"""
+    return render_template('learning_management.html')
+
+# ================================
+# データ管理API
+# ================================
+
+@learning_bp.route('/upload-data', methods=['POST'])
+def upload_learning_data():
+    """
+    学習データ用の画像をアップロード
+    
+    Request:
+    - images: アップロードする画像ファイル（複数可）
+    - gender: 性別カテゴリ ('male', 'female', 'unknown')
+    
+    Returns:
+    - JSON: アップロード結果
+    """
+    from app import app
+    from utils.file_handlers import allowed_file, is_image_file
+    from config import STATIC_SAMPLES_DIR
+    
+    if 'images' not in request.files:
+        return jsonify({"error": "画像ファイルがありません"}), 400
+    
+    files = request.files.getlist('images')
+    gender = request.form.get('gender', 'unknown')
+    
+    if not files or all(f.filename == '' for f in files):
+        return jsonify({"error": "ファイルが選択されていません"}), 400
+    
+    uploaded_files = []
+    errors = []
+    
+    # 保存先ディレクトリの決定
+    if gender in ['male', 'female']:
+        target_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', gender)
+    else:
+        target_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'unknown')
+    
+    # ディレクトリが存在しない場合は作成
+    os.makedirs(target_dir, exist_ok=True)
+    
+    for file in files:
+        if file and file.filename != '':
+            if allowed_file(file.filename, app.config['ALLOWED_EXTENSIONS']) and is_image_file(file.filename):
+                try:
+                    # 安全なファイル名に変換
+                    filename = secure_filename(file.filename)
+                    
+                    # 同名ファイルが既に存在する場合はユニークな名前に変更
+                    target_path = os.path.join(target_dir, filename)
+                    if os.path.exists(target_path):
+                        name, ext = os.path.splitext(filename)
+                        unique_suffix = uuid.uuid4().hex[:8]
+                        filename = f"{name}_{unique_suffix}{ext}"
+                        target_path = os.path.join(target_dir, filename)
+                    
+                    # ファイルを保存
+                    file.save(target_path)
+                    uploaded_files.append({
+                        'filename': filename,
+                        'path': f'papillae/{gender}/{filename}',
+                        'gender': gender
+                    })
+                    current_app.logger.info(f"学習データアップロード: {gender}/{filename}")
+                    
+                except Exception as e:
+                    current_app.logger.error(f"ファイル保存エラー {file.filename}: {str(e)}")
+                    errors.append(f"{file.filename}: {str(e)}")
+            else:
+                errors.append(f"{file.filename}: 無効なファイル形式です")
+    
+    result = {
+        "success": len(uploaded_files) > 0,
+        "uploaded_count": len(uploaded_files),
+        "error_count": len(errors),
+        "uploaded_files": uploaded_files
+    }
+    
+    if errors:
+        result["errors"] = errors
+    
+    if len(uploaded_files) > 0:
+        result["message"] = f"{len(uploaded_files)}個のファイルをアップロードしました"
+    else:
+        result["message"] = "アップロードに失敗しました"
+        
+    return jsonify(result)
+
+@learning_bp.route('/dataset-stats')
+def get_dataset_stats():
+    """
+    学習データセットの統計情報を取得
+    
+    Returns:
+    - JSON: データセット統計情報
+    """
+    from config import STATIC_SAMPLES_DIR
+    
+    try:
+        # 各カテゴリのディレクトリパス
+        male_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'male')
+        female_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'female')
+        unknown_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'unknown')
+        
+        # 画像ファイル数をカウント
+        male_count = len([f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(male_dir) else 0
+        female_count = len([f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(female_dir) else 0
+        unknown_count = len([f for f in os.listdir(unknown_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(unknown_dir) else 0
+        
+        # 合計カウント
+        total_count = male_count + female_count + unknown_count
+        
+        # アノテーション情報の取得
+        annotation_count = 0
+        annotation_file = os.path.join('static', 'annotation_mapping.json')
+        if os.path.exists(annotation_file):
+            try:
+                with open(annotation_file, 'r') as f:
+                    annotations = json.load(f)
+                    annotation_count = len(annotations)
+            except Exception as e:
+                current_app.logger.error(f"アノテーション情報読み込みエラー: {str(e)}")
+        
+        # 比率計算
+        male_ratio = (male_count / total_count * 100) if total_count > 0 else 0
+        female_ratio = (female_count / total_count * 100) if total_count > 0 else 0
+        annotation_ratio = (annotation_count / total_count * 100) if total_count > 0 else 0
+        
+        return jsonify({
+            "male_count": male_count,
+            "female_count": female_count,
+            "unknown_count": unknown_count,
+            "total_count": total_count,
+            "annotation_count": annotation_count,
+            "ratios": {
+                "male": male_ratio,
+                "female": female_ratio,
+                "annotation": annotation_ratio
+            }
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"データセット統計取得エラー: {str(e)}")
+        return jsonify({"error": "統計情報の取得に失敗しました"}), 500
+
+@learning_bp.route('/learning-data')
+def get_learning_data():
+    """
+    学習データ一覧を取得
+    
+    Parameters:
+    - gender: フィルタリングする性別 (オプション)
+    
+    Returns:
+    - JSON: 学習データ一覧
+    """
+    from config import STATIC_SAMPLES_DIR
+    
+    try:
+        gender_filter = request.args.get('gender', 'all')
+        
+        # サンプルディレクトリ
+        samples_base_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
+        
+        result = {
+            'male': [],
+            'female': [],
+            'unknown': []
+        }
+        
+        # 各性別フォルダを検索
+        for category in ['male', 'female', 'unknown']:
+            if gender_filter != 'all' and gender_filter != category:
+                continue
+                
+            category_dir = os.path.join(samples_base_dir, category)
+            if not os.path.exists(category_dir):
+                continue
+                
+            # 画像ファイルをリストアップ
+            for filename in os.listdir(category_dir):
+                if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                    # アノテーション情報を確認
+                    rel_path = f"papillae/{category}/{filename}"
+                    
+                    # アノテーション状態を確認
+                    has_annotation = False
+                    annotation_path = None
+                    
+                    mapping_file = os.path.join('static', 'annotation_mapping.json')
+                    if os.path.exists(mapping_file):
+                        try:
+                            with open(mapping_file, 'r') as f:
+                                mapping = json.load(f)
+                                if rel_path in mapping:
+                                    has_annotation = True
+                                    annotation_path = mapping[rel_path]
+                        except Exception:
+                            pass
+                    
+                    # 画像情報を追加
+                    sample_info = {
+                        'filename': filename,
+                        'path': rel_path,
+                        'url': f"/sample/{rel_path}",
+                        'has_annotation': has_annotation,
+                        'category': category
+                    }
+                    
+                    if has_annotation:
+                        sample_info['annotation_path'] = annotation_path
+                    
+                    result[category].append(sample_info)
+        
+        # 総数情報を追加
+        result['counts'] = {
+            'male': len(result['male']),
+            'female': len(result['female']),
+            'unknown': len(result['unknown']),
+            'total': len(result['male']) + len(result['female']) + len(result['unknown'])
+        }
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        current_app.logger.error(f"学習データ取得エラー: {str(e)}")
+        return jsonify({"error": "学習データの取得に失敗しました"}), 500
+
+@learning_bp.route('/delete-data', methods=['POST'])
+def delete_learning_data():
+    """
+    学習データを削除
+    
+    Request:
+    - path: 削除する画像のパス
+    
+    Returns:
+    - JSON: 削除結果
+    """
+    from config import STATIC_SAMPLES_DIR
+    
+    try:
+        data = request.json
+        if not data or 'path' not in data:
+            return jsonify({"error": "削除する画像のパスが指定されていません"}), 400
+        
+        image_path = data['path']
+        
+        # パスの検証
+        if '..' in image_path or not image_path.startswith('papillae/'):
+            return jsonify({"error": "不正なパスです"}), 400
+        
+        # フルパスの構築
+        full_path = os.path.join(STATIC_SAMPLES_DIR, image_path)
+        
+        if not os.path.exists(full_path):
+            return jsonify({"error": "指定された画像が見つかりません"}), 404
+        
+        # 画像の削除
+        os.remove(full_path)
+        
+        # アノテーションマッピングからも削除
+        mapping_file = os.path.join('static', 'annotation_mapping.json')
+        if os.path.exists(mapping_file):
+            try:
+                with open(mapping_file, 'r') as f:
+                    mapping = json.load(f)
+                
+                if image_path in mapping:
+                    # アノテーション画像も削除
+                    annotation_path = os.path.join('static', mapping[image_path])
+                    if os.path.exists(annotation_path):
+                        os.remove(annotation_path)
+                    
+                    # マッピングから削除
+                    del mapping[image_path]
+                    
+                    with open(mapping_file, 'w') as f:
+                        json.dump(mapping, f, indent=2)
+                
+            except Exception as e:
+                current_app.logger.error(f"アノテーション削除エラー: {str(e)}")
+        
+        current_app.logger.info(f"学習データ削除: {image_path}")
+        
+        return jsonify({
+            "success": True,
+            "message": "画像を削除しました"
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"学習データ削除エラー: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": f"画像の削除に失敗しました: {str(e)}"}), 500
+
+# ================================
+# アノテーション機能
+# ================================
 
 @learning_bp.route('/save-annotation', methods=['POST'])
 def save_annotation():
@@ -119,233 +439,9 @@ def save_annotation():
         traceback.print_exc()
         return jsonify({"error": f"アノテーションの保存中にエラーが発生しました: {str(e)}"}), 500
 
-
-@learning_bp.route('/upload-data', methods=['POST'])
-def upload_learning_data():
-    """
-    学習データ用の画像をアップロード
-    
-    Request:
-    - images: アップロードする画像ファイル（複数可）
-    - gender: 性別カテゴリ ('male', 'female', 'unknown')
-    
-    Returns:
-    - JSON: アップロード結果
-    """
-    from app import app
-    from utils.file_handlers import allowed_file, is_image_file
-    from config import STATIC_SAMPLES_DIR
-    
-    if 'images' not in request.files:
-        return jsonify({"error": "画像ファイルがありません"}), 400
-    
-    files = request.files.getlist('images')
-    gender = request.form.get('gender', 'unknown')
-    
-    if not files or all(f.filename == '' for f in files):
-        return jsonify({"error": "ファイルが選択されていません"}), 400
-    
-    uploaded_files = []
-    errors = []
-    
-    # 保存先ディレクトリの決定
-    if gender in ['male', 'female']:
-        target_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', gender)
-    else:
-        target_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'unknown')
-    
-    # ディレクトリが存在しない場合は作成
-    os.makedirs(target_dir, exist_ok=True)
-    
-    for file in files:
-        if file and file.filename != '':
-            if allowed_file(file.filename, app.config['ALLOWED_EXTENSIONS']) and is_image_file(file.filename):
-                try:
-                    # 安全なファイル名に変換
-                    filename = secure_filename(file.filename)
-                    
-                    # 同名ファイルが既に存在する場合はユニークな名前に変更
-                    target_path = os.path.join(target_dir, filename)
-                    if os.path.exists(target_path):
-                        name, ext = os.path.splitext(filename)
-                        unique_suffix = uuid.uuid4().hex[:8]
-                        filename = f"{name}_{unique_suffix}{ext}"
-                        target_path = os.path.join(target_dir, filename)
-                    
-                    # ファイルを保存
-                    file.save(target_path)
-                    uploaded_files.append({
-                        'filename': filename,
-                        'path': f'papillae/{gender}/{filename}',
-                        'gender': gender
-                    })
-                    current_app.logger.info(f"学習データアップロード: {gender}/{filename}")
-                    
-                except Exception as e:
-                    current_app.logger.error(f"ファイル保存エラー {file.filename}: {str(e)}")
-                    errors.append(f"{file.filename}: {str(e)}")
-            else:
-                errors.append(f"{file.filename}: 無効なファイル形式です")
-    
-    result = {
-        "success": len(uploaded_files) > 0,
-        "uploaded_count": len(uploaded_files),
-        "error_count": len(errors),
-        "uploaded_files": uploaded_files
-    }
-    
-    if errors:
-        result["errors"] = errors
-    
-    if len(uploaded_files) > 0:
-        result["message"] = f"{len(uploaded_files)}個のファイルをアップロードしました"
-    else:
-        result["message"] = "アップロードに失敗しました"
-        
-    return jsonify(result)
-
-
-@learning_bp.route('/dataset-stats')
-def get_dataset_stats():
-    """
-    学習データセットの統計情報を取得
-    
-    Returns:
-    - JSON: データセット統計情報
-    """
-    from config import STATIC_SAMPLES_DIR
-    
-    try:
-        # 各カテゴリのディレクトリパス
-        male_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'male')
-        female_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'female')
-        unknown_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'unknown')
-        
-        # 画像ファイル数をカウント
-        male_count = len([f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(male_dir) else 0
-        female_count = len([f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(female_dir) else 0
-        unknown_count = len([f for f in os.listdir(unknown_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(unknown_dir) else 0
-        
-        # 合計カウント
-        total_count = male_count + female_count + unknown_count
-        
-        # アノテーション情報の取得
-        annotation_count = 0
-        annotation_file = os.path.join('static', 'annotation_mapping.json')
-        if os.path.exists(annotation_file):
-            try:
-                with open(annotation_file, 'r') as f:
-                    annotations = json.load(f)
-                    annotation_count = len(annotations)
-            except Exception as e:
-                current_app.logger.error(f"アノテーション情報読み込みエラー: {str(e)}")
-        
-        # 比率計算
-        male_ratio = (male_count / total_count * 100) if total_count > 0 else 0
-        female_ratio = (female_count / total_count * 100) if total_count > 0 else 0
-        annotation_ratio = (annotation_count / total_count * 100) if total_count > 0 else 0
-        
-        return jsonify({
-            "male_count": male_count,
-            "female_count": female_count,
-            "unknown_count": unknown_count,
-            "total_count": total_count,
-            "annotation_count": annotation_count,
-            "ratios": {
-                "male": male_ratio,
-                "female": female_ratio,
-                "annotation": annotation_ratio
-            }
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f"データセット統計取得エラー: {str(e)}")
-        return jsonify({"error": "統計情報の取得に失敗しました"}), 500
-
-
-@learning_bp.route('/learning-data')
-def get_learning_data():
-    """
-    学習データ一覧を取得
-    
-    Parameters:
-    - gender: フィルタリングする性別 (オプション)
-    
-    Returns:
-    - JSON: 学習データ一覧
-    """
-    from config import STATIC_SAMPLES_DIR
-    
-    try:
-        gender_filter = request.args.get('gender', 'all')
-        
-        # サンプルディレクトリ
-        samples_base_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
-        
-        result = {
-            'male': [],
-            'female': [],
-            'unknown': []
-        }
-        
-        # 各性別フォルダを検索
-        for category in ['male', 'female', 'unknown']:
-            if gender_filter != 'all' and gender_filter != category:
-                continue
-                
-            category_dir = os.path.join(samples_base_dir, category)
-            if not os.path.exists(category_dir):
-                continue
-                
-            # 画像ファイルをリストアップ
-            for filename in os.listdir(category_dir):
-                if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
-                    # アノテーション情報を確認
-                    rel_path = f"papillae/{category}/{filename}"
-                    
-                    # アノテーション状態を確認
-                    has_annotation = False
-                    annotation_path = None
-                    
-                    mapping_file = os.path.join('static', 'annotation_mapping.json')
-                    if os.path.exists(mapping_file):
-                        try:
-                            with open(mapping_file, 'r') as f:
-                                mapping = json.load(f)
-                                if rel_path in mapping:
-                                    has_annotation = True
-                                    annotation_path = mapping[rel_path]
-                        except Exception:
-                            pass
-                    
-                    # 画像情報を追加
-                    sample_info = {
-                        'filename': filename,
-                        'path': rel_path,
-                        'url': f"/sample/{rel_path}",
-                        'has_annotation': has_annotation,
-                        'category': category
-                    }
-                    
-                    if has_annotation:
-                        sample_info['annotation_path'] = annotation_path
-                    
-                    result[category].append(sample_info)
-        
-        # 総数情報を追加
-        result['counts'] = {
-            'male': len(result['male']),
-            'female': len(result['female']),
-            'unknown': len(result['unknown']),
-            'total': len(result['male']) + len(result['female']) + len(result['unknown'])
-        }
-        
-        return jsonify(result)
-        
-    except Exception as e:
-        current_app.logger.error(f"学習データ取得エラー: {str(e)}")
-        return jsonify({"error": "学習データの取得に失敗しました"}), 500
-
+# ================================
+# 学習・評価実行
+# ================================
 
 @learning_bp.route('/start-training', methods=['POST'])
 def start_model_training():
@@ -405,7 +501,6 @@ def start_model_training():
         traceback.print_exc()
         return jsonify({"error": f"モデル訓練の開始に失敗しました: {str(e)}"}), 500
 
-
 @learning_bp.route('/start-evaluation', methods=['POST'])
 def start_model_evaluation():
     """
@@ -458,7 +553,6 @@ def start_model_evaluation():
         traceback.print_exc()
         return jsonify({"error": f"モデル評価の開始に失敗しました: {str(e)}"}), 500
 
-
 @learning_bp.route('/start-annotation-analysis', methods=['POST'])
 def start_annotation_analysis():
     """
@@ -510,151 +604,6 @@ def start_annotation_analysis():
         current_app.logger.error(f"アノテーション効果分析開始エラー: {str(e)}")
         traceback.print_exc()
         return jsonify({"error": f"アノテーション効果分析の開始に失敗しました: {str(e)}"}), 500
-
-
-@learning_bp.route('/learning-history')
-def get_learning_history():
-    """
-    学習・評価履歴を取得
-    
-    Returns:
-    - JSON: 学習・評価履歴
-    """
-    try:
-        from utils.model_evaluation import get_model_evaluation_history
-        from config import EVALUATION_DATA_DIR
-        
-        # 評価履歴を取得
-        evaluation_history = get_model_evaluation_history(EVALUATION_DATA_DIR)
-        
-        # 学習履歴も含める（将来の拡張用）
-        combined_history = []
-        
-        # 評価履歴を追加
-        for item in evaluation_history:
-            combined_history.append({
-                "id": item.get("timestamp"),
-                "type": item.get("type", "evaluation"),
-                "timestamp": item.get("timestamp"),
-                "date": format_timestamp_to_date(item.get("timestamp")),
-                "accuracy": item.get("cv_mean", 0),
-                "details": item
-            })
-        
-        # 日付でソート（新しい順）
-        combined_history.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-        
-        return jsonify({
-            "history": combined_history,
-            "count": len(combined_history)
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f"学習履歴取得エラー: {str(e)}")
-        traceback.print_exc()
-        return jsonify({"error": "学習履歴の取得に失敗しました"}), 500
-
-
-def format_timestamp_to_date(timestamp):
-    """
-    タイムスタンプを読みやすい日付形式に変換
-    
-    Parameters:
-    - timestamp: YYYYMMdd_HHmmss形式のタイムスタンプ
-    
-    Returns:
-    - str: フォーマットされた日付文字列
-    """
-    if not timestamp or len(timestamp) < 15:
-        return 'Invalid date'
-    
-    try:
-        year = timestamp[0:4]
-        month = timestamp[4:6]
-        day = timestamp[6:8]
-        hour = timestamp[9:11]
-        minute = timestamp[11:13]
-        second = timestamp[13:15]
-        
-        date = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
-        return date.strftime("%Y年%m月%d日 %H:%M:%S")
-    except Exception:
-        return timestamp
-
-
-@learning_bp.route('/delete-data', methods=['POST'])
-def delete_learning_data():
-    """
-    学習データを削除
-    
-    Request:
-    - path: 削除する画像のパス
-    
-    Returns:
-    - JSON: 削除結果
-    """
-    from config import STATIC_SAMPLES_DIR
-    
-    try:
-        data = request.json
-        if not data or 'path' not in data:
-            return jsonify({"error": "削除する画像のパスが指定されていません"}), 400
-        
-        image_path = data['path']
-        
-        # パスの検証
-        if '..' in image_path or not image_path.startswith('papillae/'):
-            return jsonify({"error": "不正なパスです"}), 400
-        
-        # フルパスの構築
-        full_path = os.path.join(STATIC_SAMPLES_DIR, image_path)
-        
-        if not os.path.exists(full_path):
-            return jsonify({"error": "指定された画像が見つかりません"}), 404
-        
-        # 画像の削除
-        os.remove(full_path)
-        
-        # アノテーションマッピングからも削除
-        mapping_file = os.path.join('static', 'annotation_mapping.json')
-        if os.path.exists(mapping_file):
-            try:
-                with open(mapping_file, 'r') as f:
-                    mapping = json.load(f)
-                
-                if image_path in mapping:
-                    # アノテーション画像も削除
-                    annotation_path = os.path.join('static', mapping[image_path])
-                    if os.path.exists(annotation_path):
-                        os.remove(annotation_path)
-                    
-                    # マッピングから削除
-                    del mapping[image_path]
-                    
-                    with open(mapping_file, 'w') as f:
-                        json.dump(mapping, f, indent=2)
-                
-            except Exception as e:
-                current_app.logger.error(f"アノテーション削除エラー: {str(e)}")
-        
-        current_app.logger.info(f"学習データ削除: {image_path}")
-        
-        return jsonify({
-            "success": True,
-            "message": "画像を削除しました"
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f"学習データ削除エラー: {str(e)}")
-        traceback.print_exc()
-        return jsonify({"error": f"画像の削除に失敗しました: {str(e)}"}), 500
-
-
-@learning_bp.route('/unified-management')
-def unified_management_page():
-    """統合学習管理ページを表示"""
-    return render_template('learning_management.html')
-
 
 @learning_bp.route('/start-unified-training', methods=['POST'])
 def start_unified_training():
@@ -721,53 +670,124 @@ def start_unified_training():
         traceback.print_exc()
         return jsonify({"error": f"統合学習の開始に失敗しました: {str(e)}"}), 500
 
+# ================================
+# タスク状態管理 (旧api_routes.pyから統合)
+# ================================
 
-@learning_bp.route('/dataset-validation')
-def dataset_validation():
+@learning_bp.route('/task-status')
+def get_task_status():
     """
-    データセットの検証と準備完了度チェック
+    タスクの状態を取得
+    
+    Query Parameters:
+    - task_id: 処理タスクのID
     
     Returns:
-    - JSON: データセット検証結果
+    - JSON: タスクの処理状態
     """
-    try:
-        validation_result = validate_dataset_for_training()
-        return jsonify(validation_result)
-        
-    except Exception as e:
-        current_app.logger.error(f"データセット検証エラー: {str(e)}")
-        return jsonify({"error": "データセット検証に失敗しました"}), 500
+    from app import processing_status
+    
+    task_id = request.args.get('task_id')
+    
+    if not task_id:
+        return jsonify({"error": "task_id is required"}), 400
+    
+    # 状態の取得
+    if task_id in processing_status:
+        status = processing_status.get(task_id)
+        return jsonify({"status": status})
+    else:
+        return jsonify({"status": {"status": "unknown", "message": "タスクが見つかりません"}})
 
-
-@learning_bp.route('/readiness-check')
-def readiness_check():
+@learning_bp.route('/task-status/<task_id>')
+def get_task_status_by_id(task_id):
     """
-    学習開始の準備完了度をチェック
+    タスクIDでの状態取得（パスパラメータ版）
+    
+    Parameters:
+    - task_id: 処理タスクのID
     
     Returns:
-    - JSON: 準備完了状況と推奨アクション
+    - JSON: タスクの処理状態
     """
-    try:
-        # データセット統計取得
-        stats_response = get_dataset_stats()
-        stats_data = stats_response.get_json()
-        
-        # 準備完了度の計算
-        readiness = calculate_readiness_score(stats_data)
-        
+    from app import processing_status
+    
+    if not task_id:
+        return jsonify({"status": "unknown", "message": "タスクIDが指定されていません"}), 400
+    
+    # ステータスの取得
+    status = processing_status.get(task_id, {"status": "unknown", "message": "タスクが見つかりません"})
+    
+    current_app.logger.debug(f"タスク状態取得: {task_id} = {status}")
+    
+    # ステータスをそのまま返す（オブジェクトではなくフラットな形式）
+    return jsonify(status)
+
+@learning_bp.route('/cancel-task/<task_id>', methods=['POST'])
+def cancel_task(task_id):
+    """
+    タスクをキャンセル
+    
+    Parameters:
+    - task_id: キャンセルするタスクのID
+    
+    Returns:
+    - JSON: キャンセル結果
+    """
+    from app import processing_status
+    
+    if not task_id:
+        return jsonify({"error": "タスクIDが指定されていません"}), 400
+    
+    # タスクの存在確認
+    if task_id not in processing_status:
+        return jsonify({"error": "指定されたタスクが見つかりません"}), 404
+    
+    # タスクの状態確認
+    status = processing_status[task_id]
+    
+    # すでに完了または失敗したタスクはキャンセル不可
+    if status.get('status') in ['completed', 'failed', 'error']:
         return jsonify({
-            "readiness_score": readiness['score'],
-            "readiness_percentage": readiness['percentage'],
-            "status": readiness['status'],
-            "message": readiness['message'],
-            "requirements": readiness['requirements'],
-            "suggestions": readiness['suggestions']
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f"準備完了度チェックエラー: {str(e)}")
-        return jsonify({"error": "準備完了度の確認に失敗しました"}), 500
+            "error": "すでに完了または失敗したタスクはキャンセルできません",
+            "current_status": status
+        }), 400
+    
+    # 状態をキャンセルに更新
+    processing_status[task_id] = {
+        "status": "cancelled",
+        "message": "ユーザーによってキャンセルされました",
+        "previous_status": status
+    }
+    
+    current_app.logger.info(f"タスクをキャンセルしました: {task_id}")
+    
+    return jsonify({
+        "success": True,
+        "message": "タスクがキャンセルされました",
+        "task_id": task_id
+    })
 
+@learning_bp.route('/all-tasks')
+def get_all_tasks():
+    """
+    すべてのタスク状態を取得
+    
+    Returns:
+    - JSON: すべてのタスクの処理状態
+    """
+    from app import processing_status
+    
+    # APIキーによる認証（オプション）
+    api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
+    if not api_key or api_key != current_app.config.get('API_KEY', 'dev_key'):
+        return jsonify({"error": "認証が必要です"}), 401
+    
+    # 全タスクのステータスを返す
+    return jsonify({
+        "tasks": processing_status,
+        "count": len(processing_status)
+    })
 
 @learning_bp.route('/unified-status/<task_id>')
 def get_unified_status(task_id):
@@ -803,8 +823,104 @@ def get_unified_status(task_id):
         current_app.logger.error(f"統合ステータス取得エラー: {str(e)}")
         return jsonify({"error": "ステータス取得に失敗しました"}), 500
 
+# ================================
+# 評価履歴 (旧api_routes.pyから統合)
+# ================================
 
-# ===== ヘルパー関数 =====
+@learning_bp.route('/learning-history')
+def get_learning_history():
+    """
+    学習・評価履歴を取得
+    
+    Returns:
+    - JSON: 学習・評価履歴
+    """
+    try:
+        from core.evaluator import UnifiedEvaluator
+        
+        # 評価履歴を取得
+        evaluator = UnifiedEvaluator()
+        evaluation_history = evaluator.get_evaluation_history()
+        
+        # 学習履歴も含める（将来の拡張用）
+        combined_history = []
+        
+        # 評価履歴を追加
+        for item in evaluation_history:
+            combined_history.append({
+                "id": item.get("timestamp"),
+                "type": item.get("type", "evaluation"),
+                "timestamp": item.get("timestamp"),
+                "date": format_timestamp_to_date(item.get("timestamp")),
+                "accuracy": item.get("cv_mean", 0),
+                "details": item
+            })
+        
+        # 日付でソート（新しい順）
+        combined_history.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        
+        return jsonify({
+            "history": combined_history,
+            "count": len(combined_history)
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"学習履歴取得エラー: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": "学習履歴の取得に失敗しました"}), 500
+
+# ================================
+# データセット準備度評価
+# ================================
+
+@learning_bp.route('/dataset-validation')
+def dataset_validation():
+    """
+    データセットの検証と準備完了度チェック
+    
+    Returns:
+    - JSON: データセット検証結果
+    """
+    try:
+        validation_result = validate_dataset_for_training()
+        return jsonify(validation_result)
+        
+    except Exception as e:
+        current_app.logger.error(f"データセット検証エラー: {str(e)}")
+        return jsonify({"error": "データセット検証に失敗しました"}), 500
+
+@learning_bp.route('/readiness-check')
+def readiness_check():
+    """
+    学習開始の準備完了度をチェック
+    
+    Returns:
+    - JSON: 準備完了状況と推奨アクション
+    """
+    try:
+        # データセット統計取得
+        stats_response = get_dataset_stats()
+        stats_data = stats_response.get_json()
+        
+        # 準備完了度の計算
+        readiness = calculate_readiness_score(stats_data)
+        
+        return jsonify({
+            "readiness_score": readiness['score'],
+            "readiness_percentage": readiness['percentage'],
+            "status": readiness['status'],
+            "message": readiness['message'],
+            "requirements": readiness['requirements'],
+            "suggestions": readiness['suggestions']
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"準備完了度チェックエラー: {str(e)}")
+        return jsonify({"error": "準備完了度の確認に失敗しました"}), 500
+
+# ================================
+# ヘルパー関数
+# ================================
 
 def validate_dataset_for_training():
     """
@@ -873,7 +989,6 @@ def validate_dataset_for_training():
             "message": f"検証中にエラーが発生しました: {str(e)}",
             "stats": {}
         }
-
 
 def calculate_readiness_score(stats_data):
     """
@@ -969,7 +1084,6 @@ def calculate_readiness_score(stats_data):
         "suggestions": suggestions
     }
 
-
 def check_dataset_quality(stats_data):
     """
     データセット品質の詳細チェック
@@ -1017,7 +1131,6 @@ def check_dataset_quality(stats_data):
     
     return warnings
 
-
 def estimate_model_accuracy(stats_data):
     """
     予想モデル精度の推定
@@ -1062,7 +1175,6 @@ def estimate_model_accuracy(stats_data):
         }
     }
 
-
 def estimate_training_duration(stats_data):
     """
     訓練時間の推定
@@ -1098,7 +1210,6 @@ def estimate_training_duration(stats_data):
         }
     }
 
-
 def get_phase_details(status):
     """
     フェーズ詳細情報の取得
@@ -1127,7 +1238,6 @@ def get_phase_details(status):
         "total_phases": len(phase_info)
     }
 
-
 def estimate_remaining_time(status):
     """
     残り時間の推定
@@ -1151,7 +1261,6 @@ def estimate_remaining_time(status):
         "estimated_seconds": estimated_seconds,
         "estimated_minutes": round(estimated_seconds / 60, 1)
     }
-
 
 def get_next_phase(status):
     """
@@ -1183,7 +1292,6 @@ def get_next_phase(status):
     
     return None
 
-
 def calculate_completion_percentage(status):
     """
     完了率の計算
@@ -1204,3 +1312,29 @@ def calculate_completion_percentage(status):
     current_contribution = (current_progress / 100) * current_phase_weight
     
     return min(100, base_percentage + current_contribution)
+
+def format_timestamp_to_date(timestamp):
+    """
+    タイムスタンプを読みやすい日付形式に変換
+    
+    Parameters:
+    - timestamp: YYYYMMdd_HHmmss形式のタイムスタンプ
+    
+    Returns:
+    - str: フォーマットされた日付文字列
+    """
+    if not timestamp or len(timestamp) < 15:
+        return 'Invalid date'
+    
+    try:
+        year = timestamp[0:4]
+        month = timestamp[4:6]
+        day = timestamp[6:8]
+        hour = timestamp[9:11]
+        minute = timestamp[11:13]
+        second = timestamp[13:15]
+        
+        date = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
+        return date.strftime("%Y年%m月%d日 %H:%M:%S")
+    except Exception:
+        return timestamp

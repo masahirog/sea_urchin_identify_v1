@@ -1,6 +1,15 @@
 """
-ウニ生殖乳頭分析システム - 動画処理ルート
-動画からの生殖乳頭画像抽出機能を提供する
+routes/video.py - 動画処理ルート
+
+リネーム元:
+- routes/video_routes.py → routes/video.py
+
+機能:
+- 動画アップロード・処理
+- 生殖乳頭画像抽出
+- 処理状況監視
+- 結果ダウンロード
+- 処理履歴管理
 """
 
 from flask import Blueprint, request, jsonify, url_for, current_app, render_template, send_file
@@ -13,12 +22,23 @@ from datetime import datetime
 
 video_bp = Blueprint('video', __name__)
 
+# ================================
+# ページルート
+# ================================
+
+@video_bp.route('/')
+def video_page():
+    """動画処理メインページ"""
+    return render_template('video_processing.html')
 
 @video_bp.route('/processing')
 def processing_page():
     """動画処理専用ページを表示"""
     return render_template('video_processing.html')
 
+# ================================
+# 動画処理API
+# ================================
 
 @video_bp.route('/upload', methods=['POST'])
 def upload_video():
@@ -98,6 +118,32 @@ def upload_video():
     
     return jsonify({"error": "無効なファイル形式です"}), 400
 
+# ================================
+# 処理状況・結果取得API
+# ================================
+
+@video_bp.route('/status/<task_id>')
+def get_processing_status(task_id):
+    """
+    動画処理状況を取得
+    
+    Parameters:
+    - task_id: 処理タスクのID
+    
+    Returns:
+    - JSON: 処理状況
+    """
+    from app import processing_status
+    
+    if not task_id:
+        return jsonify({"error": "タスクIDが指定されていません"}), 400
+    
+    # ステータスの取得
+    status = processing_status.get(task_id, {"status": "unknown", "message": "タスクが見つかりません"})
+    
+    current_app.logger.debug(f"動画処理状況取得: {task_id} = {status}")
+    
+    return jsonify(status)
 
 @video_bp.route('/extracted-images/<task_id>', methods=['GET'])
 def get_extracted_images(task_id):
@@ -141,6 +187,9 @@ def get_extracted_images(task_id):
         "task_id": task_id
     })
 
+# ================================
+# ダウンロード機能
+# ================================
 
 @video_bp.route('/download-zip/<task_id>')
 def download_extracted_images_zip(task_id):
@@ -195,7 +244,6 @@ def download_extracted_images_zip(task_id):
     except Exception as e:
         current_app.logger.error(f"ZIP作成エラー {task_id}: {str(e)}")
         return jsonify({"error": f"ZIP作成中にエラーが発生しました: {str(e)}"}), 500
-
 
 @video_bp.route('/download-selected', methods=['POST'])
 def download_selected_images():
@@ -254,6 +302,9 @@ def download_selected_images():
         current_app.logger.error(f"選択画像ZIP作成エラー {task_id}: {str(e)}")
         return jsonify({"error": f"ZIP作成中にエラーが発生しました: {str(e)}"}), 500
 
+# ================================
+# タスク管理
+# ================================
 
 @video_bp.route('/delete-task/<task_id>', methods=['DELETE'])
 def delete_task(task_id):
@@ -299,6 +350,54 @@ def delete_task(task_id):
             "error": f"タスクの削除中にエラーが発生しました: {str(e)}"
         }), 500
 
+@video_bp.route('/cancel-task/<task_id>', methods=['POST'])
+def cancel_task(task_id):
+    """
+    実行中のタスクをキャンセル
+    
+    Parameters:
+    - task_id: キャンセルするタスクのID
+    
+    Returns:
+    - JSON: キャンセル結果
+    """
+    from app import processing_status
+    
+    if not task_id:
+        return jsonify({"error": "タスクIDが指定されていません"}), 400
+    
+    # タスクの存在確認
+    if task_id not in processing_status:
+        return jsonify({"error": "指定されたタスクが見つかりません"}), 404
+    
+    # タスクの状態確認
+    status = processing_status[task_id]
+    
+    # すでに完了または失敗したタスクはキャンセル不可
+    if status.get('status') in ['completed', 'failed', 'error']:
+        return jsonify({
+            "error": "すでに完了または失敗したタスクはキャンセルできません",
+            "current_status": status
+        }), 400
+    
+    # 状態をキャンセルに更新
+    processing_status[task_id] = {
+        "status": "cancelled",
+        "message": "ユーザーによってキャンセルされました",
+        "previous_status": status
+    }
+    
+    current_app.logger.info(f"動画処理タスクをキャンセルしました: {task_id}")
+    
+    return jsonify({
+        "success": True,
+        "message": "タスクがキャンセルされました",
+        "task_id": task_id
+    })
+
+# ================================
+# 履歴・統計
+# ================================
 
 @video_bp.route('/processing-history')
 def get_processing_history():
@@ -343,3 +442,155 @@ def get_processing_history():
     except Exception as e:
         current_app.logger.error(f"処理履歴取得エラー: {str(e)}")
         return jsonify({"error": "処理履歴の取得に失敗しました"}), 500
+
+@video_bp.route('/stats')
+def get_video_stats():
+    """
+    動画処理統計情報を取得
+    
+    Returns:
+    - JSON: 動画処理統計
+    """
+    from app import app, processing_status
+    
+    try:
+        # 処理済みタスクの統計
+        base_dir = app.config['EXTRACTED_FOLDER']
+        total_tasks = 0
+        total_images = 0
+        
+        if os.path.exists(base_dir):
+            for task_id in os.listdir(base_dir):
+                task_dir = os.path.join(base_dir, task_id)
+                if os.path.isdir(task_dir):
+                    images = [f for f in os.listdir(task_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+                    if images:
+                        total_tasks += 1
+                        total_images += len(images)
+        
+        # アクティブタスク統計
+        active_tasks = len([t for t in processing_status.values() 
+                           if t.get('status') in ['processing', 'queued', 'running']])
+        
+        return jsonify({
+            "total_tasks": total_tasks,
+            "total_extracted_images": total_images,
+            "active_tasks": active_tasks,
+            "average_images_per_task": round(total_images / total_tasks, 1) if total_tasks > 0 else 0
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"動画処理統計取得エラー: {str(e)}")
+        return jsonify({"error": "統計情報の取得に失敗しました"}), 500
+
+# ================================
+# 画像プレビュー・個別操作
+# ================================
+
+@video_bp.route('/preview-image/<task_id>/<filename>')
+def preview_image(task_id, filename):
+    """
+    抽出画像のプレビュー情報を取得
+    
+    Parameters:
+    - task_id: タスクID
+    - filename: 画像ファイル名
+    
+    Returns:
+    - JSON: 画像情報
+    """
+    from app import app
+    
+    # パス検証
+    if '..' in task_id or '..' in filename:
+        return jsonify({"error": "不正なパスです"}), 400
+    
+    task_dir = os.path.join(app.config['EXTRACTED_FOLDER'], task_id)
+    image_path = os.path.join(task_dir, filename)
+    
+    if not os.path.exists(image_path):
+        return jsonify({"error": "指定された画像が見つかりません"}), 404
+    
+    try:
+        # 画像情報取得
+        stat = os.stat(image_path)
+        
+        return jsonify({
+            "filename": filename,
+            "task_id": task_id,
+            "file_size": stat.st_size,
+            "created_date": datetime.fromtimestamp(stat.st_ctime).strftime("%Y-%m-%d %H:%M:%S"),
+            "image_url": url_for('image.get_image', path=os.path.join(task_id, filename), _external=True)
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"画像プレビュー取得エラー: {str(e)}")
+        return jsonify({"error": "画像情報の取得に失敗しました"}), 500
+
+@video_bp.route('/save-image-to-dataset', methods=['POST'])
+def save_image_to_dataset():
+    """
+    抽出画像を学習データセットに保存
+    
+    Request:
+    - task_id: タスクID
+    - filename: 画像ファイル名
+    - gender: 性別カテゴリ ('male' または 'female')
+    
+    Returns:
+    - JSON: 保存結果
+    """
+    from app import app
+    import shutil
+    
+    data = request.json
+    
+    if not data or not all(key in data for key in ['task_id', 'filename', 'gender']):
+        return jsonify({"error": "必要なパラメータがありません"}), 400
+    
+    task_id = data['task_id']
+    filename = data['filename']
+    gender = data['gender']
+    
+    if gender not in ['male', 'female']:
+        return jsonify({"error": "性別は 'male' または 'female' である必要があります"}), 400
+    
+    # パス検証
+    if '..' in task_id or '..' in filename:
+        return jsonify({"error": "不正なパスです"}), 400
+    
+    # ソースファイルパス
+    source_path = os.path.join(app.config['EXTRACTED_FOLDER'], task_id, filename)
+    
+    if not os.path.exists(source_path):
+        return jsonify({"error": "指定された画像が見つかりません"}), 404
+    
+    try:
+        # 保存先ディレクトリ
+        target_dir = os.path.join(app.config['DATASET_FOLDER'], gender)
+        os.makedirs(target_dir, exist_ok=True)
+        
+        # 保存先パス
+        target_path = os.path.join(target_dir, filename)
+        
+        # 同名ファイルが既に存在する場合はユニークな名前に変更
+        if os.path.exists(target_path):
+            name, ext = os.path.splitext(filename)
+            unique_suffix = uuid.uuid4().hex[:8]
+            filename = f"{name}_{unique_suffix}{ext}"
+            target_path = os.path.join(target_dir, filename)
+        
+        # 画像のコピー
+        shutil.copy(source_path, target_path)
+        current_app.logger.info(f"抽出画像をデータセットに保存: {gender}/{filename}")
+        
+        return jsonify({
+            "success": True, 
+            "message": f"画像を {gender} カテゴリに保存しました",
+            "filename": filename,
+            "path": target_path
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"データセット保存エラー: {str(e)}")
+        return jsonify({"error": f"画像の保存中にエラーが発生しました: {str(e)}"}), 500
