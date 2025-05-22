@@ -7,7 +7,6 @@ import os
 import uuid
 import json
 from flask import Blueprint, render_template, jsonify, request, send_from_directory, current_app
-from utils.model_evaluation import evaluate_model, analyze_annotation_impact, get_model_evaluation_history
 
 evaluation_bp = Blueprint('evaluation', __name__)
 
@@ -120,7 +119,7 @@ def analyze_annotation_impact_route():
     try:
         current_app.logger.info("アノテーション影響分析実行リクエスト受信")
         
-        # ★ 修正: モデルとデータセットのパスを正しく取得
+        # モデルとデータセットのパスを正しく取得
         model_path = os.path.join(app.config['MODEL_FOLDER'], "sea_urchin_rf_model.pkl")
         dataset_dir = app.config['DATASET_FOLDER']  # data/dataset を正しく取得
         
@@ -134,7 +133,7 @@ def analyze_annotation_impact_route():
             }), 404
             
         if not os.path.exists(dataset_dir):
-            # ★ データセットディレクトリが存在しない場合は作成
+            # データセットディレクトリが存在しない場合は作成
             try:
                 from config import ensure_directories
                 ensure_directories()
@@ -212,6 +211,8 @@ def analyze_annotation_impact_route_underscore():
     アノテーション影響分析を実行（アンダースコア版）
     """
     return analyze_annotation_impact_route()
+
+
 @evaluation_bp.route('/history')
 def get_evaluation_history():
     """
@@ -223,14 +224,16 @@ def get_evaluation_history():
     from app import app
     
     try:
-        evaluation_dir = os.path.join(app.config.get('STATIC_FOLDER', 'static'), 'evaluation')
+        # ★修正: 新しい評価データディレクトリを使用
+        from config import EVALUATION_DATA_DIR
+        from utils.model_evaluation import get_model_evaluation_history
         
         # ディレクトリの存在確認
-        if not os.path.exists(evaluation_dir):
-            os.makedirs(evaluation_dir, exist_ok=True)
+        if not os.path.exists(EVALUATION_DATA_DIR):
+            os.makedirs(EVALUATION_DATA_DIR, exist_ok=True)
             return jsonify({"history": []})
             
-        history = get_model_evaluation_history(evaluation_dir)
+        history = get_model_evaluation_history(EVALUATION_DATA_DIR)
         return jsonify({"history": history})
     except Exception as e:
         import traceback
@@ -251,15 +254,17 @@ def get_latest_evaluation_result():
     from app import app
     
     try:
-        evaluation_dir = os.path.join(app.config.get('STATIC_FOLDER', 'static'), 'evaluation')
+        # ★修正: 新しい評価データディレクトリを使用
+        from config import EVALUATION_DATA_DIR
+        from utils.model_evaluation import get_model_evaluation_history
         
         # ディレクトリの存在確認
-        if not os.path.exists(evaluation_dir):
-            os.makedirs(evaluation_dir, exist_ok=True)
+        if not os.path.exists(EVALUATION_DATA_DIR):
+            os.makedirs(EVALUATION_DATA_DIR, exist_ok=True)
             current_app.logger.warning("評価ディレクトリが存在しないため作成しました")
             return jsonify({"error": "評価履歴がありません"}), 404
         
-        history = get_model_evaluation_history(evaluation_dir)
+        history = get_model_evaluation_history(EVALUATION_DATA_DIR)
         current_app.logger.debug(f"履歴取得結果: {len(history)}件")
         
         if not history:
@@ -275,7 +280,7 @@ def get_latest_evaluation_result():
         if latest.get('type') == 'evaluation':
             # 評価ファイルの読み込み
             try:
-                eval_path = os.path.join(evaluation_dir, f"eval_{latest['timestamp']}.json")
+                eval_path = os.path.join(EVALUATION_DATA_DIR, f"eval_{latest['timestamp']}.json")
                 if os.path.exists(eval_path):
                     with open(eval_path, 'r') as f:
                         details = json.load(f)
@@ -287,7 +292,7 @@ def get_latest_evaluation_result():
         else:
             # アノテーション影響ファイルの読み込み
             try:
-                anno_path = os.path.join(evaluation_dir, f"annotation_impact_{latest['timestamp']}.json")
+                anno_path = os.path.join(EVALUATION_DATA_DIR, f"annotation_impact_{latest['timestamp']}.json")
                 if os.path.exists(anno_path):
                     with open(anno_path, 'r') as f:
                         details = json.load(f)
@@ -318,80 +323,6 @@ def get_latest_evaluation_result():
         return jsonify({"error": error_msg}), 500
 
 
-@evaluation_bp.route('/static/evaluation/<path:filename>')
-def evaluation_static(filename):
-    """
-    評価結果の静的ファイルを提供
-    
-    Parameters:
-    - filename: 評価結果ファイルの名前
-    
-    Returns:
-    - Response: 評価結果ファイル
-    """
-    from app import app
-    
-    evaluation_dir = os.path.join(app.config.get('STATIC_FOLDER', 'static'), 'evaluation')
-    
-    # パスの検証
-    if '..' in filename or filename.startswith('/'):
-        current_app.logger.warning(f"不正なパスへのアクセス試行: {filename}")
-        return jsonify({"error": "不正なパスです"}), 400
-        
-    current_app.logger.debug(f"静的ファイル要求: {filename}, ディレクトリ: {evaluation_dir}")
-    
-    # ファイルの存在確認
-    full_path = os.path.join(evaluation_dir, filename)
-    if os.path.exists(full_path):
-        current_app.logger.debug(f"ファイルが見つかりました: {full_path}")
-        return send_from_directory(evaluation_dir, filename)
-    else:
-        current_app.logger.warning(f"ファイルが見つかりません: {full_path}")
-        return jsonify({"error": "ファイルが見つかりません"}), 404
-
-
-@evaluation_bp.route('/debug-directory')
-def debug_directory():
-    """
-    評価ディレクトリの内容を確認（デバッグ用）
-    
-    Returns:
-    - JSON: ディレクトリ内容
-    """
-    from app import app
-    import os
-    
-    evaluation_dir = os.path.join(app.config.get('STATIC_FOLDER', 'static'), 'evaluation')
-    
-    # ディレクトリの存在確認
-    if not os.path.exists(evaluation_dir):
-        return jsonify({
-            "error": f"ディレクトリが存在しません: {evaluation_dir}",
-            "current_directory": os.getcwd()
-        })
-    
-    # ディレクトリ内のファイル一覧を取得
-    files = os.listdir(evaluation_dir)
-    
-    file_info = []
-    for file in files:
-        file_path = os.path.join(evaluation_dir, file)
-        file_info.append({
-            "name": file,
-            "is_dir": os.path.isdir(file_path),
-            "size": os.path.getsize(file_path) if os.path.isfile(file_path) else None,
-            "created": os.path.getctime(file_path),
-            "modified": os.path.getmtime(file_path)
-        })
-    
-    return jsonify({
-        "directory": evaluation_dir,
-        "exists": True,
-        "files": file_info,
-        "count": len(files)
-    })
-
-
 @evaluation_bp.route('/get-specific-result/<timestamp>')
 def get_specific_evaluation_result(timestamp):
     """
@@ -409,11 +340,12 @@ def get_specific_evaluation_result(timestamp):
         if not timestamp or '..' in timestamp or '/' in timestamp:
             return jsonify({"error": "不正なタイムスタンプです"}), 400
             
-        evaluation_dir = os.path.join(app.config.get('STATIC_FOLDER', 'static'), 'evaluation')
+        # ★修正: 新しい評価データディレクトリを使用
+        from config import EVALUATION_DATA_DIR
         
         # 評価ファイルのパス
-        eval_path = os.path.join(evaluation_dir, f"eval_{timestamp}.json")
-        anno_path = os.path.join(evaluation_dir, f"annotation_impact_{timestamp}.json")
+        eval_path = os.path.join(EVALUATION_DATA_DIR, f"eval_{timestamp}.json")
+        anno_path = os.path.join(EVALUATION_DATA_DIR, f"annotation_impact_{timestamp}.json")
         
         details = {}
         result_type = "unknown"
@@ -450,6 +382,109 @@ def get_specific_evaluation_result(timestamp):
         current_app.logger.error(error_msg)
         current_app.logger.error(traceback.format_exc())
         return jsonify({"error": error_msg}), 500
+
+
+# ★新規追加: 評価画像の配信用ルート
+@evaluation_bp.route('/images/<path:filename>')
+def evaluation_images(filename):
+    """
+    評価結果の画像を配信
+    
+    Parameters:
+    - filename: 評価結果ファイルの名前
+    
+    Returns:
+    - Response: 評価結果ファイル
+    """
+    from app import app
+    from config import STATIC_EVALUATION_DIR
+    
+    # パスの検証
+    if '..' in filename or filename.startswith('/'):
+        current_app.logger.warning(f"不正なパスへのアクセス試行: {filename}")
+        return jsonify({"error": "不正なパスです"}), 400
+        
+    current_app.logger.debug(f"評価画像要求: {filename}, ディレクトリ: {STATIC_EVALUATION_DIR}")
+    
+    # ファイルの存在確認
+    full_path = os.path.join(STATIC_EVALUATION_DIR, filename)
+    if os.path.exists(full_path):
+        current_app.logger.debug(f"ファイルが見つかりました: {full_path}")
+        return send_from_directory(STATIC_EVALUATION_DIR, filename)
+    else:
+        current_app.logger.warning(f"ファイルが見つかりません: {full_path}")
+        return jsonify({"error": "ファイルが見つかりません"}), 404
+
+
+# ★修正: 旧ルートとの互換性のため
+@evaluation_bp.route('/static/evaluation/<path:filename>')
+def evaluation_static(filename):
+    """
+    評価結果の静的ファイルを提供（旧ルートとの互換性用）
+    
+    Parameters:
+    - filename: 評価結果ファイルの名前
+    
+    Returns:
+    - Response: 評価結果ファイル
+    """
+    current_app.logger.debug(f"旧ルート経由での画像要求: {filename}")
+    # 新しいルートにリダイレクト
+    return evaluation_images(filename)
+
+
+@evaluation_bp.route('/debug-directory')
+def debug_directory():
+    """
+    評価ディレクトリの内容を確認（デバッグ用）
+    
+    Returns:
+    - JSON: ディレクトリ内容
+    """
+    from app import app
+    import os
+    from config import EVALUATION_DATA_DIR, STATIC_EVALUATION_DIR
+    
+    def get_directory_info(directory, name):
+        """ディレクトリ情報を取得"""
+        if not os.path.exists(directory):
+            return {
+                "name": name,
+                "path": directory,
+                "exists": False,
+                "files": [],
+                "count": 0
+            }
+        
+        files = os.listdir(directory)
+        file_info = []
+        for file in files:
+            file_path = os.path.join(directory, file)
+            file_info.append({
+                "name": file,
+                "is_dir": os.path.isdir(file_path),
+                "size": os.path.getsize(file_path) if os.path.isfile(file_path) else None,
+                "created": os.path.getctime(file_path),
+                "modified": os.path.getmtime(file_path)
+            })
+        
+        return {
+            "name": name,
+            "path": directory,
+            "exists": True,
+            "files": file_info,
+            "count": len(files)
+        }
+    
+    # 両方のディレクトリの情報を取得
+    data_dir_info = get_directory_info(EVALUATION_DATA_DIR, "評価データ")
+    static_dir_info = get_directory_info(STATIC_EVALUATION_DIR, "評価画像")
+    
+    return jsonify({
+        "data_directory": data_dir_info,
+        "static_directory": static_dir_info,
+        "current_directory": os.getcwd()
+    })
 
 
 @evaluation_bp.route('/reset-annotations', methods=['POST'])
@@ -496,12 +531,22 @@ def reset_annotations():
             # ディレクトリが存在しない場合は作成
             os.makedirs(annotations_dir, exist_ok=True)
         
-        # 3. アノテーション関連の評価ファイルの削除
-        evaluation_dir = os.path.join(app.config.get('STATIC_FOLDER', 'static'), 'evaluation')
-        if os.path.exists(evaluation_dir):
-            for filename in os.listdir(evaluation_dir):
+        # ★修正: 3. アノテーション関連の評価ファイルの削除（新しいディレクトリから）
+        from config import EVALUATION_DATA_DIR, STATIC_EVALUATION_DIR
+        
+        # データディレクトリからアノテーション影響ファイルを削除
+        if os.path.exists(EVALUATION_DATA_DIR):
+            for filename in os.listdir(EVALUATION_DATA_DIR):
                 if filename.startswith('annotation_impact_'):
-                    file_path = os.path.join(evaluation_dir, filename)
+                    file_path = os.path.join(EVALUATION_DATA_DIR, filename)
+                    if os.path.isfile(file_path):
+                        os.unlink(file_path)
+        
+        # 静的ディレクトリからアノテーション影響画像を削除
+        if os.path.exists(STATIC_EVALUATION_DIR):
+            for filename in os.listdir(STATIC_EVALUATION_DIR):
+                if filename.startswith('annotation_impact_'):
+                    file_path = os.path.join(STATIC_EVALUATION_DIR, filename)
                     if os.path.isfile(file_path):
                         os.unlink(file_path)
         

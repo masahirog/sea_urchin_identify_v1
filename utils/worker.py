@@ -132,16 +132,22 @@ def processing_worker(queue, status_dict, app_config):
                                 print("特徴量のスケーリング実行中")
                                 X_scaled = scaler.transform(X)
                                 
-                                # モデル評価の実行
+                                # ★修正: モデル評価の実行（新しいディレクトリ構造使用）
                                 print("モデル評価の実行を開始")
-                                eval_dir = os.path.join(app_config.get('STATIC_FOLDER', 'static'), 'evaluation')
-                                print(f"評価結果保存先: {eval_dir}")
                                 
-                                os.makedirs(eval_dir, exist_ok=True)
+                                # configから評価データディレクトリを取得
+                                from config import EVALUATION_DATA_DIR
+                                print(f"評価結果保存先（データ）: {EVALUATION_DATA_DIR}")
                                 
-                                # モデル評価実行
+                                # ディレクトリの作成
+                                os.makedirs(EVALUATION_DATA_DIR, exist_ok=True)
+                                
+                                # モデル評価実行（出力ディレクトリを明示的に指定）
                                 from utils.model_evaluation import evaluate_model
-                                eval_results = evaluate_model(X_scaled, y, model, output_dir=eval_dir)
+                                eval_results = evaluate_model(
+                                    X_scaled, y, model, 
+                                    output_dir=EVALUATION_DATA_DIR  # ★修正: 明示的に指定
+                                )
                                 
                                 # 処理完了を記録
                                 status_dict[task_id] = {
@@ -178,14 +184,18 @@ def processing_worker(queue, status_dict, app_config):
                     status_dict[task_id]["message"] = "アノテーション影響分析準備中..."
                     status_dict[task_id]["progress"] = 20
                     
-                    # アノテーション影響分析実行
+                    # ★修正: アノテーション影響分析実行（新しいディレクトリ構造使用）
                     from utils.model_evaluation import analyze_annotation_impact
                     
-                    # コンフィグから評価結果の保存先を取得
-                    evaluation_dir = os.path.join(app_config.get('STATIC_FOLDER', 'static'), 'evaluation')
+                    # configから評価データディレクトリを取得
+                    from config import EVALUATION_DATA_DIR
+                    print(f"アノテーション分析結果保存先（データ）: {EVALUATION_DATA_DIR}")
                     
-                    # 分析実行
-                    result = analyze_annotation_impact(dataset_dir, model_path, output_dir=evaluation_dir)
+                    # 分析実行（出力ディレクトリを明示的に指定）
+                    result = analyze_annotation_impact(
+                        dataset_dir, model_path, 
+                        output_dir=EVALUATION_DATA_DIR  # ★修正: 明示的に指定
+                    )
                     
                     # 処理完了を記録
                     status_dict[task_id] = {

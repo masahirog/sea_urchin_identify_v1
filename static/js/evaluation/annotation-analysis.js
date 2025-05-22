@@ -216,8 +216,9 @@ function updateAnnotationDatasetInfo(data) {
  * @param {Object} data - 分析データ
  */
 function updateAnnotationImpactImage(data) {
+    // ★修正: 新しい画像配信ルートを使用
     if (data.images && data.images.annotation_impact) {
-        const imgSrc = '/evaluation/static/evaluation/' + data.images.annotation_impact;
+        const imgSrc = '/evaluation/images/' + data.images.annotation_impact;
         setImageWithFallback('annotationImpactImg', imgSrc);
     } else {
         // 画像がない場合はデータからグラフを生成

@@ -313,14 +313,15 @@ function updateMetricsValues(data) {
  * @param {string} timestamp - 評価タイムスタンプ
  */
 function updateEvaluationImages(timestamp) {
+    // ★修正: 新しい画像配信ルートを使用
     // 学習曲線の画像
-    setImageWithFallback('learningCurveImg', '/evaluation/static/evaluation/learning_curve_' + timestamp + '.png');
+    setImageWithFallback('learningCurveImg', '/evaluation/images/learning_curve_' + timestamp + '.png');
     
     // 混同行列の画像
-    setImageWithFallback('confusionMatrixImg', '/evaluation/static/evaluation/confusion_matrix_' + timestamp + '.png');
+    setImageWithFallback('confusionMatrixImg', '/evaluation/images/confusion_matrix_' + timestamp + '.png');
     
     // ROCカーブの画像
-    setImageWithFallback('rocCurveImg', '/evaluation/static/evaluation/roc_curve_' + timestamp + '.png');
+    setImageWithFallback('rocCurveImg', '/evaluation/images/roc_curve_' + timestamp + '.png');
 }
 
 /**

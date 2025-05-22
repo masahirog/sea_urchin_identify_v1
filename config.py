@@ -13,13 +13,21 @@ EXTRACTED_DIR = os.path.join(DATA_DIR, 'extracted_frames')
 DATASET_DIR = os.path.join(DATA_DIR, 'dataset')
 MODELS_DIR = os.path.join(DATA_DIR, 'models')
 
+# 評価結果ディレクトリ（データ）
+EVALUATION_DATA_DIR = os.path.join(DATA_DIR, 'evaluations')
+
 # 静的ファイルディレクトリ（公開）
 STATIC_DIR = os.path.join(BASE_DIR, 'static')
 STATIC_IMAGES_DIR = os.path.join(STATIC_DIR, 'images')
 STATIC_SAMPLES_DIR = os.path.join(STATIC_IMAGES_DIR, 'samples')
 STATIC_ANNOTATIONS_DIR = os.path.join(STATIC_IMAGES_DIR, 'annotations')
 STATIC_DETECTION_DIR = os.path.join(STATIC_IMAGES_DIR, 'detection_results')
+
+# 評価結果の静的配信用ディレクトリ（公開）
 STATIC_EVALUATION_DIR = os.path.join(STATIC_IMAGES_DIR, 'evaluations')
+
+# JavaScriptファイル（静的コード）
+STATIC_JS_EVALUATION_DIR = os.path.join(STATIC_DIR, 'js', 'evaluation')
 
 # ログディレクトリ
 LOGS_DIR = os.path.join(BASE_DIR, 'logs')
@@ -49,11 +57,13 @@ def ensure_directories():
         os.path.join(DATASET_DIR, 'male'),
         os.path.join(DATASET_DIR, 'female'),
         os.path.join(MODELS_DIR, 'saved'),
+        EVALUATION_DATA_DIR,  # 追加
         STATIC_IMAGES_DIR,
         STATIC_SAMPLES_DIR,
         STATIC_ANNOTATIONS_DIR,
         STATIC_DETECTION_DIR,
-        STATIC_EVALUATION_DIR,
+        STATIC_EVALUATION_DIR,  # 追加
+        STATIC_JS_EVALUATION_DIR,  # 追加
         LOGS_DIR
     ]
     

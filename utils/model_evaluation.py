@@ -10,6 +10,7 @@ import json
 from datetime import datetime
 import joblib
 import traceback
+import shutil
 
 # matplotlib設定（GUIなしの環境用）
 import matplotlib
@@ -19,7 +20,7 @@ from sklearn.metrics import confusion_matrix, classification_report, roc_curve, 
 from sklearn.model_selection import cross_val_score, learning_curve, StratifiedKFold
 
 
-def evaluate_model(X, y, model, model_path=None, output_dir='static/evaluation'):
+def evaluate_model(X, y, model, model_path=None, output_dir=None):
     """
     モデルの評価を行い、結果を保存する
     
@@ -28,11 +29,16 @@ def evaluate_model(X, y, model, model_path=None, output_dir='static/evaluation')
     - y: ラベルデータ
     - model: 学習済みモデル
     - model_path: モデルファイルのパス（Noneの場合はmodelパラメータを使用）
-    - output_dir: 評価結果の出力ディレクトリ
+    - output_dir: 評価結果の出力ディレクトリ（Noneの場合はconfigから取得）
     
     Returns:
     - dict: 評価結果の辞書
     """
+    # ★修正: デフォルトの出力ディレクトリを動的に取得
+    if output_dir is None:
+        from config import EVALUATION_DATA_DIR, STATIC_EVALUATION_DIR
+        output_dir = EVALUATION_DATA_DIR
+    
     print(f"モデル評価開始 - サンプル数: {len(X) if X is not None else 'None'}")
     print(f"出力ディレクトリ: {output_dir}")
     
@@ -132,8 +138,8 @@ def evaluate_model(X, y, model, model_path=None, output_dir='static/evaluation')
             print(f"評価結果JSON保存エラー: {str(e)}")
             traceback.print_exc()
         
-        # グラフを生成して保存
-        create_evaluation_plots(eval_results, output_dir, timestamp)
+        # ★修正: グラフを生成して静的ディレクトリに保存
+        create_evaluation_plots(eval_results, timestamp)
         
         print("モデル評価完了")
         return eval_results
@@ -145,21 +151,24 @@ def evaluate_model(X, y, model, model_path=None, output_dir='static/evaluation')
         return {"error": error_msg}
 
 
-def create_evaluation_plots(eval_results, output_dir, timestamp):
+def create_evaluation_plots(eval_results, timestamp):
     """
     評価結果からグラフを生成して保存
     
     Parameters:
     - eval_results: 評価結果の辞書
-    - output_dir: 出力ディレクトリ
     - timestamp: タイムスタンプ文字列
     """
-    print(f"グラフ生成開始: {output_dir}, timestamp: {timestamp}")
+    print(f"グラフ生成開始: timestamp: {timestamp}")
     
     try:
+        # ★修正: 静的ディレクトリに保存（Web配信用）
+        from config import STATIC_EVALUATION_DIR
+        output_dir = STATIC_EVALUATION_DIR
+        
         # 出力ディレクトリの確認
         os.makedirs(output_dir, exist_ok=True)
-        print(f"出力ディレクトリ存在確認: {os.path.exists(output_dir)}")
+        print(f"グラフ出力ディレクトリ存在確認: {os.path.exists(output_dir)}")
         
         print("学習曲線のプロット生成開始")
         # 学習曲線のプロット
@@ -252,16 +261,21 @@ def create_evaluation_plots(eval_results, output_dir, timestamp):
         traceback.print_exc()
 
 
-def get_model_evaluation_history(evaluation_dir='static/evaluation'):
+def get_model_evaluation_history(evaluation_dir=None):
     """
     評価履歴を取得する
     
     Parameters:
-    - evaluation_dir: 評価結果が保存されているディレクトリ
+    - evaluation_dir: 評価結果が保存されているディレクトリ（Noneの場合はconfigから取得）
     
     Returns:
     - list: 評価履歴のリスト
     """
+    # ★修正: デフォルトディレクトリを動的に取得
+    if evaluation_dir is None:
+        from config import EVALUATION_DATA_DIR
+        evaluation_dir = EVALUATION_DATA_DIR
+    
     print(f"評価履歴取得開始: {evaluation_dir}")
     
     if not os.path.exists(evaluation_dir):
@@ -327,10 +341,11 @@ def process_evaluation_file(evaluation_dir, eval_file, eval_history):
     timestamp = data.get("timestamp", eval_file.replace("eval_", "").replace(".json", ""))
     print(f"タイムスタンプ: {timestamp}")
     
-    # 関連する画像ファイルの存在確認
-    learning_curve_path = os.path.join(evaluation_dir, f"learning_curve_{timestamp}.png")
-    confusion_matrix_path = os.path.join(evaluation_dir, f"confusion_matrix_{timestamp}.png")
-    roc_curve_path = os.path.join(evaluation_dir, f"roc_curve_{timestamp}.png")
+    # ★修正: 静的ディレクトリで画像ファイルの存在確認
+    from config import STATIC_EVALUATION_DIR
+    learning_curve_path = os.path.join(STATIC_EVALUATION_DIR, f"learning_curve_{timestamp}.png")
+    confusion_matrix_path = os.path.join(STATIC_EVALUATION_DIR, f"confusion_matrix_{timestamp}.png")
+    roc_curve_path = os.path.join(STATIC_EVALUATION_DIR, f"roc_curve_{timestamp}.png")
     
     lc_exists = os.path.exists(learning_curve_path)
     cm_exists = os.path.exists(confusion_matrix_path)
@@ -382,8 +397,9 @@ def process_annotation_file(evaluation_dir, anno_file, eval_history):
         timestamp = data.get("timestamp", anno_file.replace("annotation_impact_", "").replace(".json", ""))
         print(f"タイムスタンプ: {timestamp}")
         
-        # アノテーション影響グラフの存在確認
-        annotation_impact_path = os.path.join(evaluation_dir, f"annotation_impact_{timestamp}.png")
+        # ★修正: 静的ディレクトリでアノテーション影響グラフの存在確認
+        from config import STATIC_EVALUATION_DIR
+        annotation_impact_path = os.path.join(STATIC_EVALUATION_DIR, f"annotation_impact_{timestamp}.png")
         anno_exists = os.path.exists(annotation_impact_path)
         
         print(f"アノテーション影響グラフ存在確認: {anno_exists}")
@@ -429,18 +445,23 @@ def process_annotation_file(evaluation_dir, anno_file, eval_history):
         print(f"アノテーションファイル処理エラー: {str(e)}")
         traceback.print_exc()
 
-def analyze_annotation_impact(dataset_dir, model_path, output_dir='static/evaluation'):
+def analyze_annotation_impact(dataset_dir, model_path, output_dir=None):
     """
     アノテーションの影響を分析する
     
     Parameters:
     - dataset_dir: データセットディレクトリ
     - model_path: モデルファイルパス
-    - output_dir: 出力ディレクトリ
+    - output_dir: 出力ディレクトリ（Noneの場合はconfigから取得）
     
     Returns:
     - dict: 分析結果
     """
+    # ★修正: デフォルトの出力ディレクトリを動的に取得
+    if output_dir is None:
+        from config import EVALUATION_DATA_DIR
+        output_dir = EVALUATION_DATA_DIR
+    
     os.makedirs(output_dir, exist_ok=True)
     print(f"アノテーション影響分析開始 - データセット: {dataset_dir}")
     
@@ -544,66 +565,8 @@ def analyze_annotation_impact(dataset_dir, model_path, output_dir='static/evalua
             json.dump(analysis, f, indent=2)
         print(f"アノテーション分析結果を保存しました: {analysis_path}")
         
-        # グラフを生成
-        try:
-            print(f"アノテーション分析グラフ生成開始: {output_dir}")
-            
-            # 出力ディレクトリの確認
-            os.makedirs(output_dir, exist_ok=True)
-            
-            plt.figure(figsize=(10, 6))
-            labels = ['オス', 'メス', '合計']
-            annotated = [male_annotated, female_annotated, male_annotated + female_annotated]
-            
-            # データの整合性を確保（グラフ表示用）
-            total = [max(len(male_files), male_annotated), 
-                    max(len(female_files), female_annotated), 
-                    max(len(male_files) + len(female_files), male_annotated + female_annotated)]
-            
-            non_annotated = [t - a for t, a in zip(total, annotated)]
-            
-            x = np.arange(len(labels))
-            width = 0.35
-            
-            fig, ax = plt.subplots(figsize=(10, 6))
-            rects1 = ax.bar(x - width/2, annotated, width, label='アノテーション済み')
-            rects2 = ax.bar(x + width/2, non_annotated, width, label='未アノテーション')
-            
-            # グラフタイトルに警告を追加
-            title = 'データセットのアノテーション状況'
-            if warning:
-                title += f'\n（警告: {warning}）'
-            
-            ax.set_title(title)
-            ax.set_ylabel('画像数')
-            ax.set_xticks(x)
-            ax.set_xticklabels(labels)
-            ax.legend()
-            
-            # バーに数値を追加
-            def add_labels(rects):
-                for rect in rects:
-                    height = rect.get_height()
-                    ax.annotate(f'{height}',
-                                xy=(rect.get_x() + rect.get_width() / 2, height),
-                                xytext=(0, 3),
-                                textcoords="offset points",
-                                ha='center', va='bottom')
-            
-            add_labels(rects1)
-            add_labels(rects2)
-            
-            fig.tight_layout()
-            annotation_impact_path = os.path.join(output_dir, f"annotation_impact_{timestamp}.png")
-            print(f"アノテーション影響グラフの保存先: {annotation_impact_path}")
-            plt.savefig(annotation_impact_path, dpi=100, bbox_inches='tight')
-            print(f"アノテーション影響グラフを保存しました: {annotation_impact_path}")
-            plt.close()
-            
-            print("アノテーション分析グラフ生成完了")
-        except Exception as e:
-            print(f"アノテーション分析グラフ生成エラー: {str(e)}")
-            traceback.print_exc()
+        # ★修正: グラフを静的ディレクトリに生成
+        create_annotation_impact_plot(analysis, timestamp)
             
         return analysis
         
@@ -612,7 +575,88 @@ def analyze_annotation_impact(dataset_dir, model_path, output_dir='static/evalua
         print(error_msg)
         traceback.print_exc()
         return {"error": error_msg}
+
+
+def create_annotation_impact_plot(analysis, timestamp):
+    """
+    アノテーション影響のグラフを生成
+    
+    Parameters:
+    - analysis: 分析結果
+    - timestamp: タイムスタンプ
+    """
+    try:
+        # ★修正: 静的ディレクトリに保存
+        from config import STATIC_EVALUATION_DIR
+        output_dir = STATIC_EVALUATION_DIR
         
+        print(f"アノテーション分析グラフ生成開始: {output_dir}")
+        
+        # 出力ディレクトリの確認
+        os.makedirs(output_dir, exist_ok=True)
+        
+        dataset = analysis.get("dataset", {})
+        male_annotated = dataset.get("male_annotated", 0)
+        female_annotated = dataset.get("female_annotated", 0)
+        male_total = dataset.get("male_total", 0)
+        female_total = dataset.get("female_total", 0)
+        warning = dataset.get("warning")
+        
+        plt.figure(figsize=(10, 6))
+        labels = ['オス', 'メス', '合計']
+        annotated = [male_annotated, female_annotated, male_annotated + female_annotated]
+        
+        # データの整合性を確保（グラフ表示用）
+        total = [max(male_total, male_annotated), 
+                max(female_total, female_annotated), 
+                max(male_total + female_total, male_annotated + female_annotated)]
+        
+        non_annotated = [t - a for t, a in zip(total, annotated)]
+        
+        x = np.arange(len(labels))
+        width = 0.35
+        
+        fig, ax = plt.subplots(figsize=(10, 6))
+        rects1 = ax.bar(x - width/2, annotated, width, label='アノテーション済み')
+        rects2 = ax.bar(x + width/2, non_annotated, width, label='未アノテーション')
+        
+        # グラフタイトルに警告を追加
+        title = 'データセットのアノテーション状況'
+        if warning:
+            title += f'\n（警告: {warning}）'
+        
+        ax.set_title(title)
+        ax.set_ylabel('画像数')
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels)
+        ax.legend()
+        
+        # バーに数値を追加
+        def add_labels(rects):
+            for rect in rects:
+                height = rect.get_height()
+                ax.annotate(f'{height}',
+                            xy=(rect.get_x() + rect.get_width() / 2, height),
+                            xytext=(0, 3),
+                            textcoords="offset points",
+                            ha='center', va='bottom')
+        
+        add_labels(rects1)
+        add_labels(rects2)
+        
+        fig.tight_layout()
+        annotation_impact_path = os.path.join(output_dir, f"annotation_impact_{timestamp}.png")
+        print(f"アノテーション影響グラフの保存先: {annotation_impact_path}")
+        plt.savefig(annotation_impact_path, dpi=100, bbox_inches='tight')
+        print(f"アノテーション影響グラフを保存しました: {annotation_impact_path}")
+        plt.close()
+        
+        print("アノテーション分析グラフ生成完了")
+    except Exception as e:
+        print(f"アノテーション分析グラフ生成エラー: {str(e)}")
+        traceback.print_exc()
+
+
 # コマンドラインからの直接実行用
 if __name__ == "__main__":
     import argparse
@@ -624,17 +668,17 @@ if __name__ == "__main__":
     eval_parser = subparsers.add_parser("evaluate", help="モデルを評価")
     eval_parser.add_argument("--model", required=True, help="モデルファイルのパス")
     eval_parser.add_argument("--dataset", required=True, help="データセットディレクトリ")
-    eval_parser.add_argument("--output", default="static/evaluation", help="出力ディレクトリ")
+    eval_parser.add_argument("--output", help="出力ディレクトリ（省略時はconfig値を使用）")
     
     # アノテーション影響分析コマンド
     anno_parser = subparsers.add_parser("analyze-annotation", help="アノテーション影響を分析")
     anno_parser.add_argument("--model", required=True, help="モデルファイルのパス")
     anno_parser.add_argument("--dataset", required=True, help="データセットディレクトリ")
-    anno_parser.add_argument("--output", default="static/evaluation", help="出力ディレクトリ")
+    anno_parser.add_argument("--output", help="出力ディレクトリ（省略時はconfig値を使用）")
     
     # 履歴表示コマンド
     hist_parser = subparsers.add_parser("history", help="評価履歴を表示")
-    hist_parser.add_argument("--dir", default="static/evaluation", help="評価ディレクトリ")
+    hist_parser.add_argument("--dir", help="評価ディレクトリ（省略時はconfig値を使用）")
     
     args = parser.parse_args()
     
