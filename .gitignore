@@ -1,4 +1,8 @@
-# Python関連
+# ==================== データディレクトリ（非公開） ====================
+# 一時ファイル、学習データ、モデルなど - 全て除外
+/data/
+
+# ==================== Python関連 ====================
 __pycache__/
 *.py[cod]
 *.so
@@ -6,66 +10,30 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+
+# ==================== 仮想環境 ====================
 venv/
-ENV/
 env/
 .venv/
+ENV/
 
-# 開発環境
+# ==================== 開発環境 ====================
 .idea/
 .vscode/
 *.swp
-.DS_Store
-Thumbs.db
 
-# アプリケーションデータ（ユーザーデータを除外）
-models/saved/*.pkl
-extracted_images/*
-dataset/*
-static/uploads/*
-static/annotations/*
-data/*
-
-# ディレクトリ構造は保持
-!uploads/.gitkeep
-!extracted_images/.gitkeep
-!dataset/male/.gitkeep
-!dataset/female/.gitkeep
-!static/uploads/.gitkeep
-!static/evaluation/.gitkeep
-!static/annotations/.gitkeep
-!samples/papillae/male/.gitkeep
-!samples/papillae/female/.gitkeep
-
-# ログファイル
+# ==================== ログファイル ====================
 *.log
 app.log
 logs/
 
-# データファイル（設定ファイルを除く）
+# ==================== データベースファイル ====================
 *.db
 *.sqlite
 *.sqlite3
-*.h5
-*.npy
-*.csv
-*.xlsx
 
-# メディアファイル
-*.jpg
-*.jpeg
-*.png
-*.gif
-*.mp4
-*.avi
-*.mov
-*.mkv
-
-# 保持するJSONファイル
-!static/js/*.json
-!static/annotation_mapping.json
-
-# OS固有ファイル
+# ==================== OS固有ファイル ====================
 .DS_Store
 .AppleDouble
 .LSOverride
@@ -73,3 +41,31 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 *~
+
+# ==================== 一時ファイル ====================
+*.tmp
+*.temp
+
+# ==================== 旧ディレクトリ（削除済み/削除対象） ====================
+/samples/
+/uploads/
+/static/uploads/
+
+# ==================== 特定ファイルの除外 ====================
+# 画像ファイル全般（ユーザー生成・自動生成・サンプル含む）
+/static/images/samples/*
+/static/images/detection_results/*
+/static/images/annotations/*
+/static/images/evaluations/*
+
+# ただし、.gitkeepファイルは保持（ディレクトリ構造維持）
+!/static/images/samples/.gitkeep
+!/static/images/samples/papillae/male/.gitkeep
+!/static/images/samples/papillae/female/.gitkeep
+!/static/images/detection_results/.gitkeep
+!/static/images/annotations/.gitkeep
+!/static/images/evaluations/.gitkeep
+
+# ==================== 保持するもの ====================
+# 設定ファイルのみ追跡
+# static/annotation_mapping.json は除外しない（つまり追跡する）
