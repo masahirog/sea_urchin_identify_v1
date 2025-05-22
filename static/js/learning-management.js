@@ -337,59 +337,6 @@ function loadLearningData(genderFilter = 'all') {
     });
 }
 
-/**
- * 学習データの表示
- */
-function displayLearningData() {
-    const container = document.getElementById('learningDataContainer');
-    if (!container) return;
-    
-    const data = learningManagementService.learningData;
-    const allImages = [...data.male, ...data.female, ...data.unknown];
-    
-    if (allImages.length === 0) {
-        container.innerHTML = `
-            <div class="text-center text-muted py-5">
-                <i class="fas fa-database fa-3x mb-3" aria-hidden="true"></i>
-                <p>学習データをアップロードすると、ここに表示されます</p>
-                <small class="text-muted">画像をクリックしてアノテーションを行ってください</small>
-            </div>
-        `;
-        return;
-    }
-    
-    // 画像カードの生成
-    const imageCards = allImages.map(item => {
-        const genderClass = item.category === 'male' ? 'border-primary' : 
-                           item.category === 'female' ? 'border-danger' : 'border-secondary';
-        const genderIcon = item.category === 'male' ? 'fas fa-mars text-primary' : 
-                          item.category === 'female' ? 'fas fa-venus text-danger' : 'fas fa-question text-secondary';
-        const annotationBadge = item.has_annotation ? 
-            '<span class="badge bg-success position-absolute top-0 end-0 m-1">✓</span>' : '';
-        
-        return `
-            <div class="image-card sample-card ${genderClass}" data-path="${item.path}">
-                ${annotationBadge}
-                <img src="${item.url}" alt="${item.filename}" class="image-preview" 
-                     onclick="selectLearningImage('${item.path}')">
-                <div class="image-info">
-                    <i class="${genderIcon} me-1"></i>
-                    ${item.filename}
-                </div>
-                <div class="image-controls">
-                    <button class="btn btn-sm btn-outline-primary" onclick="selectLearningImage('${item.path}')">
-                        <i class="fas fa-pen"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteLearningImage('${item.path}')">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </div>
-        `;
-    }).join('');
-    
-    container.innerHTML = imageCards;
-}
 
 /**
  * 学習データのフィルタリング
@@ -985,3 +932,191 @@ function showSuccessMessage(message) {
         setTimeout(() => alertElement.remove(), 3000);
     }
 }
+
+
+/**
+ * 学習データの表示（修正版 - アノテーション表示機能付き）
+ */
+function displayLearningData() {
+    const container = document.getElementById('learningDataContainer');
+    if (!container) return;
+    
+    const data = learningManagementService.learningData;
+    const allImages = [...data.male, ...data.female, ...data.unknown];
+    
+    if (allImages.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-muted py-5">
+                <i class="fas fa-database fa-3x mb-3" aria-hidden="true"></i>
+                <p>学習データをアップロードすると、ここに表示されます</p>
+                <small class="text-muted">画像をクリックしてアノテーションを行ってください</small>
+            </div>
+        `;
+        return;
+    }
+    
+    // 画像カードの生成
+    const imageCards = allImages.map(item => {
+        const genderClass = item.category === 'male' ? 'border-primary' : 
+                           item.category === 'female' ? 'border-danger' : 'border-secondary';
+        const genderIcon = item.category === 'male' ? 'fas fa-mars text-primary' : 
+                          item.category === 'female' ? 'fas fa-venus text-danger' : 'fas fa-question text-secondary';
+        
+        // ★修正: アノテーション状態を詳細に表示
+        let annotationBadge = '';
+        let annotationPreview = '';
+        
+        if (item.has_annotation) {
+            annotationBadge = '<span class="badge bg-success position-absolute top-0 end-0 m-1">✓</span>';
+            
+            // アノテーション画像のプレビューを追加
+            if (item.annotation_path) {
+                const annotationUrl = `/static/${item.annotation_path}`;
+                annotationPreview = `
+                    <div class="annotation-preview mt-2" style="display: none;">
+                        <img src="${annotationUrl}" alt="アノテーション" class="img-fluid rounded annotation-image" 
+                             style="max-height: 200px; width: 100%; object-fit: contain; border: 2px solid #28a745; cursor: pointer;"
+                             onclick="showAnnotationModal('${annotationUrl}', '${item.filename}')">
+                        <small class="text-success d-block text-center mt-1">
+                            <i class="fas fa-check-circle me-1"></i>アノテーション済み (クリックで拡大)
+                        </small>
+                    </div>
+                `;
+            }
+        }
+        
+        return `
+            <div class="image-card sample-card ${genderClass}" data-path="${item.path}">
+                ${annotationBadge}
+                <img src="${item.url}" alt="${item.filename}" class="image-preview" 
+                     onclick="selectLearningImage('${item.path}')">
+                <div class="image-info">
+                    <i class="${genderIcon} me-1"></i>
+                    ${item.filename}
+                </div>
+                ${annotationPreview}
+                <div class="image-controls">
+                    <button class="btn btn-sm btn-outline-primary" onclick="selectLearningImage('${item.path}')" title="アノテーション編集">
+                        <i class="fas fa-pen"></i>
+                    </button>
+                    ${item.has_annotation ? `
+                        <button class="btn btn-sm btn-outline-info" onclick="toggleAnnotationPreview('${item.path}')" title="アノテーション表示">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    ` : ''}
+                    <button class="btn btn-sm btn-outline-danger" onclick="deleteLearningImage('${item.path}')" title="削除">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    container.innerHTML = imageCards;
+}
+
+/**
+ * ★新機能: アノテーション画像を大きなモーダルで表示
+ * @param {string} imageUrl - アノテーション画像のURL
+ * @param {string} filename - ファイル名
+ */
+function showAnnotationModal(imageUrl, filename) {
+    // モーダルHTML作成
+    const modalId = 'annotationViewModal';
+    
+    // 既存のモーダルがあれば削除
+    const existingModal = document.getElementById(modalId);
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modalHTML = `
+        <div class="modal fade" id="${modalId}" tabindex="-1" aria-labelledby="${modalId}Label" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="${modalId}Label">
+                            <i class="fas fa-eye text-success me-2"></i>アノテーション表示 - ${filename}
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                    </div>
+                    <div class="modal-body text-center p-4">
+                        <img src="${imageUrl}" alt="アノテーション画像" 
+                             class="img-fluid rounded shadow-sm" 
+                             style="max-width: 100%; max-height: 70vh; border: 2px solid #28a745;">
+                        <div class="mt-3">
+                            <span class="badge bg-success">
+                                <i class="fas fa-check-circle me-1"></i>アノテーション完了
+                            </span>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times me-1"></i>閉じる
+                        </button>
+                        <a href="${imageUrl}" download="${filename}_annotation.png" class="btn btn-outline-primary">
+                            <i class="fas fa-download me-1"></i>ダウンロード
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // モーダルをページに追加
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // モーダルを表示
+    const modal = new bootstrap.Modal(document.getElementById(modalId));
+    modal.show();
+    
+    // モーダルが閉じられたときにDOMから削除
+    document.getElementById(modalId).addEventListener('hidden.bs.modal', function() {
+        this.remove();
+    });
+}
+
+/**
+ * ★新機能: アノテーションプレビューの表示/非表示切り替え
+ * @param {string} imagePath - 画像パス
+ */
+function toggleAnnotationPreview(imagePath) {
+    const card = document.querySelector(`.sample-card[data-path="${imagePath}"]`);
+    if (!card) return;
+    
+    const preview = card.querySelector('.annotation-preview');
+    if (!preview) return;
+    
+    const isVisible = preview.style.display !== 'none';
+    preview.style.display = isVisible ? 'none' : 'block';
+    
+    // ボタンアイコンの切り替え
+    const button = card.querySelector('.btn-outline-info');
+    if (button) {
+        const icon = button.querySelector('i');
+        if (isVisible) {
+            icon.className = 'fas fa-eye';
+            button.title = 'アノテーション表示';
+        } else {
+            icon.className = 'fas fa-eye-slash';
+            button.title = 'アノテーション非表示';
+        }
+    }
+}
+
+/**
+ * ★新機能: アノテーション完了後のデータ更新
+ */
+function onAnnotationSaved() {
+    console.log('アノテーション保存完了 - データ更新中');
+    
+    // データセット統計とデータ一覧を更新
+    loadDatasetStatistics();
+    loadLearningData();
+    
+    // 成功メッセージ
+    showSuccessMessage('アノテーションが保存されました。画面が更新されます。');
+}
+
+// ★修正: アノテーション保存後のコールバック関数をグローバルに公開
+window.onAnnotationSaved = onAnnotationSaved;

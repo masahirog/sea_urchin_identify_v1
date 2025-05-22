@@ -5,6 +5,88 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/analyze_samples.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/model_evaluation.css') }}">
+<!-- learning_management.html の <head> セクションに追加するCSS -->
+
+<style>
+/* アノテーション表示の改善 */
+.annotation-preview {
+    background: linear-gradient(to bottom, #f8fff8, #f0f9f0);
+    border: 1px solid #d4edda;
+    border-radius: 8px;
+    padding: 10px;
+    margin-top: 10px;
+}
+
+.annotation-image {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border-radius: 6px !important;
+}
+
+.annotation-image:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3) !important;
+}
+
+/* 画像カードの改善 */
+.image-card {
+    transition: all 0.3s ease;
+    position: relative;
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.image-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* アノテーション状態のバッジ */
+.image-card .badge {
+    font-size: 0.8rem;
+    padding: 6px 8px;
+    border-radius: 15px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* アノテーション表示ボタンの改善 */
+.btn-outline-info:hover {
+    background-color: #17a2b8;
+    border-color: #17a2b8;
+    color: white;
+    transform: scale(1.05);
+}
+
+/* モーダル内の画像表示 */
+.modal-body img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* 成功状態の強調 */
+.text-success {
+    color: #28a745 !important;
+    font-weight: 500;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+    .annotation-preview img {
+        max-height: 150px !important;
+    }
+    
+    .modal-dialog {
+        margin: 10px;
+    }
+    
+    .modal-body {
+        padding: 20px;
+    }
+}
+</style>
 {% endblock %}
 
 {% block content %}

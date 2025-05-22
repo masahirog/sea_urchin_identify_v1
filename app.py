@@ -87,6 +87,39 @@ def get_uploaded_file(filename):
     """一時アップロードファイルを提供するルート"""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
+
+
+@app.route('/static/images/<path:filename>')
+def serve_static_images(filename):
+    """
+    静的画像ファイル（アノテーション、検出結果など）を配信
+    
+    Parameters:
+    - filename: 画像ファイルのパス（annotations/xxx.png など）
+    
+    Returns:
+    - Response: 画像ファイル
+    """
+    from config import STATIC_IMAGES_DIR
+    return send_from_directory(STATIC_IMAGES_DIR, filename)
+
+# ★追加: 評価画像配信ルート  
+@app.route('/evaluation/images/<filename>')
+def serve_evaluation_images(filename):
+    """
+    評価結果画像を配信
+    
+    Parameters:
+    - filename: 評価画像ファイル名
+    
+    Returns:
+    - Response: 評価画像ファイル
+    """
+    from config import STATIC_EVALUATION_DIR
+    return send_from_directory(STATIC_EVALUATION_DIR, filename)
+
+
+
 # ★統一: サンプル画像配信（恒久ファイル用）
 @app.route('/sample/<path:filename>')
 def serve_sample_image(filename):

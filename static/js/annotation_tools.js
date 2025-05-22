@@ -313,8 +313,8 @@ function saveAnnotationData() {
         const selectedCard = annotationTools.selectedCard;
         console.log('選択カード:', selectedCard.dataset.path);
 
-        // 画像データをサーバーに送信
-        fetch('/sample/save-annotation', {
+        // 画像データをサーバーに送信（★修正: URLを /learning/save-annotation に変更）
+        fetch('/learning/save-annotation', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -346,7 +346,12 @@ function saveAnnotationData() {
                 // モーダルを閉じる
                 bootstrap.Modal.getInstance(document.getElementById('annotationModal')).hide();
                 
-                // サンプルの再分析
+                // ★修正: 学習管理画面のデータ更新コールバック
+                if (typeof window.onAnnotationSaved === 'function') {
+                    window.onAnnotationSaved();
+                }
+                
+                // サンプルの再分析（従来の機能も保持）
                 if (typeof analyzeSample === 'function') {
                     analyzeSample(selectedCard.dataset.path);
                 }

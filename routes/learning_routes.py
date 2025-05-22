@@ -9,6 +9,7 @@ import os
 import json
 import uuid
 import traceback
+import base64
 from datetime import datetime
 
 learning_bp = Blueprint('learning', __name__)
@@ -18,6 +19,103 @@ learning_bp = Blueprint('learning', __name__)
 def management_page():
     """学習管理統合ページを表示"""
     return render_template('learning_management.html')
+
+
+@learning_bp.route('/save-annotation', methods=['POST'])
+def save_annotation():
+    """
+    アノテーション画像を保存
+    
+    Request:
+    - image_data: Base64エンコードされた画像データ
+    - original_path: 元の画像パス
+    
+    Returns:
+    - JSON: 保存結果
+    """
+    try:
+        data = request.json
+        
+        if not data or 'image_data' not in data or 'original_path' not in data:
+            return jsonify({"error": "必要なパラメータが不足しています"}), 400
+        
+        # Base64データの分割（コンテンツタイプと実際のデータ）
+        image_data_parts = data['image_data'].split(',')
+        if len(image_data_parts) > 1:
+            # コンテンツタイプが含まれている場合
+            image_data = image_data_parts[1]
+        else:
+            # コンテンツタイプが含まれていない場合
+            image_data = image_data_parts[0]
+        
+        # Base64デコード
+        try:
+            image_bytes = base64.b64decode(image_data)
+        except Exception as e:
+            current_app.logger.error(f"Base64デコードエラー: {str(e)}")
+            return jsonify({"error": f"画像データの解析に失敗しました: {str(e)}"}), 400
+        
+        # 元の画像パス
+        original_path = data['original_path']
+        
+        # ファイル名を取得
+        filename = os.path.basename(original_path)
+        basename, ext = os.path.splitext(filename)
+        
+        # 新しいファイル名（元の名前に_annotation付加）
+        new_filename = f"{basename}_annotation{ext}"
+        
+        # アノテーション保存ディレクトリ
+        from config import STATIC_ANNOTATIONS_DIR
+        os.makedirs(STATIC_ANNOTATIONS_DIR, exist_ok=True)
+        
+        # 同名ファイルが既に存在する場合はユニークな名前に変更
+        save_path = os.path.join(STATIC_ANNOTATIONS_DIR, new_filename)
+        if os.path.exists(save_path):
+            unique_suffix = uuid.uuid4().hex[:8]
+            new_filename = f"{basename}_annotation_{unique_suffix}{ext}"
+            save_path = os.path.join(STATIC_ANNOTATIONS_DIR, new_filename)
+        
+        # 画像の保存
+        with open(save_path, 'wb') as f:
+            f.write(image_bytes)
+        
+        # アノテーションマッピングファイルの更新
+        annotation_mapping_file = os.path.join('static', 'annotation_mapping.json')
+        
+        # 既存のマッピングを読み込み
+        if os.path.exists(annotation_mapping_file):
+            try:
+                with open(annotation_mapping_file, 'r') as f:
+                    mapping = json.load(f)
+            except Exception:
+                mapping = {}
+        else:
+            mapping = {}
+        
+        # 新しいマッピングを追加
+        # 相対パスでマッピングを保存
+        relative_annotation_path = f"images/annotations/{new_filename}"
+        mapping[original_path] = relative_annotation_path
+        
+        # マッピングファイルを更新
+        with open(annotation_mapping_file, 'w') as f:
+            json.dump(mapping, f, indent=2)
+        
+        current_app.logger.info(f"アノテーション保存完了: {new_filename}")
+        
+        return jsonify({
+            "success": True, 
+            "message": "アノテーションを保存しました",
+            "annotation_path": save_path,
+            "filename": new_filename,
+            "mapping_updated": True
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"アノテーション保存エラー: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": f"アノテーションの保存中にエラーが発生しました: {str(e)}"}), 500
 
 
 @learning_bp.route('/upload-data', methods=['POST'])
