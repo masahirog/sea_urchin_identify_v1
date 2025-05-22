@@ -5,88 +5,8 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/analyze_samples.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/model_evaluation.css') }}">
-<!-- learning_management.html の <head> セクションに追加するCSS -->
-
-<style>
-/* アノテーション表示の改善 */
-.annotation-preview {
-    background: linear-gradient(to bottom, #f8fff8, #f0f9f0);
-    border: 1px solid #d4edda;
-    border-radius: 8px;
-    padding: 10px;
-    margin-top: 10px;
-}
-
-.annotation-image {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    border-radius: 6px !important;
-}
-
-.annotation-image:hover {
-    transform: scale(1.02);
-    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3) !important;
-}
-
-/* 画像カードの改善 */
-.image-card {
-    transition: all 0.3s ease;
-    position: relative;
-    background: white;
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.image-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-}
-
-/* アノテーション状態のバッジ */
-.image-card .badge {
-    font-size: 0.8rem;
-    padding: 6px 8px;
-    border-radius: 15px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-/* アノテーション表示ボタンの改善 */
-.btn-outline-info:hover {
-    background-color: #17a2b8;
-    border-color: #17a2b8;
-    color: white;
-    transform: scale(1.05);
-}
-
-/* モーダル内の画像表示 */
-.modal-body img {
-    max-width: 100%;
-    height: auto;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-/* 成功状態の強調 */
-.text-success {
-    color: #28a745 !important;
-    font-weight: 500;
-}
-
-/* レスポンシブ対応 */
-@media (max-width: 768px) {
-    .annotation-preview img {
-        max-height: 150px !important;
-    }
-    
-    .modal-dialog {
-        margin: 10px;
-    }
-    
-    .modal-body {
-        padding: 20px;
-    }
-}
-</style>
+<!-- ★追加: 学習管理専用CSS -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/learning_management.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -118,7 +38,7 @@
         <div class="row">
             <!-- データアップロード・管理 -->
             <div class="col-md-4">
-                <div class="card">
+                <div class="card dataset-stat-card">
                     <div class="card-header">
                         <h5><i class="fas fa-cloud-upload-alt" aria-hidden="true"></i> データアップロード</h5>
                     </div>
@@ -155,23 +75,27 @@
                 </div>
                 
                 <!-- データセット統計 -->
-                <div class="card mt-3">
+                <div class="card dataset-stat-card">
                     <div class="card-header">
                         <h6><i class="fas fa-chart-pie" aria-hidden="true"></i> データセット統計</h6>
                     </div>
                     <div class="card-body">
                         <div class="row text-center mb-3">
-                            <div class="col-4">
-                                <div class="h5 mb-0 text-primary" id="maleDataCount">0</div>
-                                <small class="text-muted">オス</small>
+                            <div class="col-3">
+                                <div class="stat-number text-primary" id="maleDataCount">0</div>
+                                <div class="stat-label">オス</div>
                             </div>
-                            <div class="col-4">
-                                <div class="h5 mb-0 text-danger" id="femaleDataCount">0</div>
-                                <small class="text-muted">メス</small>
+                            <div class="col-3">
+                                <div class="stat-number text-danger" id="femaleDataCount">0</div>
+                                <div class="stat-label">メス</div>
                             </div>
-                            <div class="col-4">
-                                <div class="h5 mb-0 text-success" id="annotatedCount">0</div>
-                                <small class="text-muted">アノテーション済み</small>
+                            <div class="col-3">
+                                <div class="stat-number text-success" id="annotatedCount">0</div>
+                                <div class="stat-label">アノテーション済み</div>
+                            </div>
+                            <div class="col-3">
+                                <div class="stat-number text-info" id="annotationProgress">0%</div>
+                                <div class="stat-label">進捗率</div>
                             </div>
                         </div>
                         
@@ -196,7 +120,7 @@
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5><i class="fas fa-database" aria-hidden="true"></i> 学習データ一覧</h5>
                         <div>
-                            <div class="btn-group btn-group-sm" role="group">
+                            <div class="btn-group btn-group-sm gender-filter-group" role="group">
                                 <input type="radio" class="btn-check" name="genderFilter" id="filterAll" value="all" checked>
                                 <label class="btn btn-outline-secondary" for="filterAll">全て</label>
                                 
@@ -214,32 +138,8 @@
                             <div class="text-center text-muted py-5">
                                 <i class="fas fa-database fa-3x mb-3" aria-hidden="true"></i>
                                 <p>学習データをアップロードすると、ここに表示されます</p>
-                                <small class="text-muted">画像をクリックしてアノテーションを行ってください</small>
+                                <small class="text-muted">画像をクリックして詳細を確認してください</small>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- アノテーション結果表示 -->
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h6><i class="fas fa-pen" aria-hidden="true"></i> アノテーション作業</h6>
-                    </div>
-                    <div class="card-body">
-                        <!-- アノテーション結果表示エリア -->
-                        <div id="annotationWorkspace" class="d-none">
-                            <!-- ここにアノテーション結果が表示されます -->
-                        </div>
-                        
-                        <!-- プレースホルダー -->
-                        <div id="annotationPlaceholder" class="text-center py-4">
-                            <i class="fas fa-mouse-pointer fa-2x mb-3 text-muted" aria-hidden="true"></i>
-                            <p class="text-muted">上の画像をクリックしてアノテーションを開始してください</p>
-                            <small class="text-muted">生殖乳頭の輪郭をペンツールで囲んで、学習データとして保存します</small>
                         </div>
                     </div>
                 </div>
