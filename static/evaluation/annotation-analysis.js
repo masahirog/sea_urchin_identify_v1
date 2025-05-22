@@ -1,7 +1,10 @@
 /**
- * ウニ生殖乳頭分析システム - アノテーション影響分析モジュール
- * アノテーション分析の実行、結果表示、データリセット機能
+ * static/evaluation/annotation-analysis.js の修正版
+ * 重複描画を防ぐためにChart.jsインスタンスを適切に管理
  */
+
+// グローバル変数でChart.jsインスタンスを管理
+let annotationChart = null;
 
 /**
  * アノテーション分析の初期化
@@ -127,11 +130,20 @@ function executeAnnotationAnalysis() {
 }
 
 /**
- * アノテーション分析結果の表示
+ * アノテーション分析結果の表示（修正版）
  * @param {Object} data - 分析結果データ
  */
 function displayAnnotationAnalysis(data) {
     console.log('アノテーション分析結果の表示開始:', data);
+    
+    // 重複実行を防ぐためのフラグチェック
+    if (window.annotationAnalysisDisplayed) {
+        console.log('アノテーション分析結果は既に表示済みです');
+        return;
+    }
+    
+    // 表示フラグを設定
+    window.annotationAnalysisDisplayed = true;
     
     // プレースホルダーを非表示、結果を表示
     const placeholder = document.getElementById('annotationPlaceholder');
@@ -174,6 +186,11 @@ function displayAnnotationAnalysis(data) {
         console.error('アノテーション分析表示エラー:', error);
         showErrorMessage('アノテーション分析の表示中にエラーが発生しました');
     }
+    
+    // 一定時間後にフラグをリセット（新しい分析結果を受け入れるため）
+    setTimeout(() => {
+        window.annotationAnalysisDisplayed = false;
+    }, 5000);
 }
 
 /**
@@ -234,101 +251,214 @@ function updateAnnotationInsight(data) {
  */
 function renderAnnotationChart(dataset) {
     try {
-        const canvas = document.getElementById('annotationImpactImg');
-        if (!canvas) return;
-       
-        // キャンバス要素をリセット
-        const chartContainer = canvas.parentElement;
-        if (!chartContainer) return;
-       
-        chartContainer.innerHTML = '';
-       
-        // 新しいキャンバス要素を作成
-        const newCanvas = document.createElement('canvas');
-        newCanvas.id = 'annotationChartCanvas';
-        chartContainer.appendChild(newCanvas);
-       
-        // データセット情報
-        const male_total = dataset.male_total || 0;
-        const female_total = dataset.female_total || 0;
-        const male_annotated = dataset.male_annotated || 0;
-        const female_annotated = dataset.female_annotated || 0;
-       
-        // Chart.jsが読み込まれているか確認
-        if (typeof Chart !== 'undefined') {
-            // グラフデータ
-            const data = {
-                labels: ['オス', 'メス', '合計'],
-                datasets: [
-                    {    
-                        label: 'アノテーション済み',
-                        data: [male_annotated, female_annotated, male_annotated + female_annotated],
-                        backgroundColor: 'rgba(54, 162, 235, 0.7)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: '未アノテーション',
-                        data: [
-                            male_total - male_annotated, 
-                            female_total - female_annotated, 
-                            (male_total - male_annotated) + (female_total - female_annotated)
-                        ],
-                        backgroundColor: 'rgba(255, 99, 132, 0.7)',
-                        borderColor: 'rgba(255, 99, 132, 1)',
-                        borderWidth: 1
-                    }
-                ]
-            };
-           
-            // グラフオプション
-            const options = {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: '画像数'
-                        }
-                    },
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'カテゴリ'
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        position: 'top',
-                    },
-                    title: {
-                        display: true,
-                        text: 'データセットのアノテーション状況'
-                    }
-                }
-            };
-           
-            // グラフを描画
-            new Chart(newCanvas, {
-                type: 'bar',
-                data: data,
-                options: options
-            });
-        } else {
-            // Chart.jsが読み込まれていない場合
-            const placeholder = document.createElement('div');
-            placeholder.className = 'text-center p-5 bg-light border rounded';
-            placeholder.innerHTML = `
-                <i class="fas fa-chart-bar text-muted mb-3" style="font-size: 3rem;"></i>
-                <p class="mb-0">アノテーション状況：オス(${male_annotated}/${male_total}), メス(${female_annotated}/${female_total})</p>
-            `;
-            chartContainer.appendChild(placeholder);
+        console.log('グラフ描画開始:', dataset);
+        
+        // 対象要素の取得
+        let chartContainer = document.getElementById('annotationChartContainer');
+        if (!chartContainer) {
+            const canvas = document.getElementById('annotationImpactImg');
+            if (!canvas) {
+                console.error('グラフ描画用のコンテナが見つかりません');
+                return;
+            }
+            chartContainer = canvas.parentElement;
         }
+        
+        // 既存のChart.jsインスタンスがあれば完全に破棄
+        if (annotationChart) {
+            console.log('既存のChart.jsインスタンスを破棄中...');
+            annotationChart.destroy();
+            annotationChart = null;
+        }
+        
+        // コンテナを完全にクリア
+        chartContainer.innerHTML = '';
+        
+        // データセット情報の取得と処理
+        const male_total = Math.max(0, dataset.male_total || 0);
+        const female_total = Math.max(0, dataset.female_total || 0);
+        const male_annotated = Math.max(0, dataset.male_annotated || 0);
+        const female_annotated = Math.max(0, dataset.female_annotated || 0);
+        
+        console.log('元データ:', {male_total, female_total, male_annotated, female_annotated});
+        
+        // データ不整合の場合の処理
+        let displayData;
+        let warningMessage = null;
+        
+        if (male_total === 0 && female_total === 0) {
+            if (male_annotated > 0 || female_annotated > 0) {
+                // ケース: データセット画像0、アノテーション存在
+                displayData = {
+                    male_total: male_annotated,
+                    female_total: female_annotated,
+                    male_annotated: male_annotated,
+                    female_annotated: female_annotated
+                };
+                warningMessage = 'データセット画像がないのにアノテーションが存在します';
+            } else {
+                // ケース: データもアノテーションも0
+                displayData = {
+                    male_total: 1,
+                    female_total: 1,
+                    male_annotated: 0,
+                    female_annotated: 0
+                };
+                warningMessage = 'データセットとアノテーションがありません';
+            }
+        } else {
+            // 通常のケース
+            displayData = {
+                male_total: Math.max(male_total, male_annotated),
+                female_total: Math.max(female_total, female_annotated),
+                male_annotated: male_annotated,
+                female_annotated: female_annotated
+            };
+        }
+        
+        console.log('表示用データ:', displayData);
+        
+        setTimeout(() => {
+            try {
+                // 新しいキャンバス要素を作成
+                const newCanvas = document.createElement('canvas');
+                newCanvas.id = 'annotationChartCanvas';
+                newCanvas.width = 400;
+                newCanvas.height = 300;
+                newCanvas.style.maxWidth = '100%';
+                newCanvas.style.height = 'auto';
+                
+                chartContainer.appendChild(newCanvas);
+                
+                // Chart.jsが読み込まれているか確認
+                if (typeof Chart !== 'undefined') {
+                    // グラフデータ
+                    const chartData = {
+                        labels: ['オス', 'メス', '合計'],
+                        datasets: [
+                            {    
+                                label: 'アノテーション済み',
+                                data: [
+                                    displayData.male_annotated, 
+                                    displayData.female_annotated, 
+                                    displayData.male_annotated + displayData.female_annotated
+                                ],
+                                backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                                borderColor: 'rgba(54, 162, 235, 1)',
+                                borderWidth: 1
+                            },
+                            {
+                                label: '未アノテーション',
+                                data: [
+                                    displayData.male_total - displayData.male_annotated, 
+                                    displayData.female_total - displayData.female_annotated, 
+                                    (displayData.male_total - displayData.male_annotated) + 
+                                    (displayData.female_total - displayData.female_annotated)
+                                ],
+                                backgroundColor: 'rgba(255, 99, 132, 0.7)',
+                                borderColor: 'rgba(255, 99, 132, 1)',
+                                borderWidth: 1
+                            }
+                        ]
+                    };
+                   
+                    // グラフオプション
+                    const maxValue = Math.max(5, displayData.male_total + displayData.female_total);
+                    const options = {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: {
+                            duration: 0
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: maxValue + 1,
+                                title: {
+                                    display: true,
+                                    text: '画像数'
+                                },
+                                ticks: {
+                                    stepSize: 1,
+                                    precision: 0
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'カテゴリ'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            title: {
+                                display: true,
+                                text: warningMessage ? 
+                                    `データセットのアノテーション状況 (${warningMessage})` :
+                                    'データセットのアノテーション状況'
+                            }
+                        }
+                    };
+                   
+                    // グラフを描画
+                    console.log('Chart.jsでグラフを作成中...');
+                    annotationChart = new Chart(newCanvas, {
+                        type: 'bar',
+                        data: chartData,
+                        options: options
+                    });
+                    
+                    console.log('グラフ作成完了。Chart ID:', annotationChart.id);
+                    
+                } else {
+                    // Chart.jsが読み込まれていない場合の代替表示
+                    console.log('Chart.js未読み込み - 代替表示を作成');
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'text-center p-5 bg-light border rounded';
+                    placeholder.innerHTML = `
+                        <i class="fas fa-chart-bar text-muted mb-3" style="font-size: 3rem;"></i>
+                        <h5>アノテーション状況</h5>
+                        <p class="mb-1">オス: ${displayData.male_annotated}/${displayData.male_total}</p>
+                        <p class="mb-1">メス: ${displayData.female_annotated}/${displayData.female_total}</p>
+                        <p class="mb-0">合計: ${displayData.male_annotated + displayData.female_annotated}/${displayData.male_total + displayData.female_total}</p>
+                        ${warningMessage ? `<div class="alert alert-warning mt-2 mb-0"><small>${warningMessage}</small></div>` : ''}
+                    `;
+                    chartContainer.appendChild(placeholder);
+                }
+                
+            } catch (innerError) {
+                console.error('グラフ作成中の内部エラー:', innerError);
+                
+                // エラー時のフォールバック表示
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'alert alert-warning text-center';
+                errorDiv.innerHTML = `
+                    <i class="fas fa-exclamation-triangle mb-2"></i>
+                    <p class="mb-1">グラフの表示中にエラーが発生しました</p>
+                    <small>オス: ${displayData.male_annotated}/${displayData.male_total}, メス: ${displayData.female_annotated}/${displayData.female_total}</small>
+                `;
+                chartContainer.appendChild(errorDiv);
+            }
+        }, 100);
+        
     } catch (error) {
         console.error('アノテーショングラフ描画エラー:', error);
+        
+        // エラー時のフォールバック
+        const chartContainer = document.getElementById('annotationChartContainer') || 
+                              document.getElementById('annotationImpactImg')?.parentElement;
+        
+        if (chartContainer) {
+            chartContainer.innerHTML = `
+                <div class="alert alert-danger text-center">
+                    <i class="fas fa-exclamation-circle mb-2"></i>
+                    <p class="mb-0">グラフの描画中にエラーが発生しました</p>
+                </div>
+            `;
+        }
     }
 }
 
@@ -351,6 +481,12 @@ function resetAnnotationData() {
     // ローディング表示
     showLoading();
     
+    // 既存のグラフを破棄
+    if (annotationChart) {
+        annotationChart.destroy();
+        annotationChart = null;
+    }
+    
     // リクエスト送信
     fetch('/evaluation/reset-annotations', {
         method: 'POST',
@@ -366,6 +502,9 @@ function resetAnnotationData() {
         hideLoading();
         
         if (data.success) {
+            // 表示フラグをリセット
+            window.annotationAnalysisDisplayed = false;
+            
             // 入力欄をクリア
             document.getElementById('resetConfirmation').value = '';
             

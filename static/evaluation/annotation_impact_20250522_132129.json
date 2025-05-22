@@ -1,0 +1,13 @@
+{
+  "timestamp": "20250522_132129",
+  "dataset": {
+    "male_total": 0,
+    "female_total": 0,
+    "male_annotated": 1,
+    "female_annotated": 1,
+    "annotation_rate": 0.0,
+    "warning": "\u30c7\u30fc\u30bf\u30bb\u30c3\u30c8\u753b\u50cf\u304c\u306a\u3044\u306e\u306b\u30a2\u30ce\u30c6\u30fc\u30b7\u30e7\u30f3\u304c\u5b58\u5728\u3057\u307e\u3059"
+  },
+  "model_loaded": true,
+  "model_path": "/Users/yamashitamasahiro/projects/sea_urchin_identify_v1/data/models/saved/sea_urchin_rf_model.pkl"
+}

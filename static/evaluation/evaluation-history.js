@@ -223,6 +223,11 @@ function loadEvaluationResult(timestamp) {
 }
 
 /**
+ * evaluation-history.js の displayEvaluationResult 関数を修正
+ * 重複実行を防ぐ
+ */
+
+/**
  * 評価結果の表示
  * @param {Object} data - 評価結果データ
  * @param {string} timestamp - 評価のタイムスタンプ
@@ -242,11 +247,20 @@ function displayEvaluationResult(data, timestamp) {
         // アノテーション分析の結果表示
         if (data.dataset) {
             // アノテーション分析結果の場合
-            if (typeof displayAnnotationAnalysis === 'function') {
-                displayAnnotationAnalysis(data);
+            console.log("アノテーション分析結果を表示 - 重複チェック中");
+            
+            // 重複実行防止: 既に表示中の場合はスキップ
+            if (!window.annotationAnalysisDisplayed) {
+                console.log("アノテーション分析結果を表示します");
+                if (typeof displayAnnotationAnalysis === 'function') {
+                    displayAnnotationAnalysis(data);
+                }
+            } else {
+                console.log("アノテーション分析結果は既に表示済みのためスキップ");
             }
         } else {
             // 通常の評価結果の場合
+            console.log("通常の評価結果を表示");
             updateMetricsValues(data);
             updateEvaluationImages(timestamp);
             updateCrossValidationScores(data);
