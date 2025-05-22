@@ -1,0 +1,379 @@
+{% extends "base.html" %}
+
+{% block title %}学習管理 - ウニ生殖乳頭分析システム{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analyze_samples.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/model_evaluation.css') }}">
+{% endblock %}
+
+{% block content %}
+<!-- メインタブナビゲーション -->
+<ul class="nav nav-tabs" id="learningTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="data-creation-tab" data-bs-toggle="tab" data-bs-target="#data-creation" 
+                type="button" role="tab" aria-controls="data-creation" aria-selected="true">
+            <i class="fas fa-images" aria-hidden="true"></i> 学習データ作成
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="model-training-tab" data-bs-toggle="tab" data-bs-target="#model-training" 
+                type="button" role="tab" aria-controls="model-training" aria-selected="false">
+            <i class="fas fa-brain" aria-hidden="true"></i> モデル訓練・評価
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="learning-history-tab" data-bs-toggle="tab" data-bs-target="#learning-history" 
+                type="button" role="tab" aria-controls="learning-history" aria-selected="false">
+            <i class="fas fa-history" aria-hidden="true"></i> 学習履歴
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="learningTabContent">
+    <!-- 学習データ作成タブ -->
+    <div class="tab-pane fade show active" id="data-creation" role="tabpanel" aria-labelledby="data-creation-tab">
+        <div class="row">
+            <!-- データアップロード・管理 -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-cloud-upload-alt" aria-hidden="true"></i> データアップロード</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="learningDataUploadForm">
+                            <div class="mb-3">
+                                <label for="learningDataFile" class="form-label">画像ファイル</label>
+                                <input type="file" id="learningDataFile" name="image" accept="image/*" class="form-control" multiple>
+                                <div class="form-text">生殖乳頭の画像を選択してください（複数選択可能）</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="dataGender" class="form-label">性別</label>
+                                <select id="dataGender" name="gender" class="form-select">
+                                    <option value="male">オス</option>
+                                    <option value="female">メス</option>
+                                    <option value="unknown">不明（後でアノテーション時に指定）</option>
+                                </select>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-upload"></i> アップロード
+                            </button>
+                        </form>
+                        
+                        <!-- アップロード進捗 -->
+                        <div id="uploadProgress" class="mt-3 d-none">
+                            <div class="progress">
+                                <div id="uploadProgressBar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <small id="uploadStatus" class="text-muted">アップロード中...</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- データセット統計 -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6><i class="fas fa-chart-pie" aria-hidden="true"></i> データセット統計</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center mb-3">
+                            <div class="col-4">
+                                <div class="h5 mb-0 text-primary" id="maleDataCount">0</div>
+                                <small class="text-muted">オス</small>
+                            </div>
+                            <div class="col-4">
+                                <div class="h5 mb-0 text-danger" id="femaleDataCount">0</div>
+                                <small class="text-muted">メス</small>
+                            </div>
+                            <div class="col-4">
+                                <div class="h5 mb-0 text-success" id="annotatedCount">0</div>
+                                <small class="text-muted">アノテーション済み</small>
+                            </div>
+                        </div>
+                        
+                        <!-- データセット比率バー -->
+                        <div class="progress mb-3" style="height: 20px;">
+                            <div id="maleDataBar" class="progress-bar bg-primary" role="progressbar" style="width: 0%"></div>
+                            <div id="femaleDataBar" class="progress-bar bg-danger" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button class="btn btn-outline-secondary btn-sm" id="refreshDatasetBtn">
+                                <i class="fas fa-sync-alt"></i> 統計更新
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 学習データ一覧・アノテーション -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5><i class="fas fa-database" aria-hidden="true"></i> 学習データ一覧</h5>
+                        <div>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <input type="radio" class="btn-check" name="genderFilter" id="filterAll" value="all" checked>
+                                <label class="btn btn-outline-secondary" for="filterAll">全て</label>
+                                
+                                <input type="radio" class="btn-check" name="genderFilter" id="filterMale" value="male">
+                                <label class="btn btn-outline-primary" for="filterMale">オス</label>
+                                
+                                <input type="radio" class="btn-check" name="genderFilter" id="filterFemale" value="female">
+                                <label class="btn btn-outline-danger" for="filterFemale">メス</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- 学習データ表示エリア -->
+                        <div id="learningDataContainer" class="image-container">
+                            <div class="text-center text-muted py-5">
+                                <i class="fas fa-database fa-3x mb-3" aria-hidden="true"></i>
+                                <p>学習データをアップロードすると、ここに表示されます</p>
+                                <small class="text-muted">画像をクリックしてアノテーションを行ってください</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- アノテーション結果表示 -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h6><i class="fas fa-pen" aria-hidden="true"></i> アノテーション作業</h6>
+                    </div>
+                    <div class="card-body">
+                        <!-- アノテーション結果表示エリア -->
+                        <div id="annotationWorkspace" class="d-none">
+                            <!-- ここにアノテーション結果が表示されます -->
+                        </div>
+                        
+                        <!-- プレースホルダー -->
+                        <div id="annotationPlaceholder" class="text-center py-4">
+                            <i class="fas fa-mouse-pointer fa-2x mb-3 text-muted" aria-hidden="true"></i>
+                            <p class="text-muted">上の画像をクリックしてアノテーションを開始してください</p>
+                            <small class="text-muted">生殖乳頭の輪郭をペンツールで囲んで、学習データとして保存します</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- モデル訓練・評価タブ -->
+    <div class="tab-pane fade" id="model-training" role="tabpanel" aria-labelledby="model-training-tab">
+        <div class="row">
+            <!-- 訓練実行・設定 -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-brain" aria-hidden="true"></i> モデル訓練</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <h6>現在の学習データ</h6>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>オス画像:</span>
+                                <span id="trainMaleCount">0枚</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>メス画像:</span>
+                                <span id="trainFemaleCount">0枚</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-3">
+                                <span>アノテーション済み:</span>
+                                <span id="trainAnnotatedCount">0枚</span>
+                            </div>
+                        </div>
+                        
+                        <button id="startTrainingBtn" class="btn btn-success btn-lg w-100 mb-3">
+                            <i class="fas fa-play" aria-hidden="true"></i> モデル訓練開始
+                        </button>
+                        
+                        <!-- 訓練状況 -->
+                        <div id="trainingStatus" class="alert alert-secondary d-none" role="alert">
+                            訓練を開始してください
+                        </div>
+                        <div class="progress mb-3 d-none" id="trainingProgressContainer">
+                            <div id="trainingProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 評価実行 -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6><i class="fas fa-chart-line" aria-hidden="true"></i> 性能評価</h6>
+                    </div>
+                    <div class="card-body">
+                        <button id="runEvaluationBtn" class="btn btn-info w-100 mb-2">
+                            <i class="fas fa-play" aria-hidden="true"></i> 詳細評価実行
+                        </button>
+                        <button id="analyzeAnnotationBtn" class="btn btn-outline-info w-100">
+                            <i class="fas fa-search" aria-hidden="true"></i> アノテーション効果分析
+                        </button>
+                        
+                        <!-- 評価状況 -->
+                        <div id="evaluationStatus" class="alert alert-secondary d-none mt-3" role="alert">
+                            評価を実行してください
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 評価結果表示 -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-chart-bar" aria-hidden="true"></i> 評価結果</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- 評価結果表示エリア -->
+                        <div id="evaluationResults" class="d-none">
+                            <!-- メトリクス概要 -->
+                            <div class="row mb-4">
+                                <div class="col-md-4">
+                                    <div class="metric-card bg-light text-center">
+                                        <div class="metric-value" id="modelAccuracyValue">0%</div>
+                                        <div class="metric-label">モデル精度</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="metric-card bg-light text-center">
+                                        <div class="metric-value" id="modelPrecisionValue">0%</div>
+                                        <div class="metric-label">適合率</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="metric-card bg-light text-center">
+                                        <div class="metric-value" id="modelRecallValue">0%</div>
+                                        <div class="metric-label">再現率</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 評価グラフエリア -->
+                            <div id="evaluationGraphs">
+                                <!-- 評価グラフがここに表示されます -->
+                            </div>
+                            
+                            <!-- アノテーション効果 -->
+                            <div id="annotationEffectResults" class="mt-4 d-none">
+                                <h6>アノテーション効果分析</h6>
+                                <div id="annotationEffectContent">
+                                    <!-- アノテーション効果の詳細がここに表示されます -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- プレースホルダー -->
+                        <div id="evaluationPlaceholder" class="text-center py-5">
+                            <i class="fas fa-chart-line fa-3x mb-3 text-muted" aria-hidden="true"></i>
+                            <h5 class="text-muted">モデル性能評価</h5>
+                            <p class="text-muted">学習データを準備してモデル訓練を実行すると、ここに評価結果が表示されます</p>
+                            <div class="row mt-4">
+                                <div class="col-md-6">
+                                    <div class="card border-success">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-brain fa-2x text-success mb-2"></i>
+                                            <h6>モデル訓練</h6>
+                                            <small class="text-muted">AIの学習実行</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card border-info">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-chart-bar fa-2x text-info mb-2"></i>
+                                            <h6>性能評価</h6>
+                                            <small class="text-muted">精度・効果測定</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 学習履歴タブ -->
+    <div class="tab-pane fade" id="learning-history" role="tabpanel" aria-labelledby="learning-history-tab">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h6><i class="fas fa-history" aria-hidden="true"></i> 履歴フィルター</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">履歴タイプ</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="historyTraining" checked>
+                                <label class="form-check-label" for="historyTraining">
+                                    モデル訓練
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="historyEvaluation" checked>
+                                <label class="form-check-label" for="historyEvaluation">
+                                    性能評価
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="historyAnnotation" checked>
+                                <label class="form-check-label" for="historyAnnotation">
+                                    アノテーション分析
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <button class="btn btn-outline-secondary btn-sm w-100" id="refreshHistoryBtn">
+                            <i class="fas fa-sync-alt"></i> 履歴更新
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6><i class="fas fa-list" aria-hidden="true"></i> 学習・評価履歴</h6>
+                        <span id="historyTotalCount" class="badge bg-secondary">0件</span>
+                    </div>
+                    <div class="card-body">
+                        <div id="learningHistoryContainer">
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-clock fa-2x mb-2"></i>
+                                <p class="mb-0">まだ履歴がありません</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- アノテーションモーダル（annotation_tools.jsから使用） -->
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js for evaluation -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+
+<!-- 既存のアノテーション機能 -->
+<script src="{{ url_for('static', filename='js/annotation_tools.js') }}"></script>
+
+<!-- 学習管理統合機能 -->
+<script src="{{ url_for('static', filename='js/learning-management.js') }}"></script>
+{% endblock %}
