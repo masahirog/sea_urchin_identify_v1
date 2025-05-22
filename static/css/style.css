@@ -1018,3 +1018,48 @@ h1 {
 .history-item:hover .text-primary {
     text-decoration: underline;
 }
+
+/* モーダルz-index修正 */
+#graphZoomModal {
+    z-index: 1060 !important;
+}
+
+#graphZoomModal .modal-backdrop {
+    z-index: 1055 !important;
+}
+
+/* グラフオーバーレイのz-index調整 */
+.graph-overlay {
+    z-index: 1 !important;
+}
+
+/* モーダル内の画像を確実にクリック可能にする */
+#graphZoomModal .modal-content {
+    z-index: 1061 !important;
+    position: relative;
+}
+
+/* グラフコンテナのポインターイベント修正 */
+.graph-container {
+    position: relative;
+    cursor: pointer !important;
+}
+
+.graph-container img {
+    cursor: pointer !important;
+    position: relative;
+    z-index: 1;
+}
+
+.graph-overlay {
+    pointer-events: none !important;  /* オーバーレイはクリックを通過させる */
+}
+
+/* モーダル表示時の背景修正 */
+.modal-backdrop.show {
+    opacity: 0.5;
+}
+
+#graphZoomModal.show {
+    z-index: 1060;
+}
