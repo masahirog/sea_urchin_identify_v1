@@ -34,17 +34,17 @@
                         <p class="small text-muted">現在のデータセットとモデルを使用して包括的な評価を実行します。</p>
                     </div>
                     <div class="col-md-6">
-                        <button id="analyzeAnnotationsBtn" class="btn btn-success mb-3 w-100">
+                        <button id="analyze-annotations-btn" class="btn btn-success mb-3 w-100">
                             <i class="fas fa-search" aria-hidden="true"></i> アノテーション影響分析を実行
                         </button>
                         <p class="small text-muted">アノテーションデータがモデルの学習・精度に与える影響を分析します。</p>
                     </div>
                 </div>
-                <div id="evaluation-status" class="alert alert-info d-none" role="alert">
+                <div id="evaluationStatus" class="alert alert-info d-none" role="alert">
                     処理を開始してください
                 </div>
-                <div class="progress mb-3 d-none" id="evaluation-progress-container">
-                    <div id="evaluation-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                <div class="progress mb-3 d-none" id="evaluationProgressContainer">
+                    <div id="evaluationProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
                          role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                 </div>
             </div>
@@ -70,19 +70,19 @@
                             <div class="row mb-4">
                                 <div class="col-md-4">
                                     <div class="metric-card bg-light">
-                                        <div class="metric-value" id="accuracy-value">0%</div>
+                                        <div class="metric-value" id="accuracyValue">0%</div>
                                         <div class="metric-label">精度 (Accuracy)</div>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="metric-card bg-light">
-                                        <div class="metric-value" id="precision-value">0%</div>
+                                        <div class="metric-value" id="precisionValue">0%</div>
                                         <div class="metric-label">適合率 (Precision)</div>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="metric-card bg-light">
-                                        <div class="metric-value" id="recall-value">0%</div>
+                                        <div class="metric-value" id="recallValue">0%</div>
                                         <div class="metric-label">再現率 (Recall)</div>
                                     </div>
                                 </div>
@@ -92,14 +92,14 @@
                             <div class="row mb-4">
                                 <div class="col-md-6">
                                     <h6>学習曲線</h6>
-                                    <div id="learning-curve-container" class="mb-3">
-                                        <img id="learning-curve-img" class="evaluation-img" src="" alt="学習曲線">
+                                    <div id="learningCurveContainer" class="mb-3">
+                                        <img id="learningCurveImg" class="evaluation-img" src="" alt="学習曲線">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <h6>混同行列</h6>
-                                    <div id="confusion-matrix-container" class="mb-3">
-                                        <img id="confusion-matrix-img" class="evaluation-img" src="" alt="混同行列">
+                                    <div id="confusionMatrixContainer" class="mb-3">
+                                        <img id="confusionMatrixImg" class="evaluation-img" src="" alt="混同行列">
                                     </div>
                                 </div>
                             </div>
@@ -108,13 +108,13 @@
                             <div class="row mb-4">
                                 <div class="col-md-6">
                                     <h6>ROCカーブ</h6>
-                                    <div id="roc-curve-container" class="mb-3">
-                                        <img id="roc-curve-img" class="evaluation-img" src="" alt="ROCカーブ">
+                                    <div id="rocCurveContainer" class="mb-3">
+                                        <img id="rocCurveImg" class="evaluation-img" src="" alt="ROCカーブ">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <h6>クロスバリデーションスコア</h6>
-                                    <div id="cv-scores-container" class="mb-3">
+                                    <div id="cvScoresContainer" class="mb-3">
                                         <div class="table-responsive">
                                             <table class="table table-sm">
                                                 <thead>
@@ -123,17 +123,17 @@
                                                         <th scope="col">精度</th>
                                                     </tr>
                                                 </thead>
-                                                <tbody id="cv-scores-table-body">
+                                                <tbody id="cvScoresTableBody">
                                                     <!-- クロスバリデーションスコアがここに表示されます -->
                                                 </tbody>
                                                 <tfoot>
                                                     <tr class="table-secondary">
                                                         <th scope="row">平均</th>
-                                                        <td id="cv-mean-value">-</td>
+                                                        <td id="cvMeanValue">-</td>
                                                     </tr>
                                                     <tr>
                                                         <th scope="row">標準偏差</th>
-                                                        <td id="cv-std-value">-</td>
+                                                        <td id="cvStdValue">-</td>
                                                     </tr>
                                                 </tfoot>
                                             </table>
@@ -160,26 +160,26 @@
                                             <tbody>
                                                 <tr>
                                                     <th scope="row">オス (male)</th>
-                                                    <td id="male-precision">-</td>
-                                                    <td id="male-recall">-</td>
-                                                    <td id="male-f1">-</td>
-                                                    <td id="male-support">-</td>
+                                                    <td id="malePrecision">-</td>
+                                                    <td id="maleRecall">-</td>
+                                                    <td id="maleF1">-</td>
+                                                    <td id="maleSupport">-</td>
                                                 </tr>
                                                 <tr>
                                                     <th scope="row">メス (female)</th>
-                                                    <td id="female-precision">-</td>
-                                                    <td id="female-recall">-</td>
-                                                    <td id="female-f1">-</td>
-                                                    <td id="female-support">-</td>
+                                                    <td id="femalePrecision">-</td>
+                                                    <td id="femaleRecall">-</td>
+                                                    <td id="femaleF1">-</td>
+                                                    <td id="femaleSupport">-</td>
                                                 </tr>
                                             </tbody>
                                             <tfoot>
                                                 <tr class="table-secondary">
                                                     <th scope="row">平均/合計</th>
-                                                    <td id="avg-precision">-</td>
-                                                    <td id="avg-recall">-</td>
-                                                    <td id="avg-f1">-</td>
-                                                    <td id="total-support">-</td>
+                                                    <td id="avgPrecision">-</td>
+                                                    <td id="avgRecall">-</td>
+                                                    <td id="avgF1">-</td>
+                                                    <td id="totalSupport">-</td>
                                                 </tr>
                                             </tfoot>
                                         </table>
@@ -204,8 +204,8 @@
                         <div id="annotationResult" class="d-none">
                             <div class="row mb-4">
                                 <div class="col-md-6">
-                                    <div id="annotation-chart-container" class="mb-3">
-                                        <img id="annotation-impact-img" class="evaluation-img" src="" alt="アノテーション影響">
+                                    <div id="annotationChartContainer" class="mb-3">
+                                        <img id="annotationImpactImg" class="evaluation-img" src="" alt="アノテーション影響">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -215,23 +215,23 @@
                                             <tbody>
                                                 <tr>
                                                     <th scope="row">オス画像数</th>
-                                                    <td id="male-total-count">-</td>
+                                                    <td id="maleTotalCount">-</td>
                                                 </tr>
                                                 <tr>
                                                     <th scope="row">アノテーション済みオス画像数</th>
-                                                    <td id="male-annotated-count">-</td>
+                                                    <td id="maleAnnotatedCount">-</td>
                                                 </tr>
                                                 <tr>
                                                     <th scope="row">メス画像数</th>
-                                                    <td id="female-total-count">-</td>
+                                                    <td id="femaleTotalCount">-</td>
                                                 </tr>
                                                 <tr>
                                                     <th scope="row">アノテーション済みメス画像数</th>
-                                                    <td id="female-annotated-count">-</td>
+                                                    <td id="femaleAnnotatedCount">-</td>
                                                 </tr>
                                                 <tr class="table-secondary">
                                                     <th scope="row">アノテーション率</th>
-                                                    <td id="annotation-rate">-</td>
+                                                    <td id="annotationRate">-</td>
                                                 </tr>
                                             </tbody>
                                         </table>
@@ -241,11 +241,11 @@
                             
                             <div class="alert alert-info">
                                 <i class="fas fa-info-circle me-2" aria-hidden="true"></i>
-                                <span id="annotation-insight">アノテーションデータが学習に影響を与えています。</span>
+                                <span id="annotationInsight">アノテーションデータが学習に影響を与えています。</span>
                             </div>
                             
                             <div class="text-center">
-                                <a href="/sample/analyze-samples" class="btn btn-primary">
+                                <a href="/sample/analyze" class="btn btn-primary">
                                     <i class="fas fa-pen" aria-hidden="true"></i> サンプルアノテーションページへ
                                 </a>
                             </div>
@@ -272,28 +272,24 @@
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <div class="row mt-3">
-                <div class="col-12">
-                    <div class="card border-danger">
-                        <div class="card-header bg-danger text-white">
-                            <h5><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> 危険な操作</h5>
+                
+                <div class="card mt-3 border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h5><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> 危険な操作</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            警告: この操作はすべてのアノテーションデータを削除します。この操作は取り消せません。
                         </div>
-                        <div class="card-body">
-                            <div class="alert alert-warning">
-                                <i class="fas fa-exclamation-circle me-2"></i>
-                                警告: この操作はすべてのアノテーションデータを削除します。この操作は取り消せません。
-                            </div>
-                            <div class="mb-3">
-                                <label for="resetConfirmation" class="form-label">確認のため、「DELETE ANNOTATION」と入力してください：</label>
-                                <input type="text" class="form-control" id="resetConfirmation" placeholder="DELETE ANNOTATION">
-                                <div class="form-text text-danger">大文字小文字も一致する必要があります</div>
-                            </div>
-                            <button id="resetAnnotationsBtn" class="btn btn-danger">
-                                <i class="fas fa-trash" aria-hidden="true"></i> アノテーションデータをリセット
-                            </button>
+                        <div class="mb-3">
+                            <label for="resetConfirmation" class="form-label">確認のため、「DELETE ANNOTATION」と入力してください：</label>
+                            <input type="text" class="form-control" id="resetConfirmation" placeholder="DELETE ANNOTATION">
+                            <div class="form-text text-danger">大文字小文字も一致する必要があります</div>
                         </div>
+                        <button id="resetAnnotationsBtn" class="btn btn-danger">
+                            <i class="fas fa-trash" aria-hidden="true"></i> アノテーションデータをリセット
+                        </button>
                     </div>
                 </div>
             </div>
@@ -301,7 +297,7 @@
     </div>
     
     <!-- ローディングオーバーレイ -->
-    <div id="loading-overlay" class="d-none" aria-live="polite">
+    <div id="loadingOverlay" class="d-none" aria-live="polite">
         <div class="spinner-border text-light me-3" role="status">
             <span class="visually-hidden">処理中...</span>
         </div>
@@ -313,9 +309,105 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="{{ url_for('static', filename='js/utilities.js') }}"></script>
     
-    <!-- 評価モジュール群（依存関係順に読み込み） -->
-    <script src="{{ url_for('static', filename='js/evaluation/evaluation-utils.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/evaluation/annotation-analysis.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/evaluation/evaluation-core.js') }}"></script>
+    <script src="{{ url_for('static', filename='evaluation/evaluation-utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='evaluation/evaluation-history.js') }}"></script>
+    <script src="{{ url_for('static', filename='evaluation/annotation-analysis.js') }}"></script>
+    <script src="{{ url_for('static', filename='evaluation/evaluation-core.js') }}"></script>
+    
+    <script>
+    // 評価実行ボタンのイベントリスナー追加（コアファイル読み込み前にボタンが見つからない問題を解決）
+    document.addEventListener('DOMContentLoaded', function() {
+        // 評価実行ボタン
+        const runEvaluationBtn = document.getElementById('run-evaluation-btn');
+        if (runEvaluationBtn && typeof runModelEvaluation === 'function') {
+            runEvaluationBtn.addEventListener('click', runModelEvaluation);
+        } else {
+            console.error('評価実行ボタンまたは関数が見つかりません');
+        }
+    });
+    
+    // evalution_runner初期化関数（evaluation-core.jsから移動）
+    function initEvaluationRunner() {
+        console.log('評価実行モジュールの初期化開始');
+        
+        const runEvaluationBtn = document.getElementById('run-evaluation-btn');
+        if (runEvaluationBtn) {
+            console.log('評価実行ボタンが見つかりました');
+            runEvaluationBtn.addEventListener('click', function() {
+                console.log('評価実行ボタンがクリックされました');
+                runModelEvaluation();
+            });
+        } else {
+            console.error('評価実行ボタンが見つかりません: run-evaluation-btn');
+        }
+        
+        console.log('評価実行モジュールの初期化完了');
+    }
+
+    // モデル評価の実行
+    function runModelEvaluation() {
+        console.log('モデル評価の実行開始');
+        
+        // ローディング表示
+        showLoading();
+        
+        // 「処理中」ステータスの表示
+        updateEvaluationStatus('evaluationStatus', 'alert-info', 'モデル評価を準備中...');
+        showProgressBar('evaluationProgressContainer', 'evaluationProgressBar', 0);
+        
+        console.log('モデル評価リクエスト送信');
+        
+        // リクエスト送信
+        fetch('/evaluation/run_evaluation', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => {
+            console.log('モデル評価レスポンス:', response.status, response.ok);
+            if (!response.ok) {
+                throw new Error(`サーバーエラー: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('モデル評価データ:', data);
+            hideLoading();
+            
+            if (data.error) {
+                console.error('サーバーエラー:', data.error);
+                updateEvaluationStatus('evaluationStatus', 'alert-danger', 'エラー: ' + data.error);
+                showErrorMessage('エラー: ' + data.error);
+                return;
+            }
+            
+            // タスクIDの保存
+            if (window.modelEvaluation) {
+                window.modelEvaluation.currentTaskId = data.task_id;
+                console.log('タスクID保存:', window.modelEvaluation.currentTaskId);
+            }
+            
+            // 状態表示の更新
+            updateEvaluationStatus('evaluationStatus', 'alert-info', 'モデル評価を開始しました...');
+            updateProgressBar('evaluationProgressBar', 10);
+            
+            // 状態チェックの開始
+            console.log('状態チェック開始');
+            if (typeof startStatusCheck === 'function') {
+                startStatusCheck();
+            }
+            
+            // 成功メッセージの表示
+            showSuccessMessage('モデル評価を開始しました。完了までお待ちください。');
+        })
+        .catch(error => {
+            console.error('モデル評価実行エラー:', error);
+            hideLoading();
+            updateEvaluationStatus('evaluationStatus', 'alert-danger', 'エラー: ' + error.message);
+            showErrorMessage('モデル評価実行中にエラーが発生しました: ' + error.message);
+        });
+    }
+    </script>
 </body>
 </html>
