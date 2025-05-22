@@ -40,8 +40,9 @@ class UnifiedLearningSystem {
         console.log('統合学習システム初期化');
     }
 
+
     /**
-     * システム初期化
+     * システム初期化（修正版）
      */
     async initialize() {
         console.log('統合学習システム初期化開始');
@@ -56,6 +57,9 @@ class UnifiedLearningSystem {
             // 初期データ読み込み
             await this.loadInitialData();
             
+            // 最新の学習結果があるかチェック
+            await this.loadLatestResults();
+            
             // フェーズ判定
             this.determineCurrentPhase();
             
@@ -69,6 +73,54 @@ class UnifiedLearningSystem {
             this.showError('システムの初期化に失敗しました: ' + error.message);
         }
     }
+
+    /**
+     * 最新の学習結果を読み込み
+     */
+    async loadLatestResults() {
+        try {
+            const response = await fetch('/learning/learning-history');
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            const history = data.history || [];
+            
+            if (history.length > 0) {
+                // 最新の結果を取得
+                const latestResult = history[0];
+                
+                // evaluation タイプの最新結果を探す
+                const latestEvaluation = history.find(item => item.type === 'evaluation');
+                
+                if (latestEvaluation) {
+                    console.log('最新の評価結果を発見:', latestEvaluation.timestamp);
+                    
+                    // 結果を仮想的に設定
+                    this.learningResults = {
+                        summary: {
+                            overall_accuracy: latestEvaluation.cv_mean || 0,
+                            precision: latestEvaluation.classification_report?.weighted_avg?.precision || 0,
+                            recall: latestEvaluation.classification_report?.weighted_avg?.recall || 0,
+                            annotation_rate: 0 // 履歴から取得できない場合のデフォルト
+                        },
+                        evaluation: latestEvaluation,
+                        metadata: {
+                            timestamp: latestEvaluation.timestamp
+                        },
+                        annotation_analysis: {
+                            annotation_timestamp: latestEvaluation.timestamp
+                        }
+                    };
+                    
+                    // 最新の結果があることをフラグで記録
+                    this.hasLatestResults = true;
+                }
+            }
+        } catch (error) {
+            console.error('最新結果の読み込みエラー:', error);
+        }
+    }
+
 
     /**
      * UI初期化
@@ -171,8 +223,7 @@ class UnifiedLearningSystem {
     }
 
     /**
-     * 指定フェーズへのナビゲーション
-     * @param {string} targetPhase - 移動先フェーズ ('preparation', 'training', 'analysis')
+     * 指定フェーズへのナビゲーション（修正版）
      */
     navigateToPhase(targetPhase) {
         console.log('フェーズナビゲーション:', this.currentPhase, '->', targetPhase);
@@ -183,7 +234,7 @@ class UnifiedLearningSystem {
             return;
         }
 
-        // フェーズ移動実行（制限なし）
+        // フェーズ移動実行
         this.currentPhase = targetPhase;
         this.updatePhaseDisplay();
         this.showPhaseSection();
@@ -195,8 +246,7 @@ class UnifiedLearningSystem {
     }
 
     /**
-     * フェーズナビゲーション時の固有処理
-     * @param {string} targetPhase - 移動先フェーズ
+     * フェーズナビゲーション時の固有処理（修正版）
      */
     handlePhaseNavigation(targetPhase) {
         switch (targetPhase) {
@@ -218,11 +268,14 @@ class UnifiedLearningSystem {
                 break;
 
             case 'analysis':
-                // 分析フェーズ: 利用可能な結果を表示
+                // 分析フェーズ: 最新の結果または履歴を表示
                 if (this.learningResults) {
                     this.displayUnifiedResults();
+                } else if (this.hasLatestResults) {
+                    // 初期化時に読み込んだ最新結果を表示
+                    this.displayUnifiedResults();
                 } else {
-                    // 学習結果がない場合は履歴または案内を表示
+                    // 結果がない場合は履歴を表示
                     this.showAnalysisGuidance();
                 }
                 break;
@@ -765,43 +818,239 @@ class UnifiedLearningSystem {
         
         const evaluation = this.learningResults.evaluation || {};
         const timestamp = this.learningResults.metadata?.timestamp || Date.now();
-        
-        // ★修正: アノテーション用のタイムスタンプを取得
         const annotationTimestamp = this.learningResults.annotation_analysis?.annotation_timestamp || timestamp;
         
-        // グラフ画像の表示
+        // グラフの説明データ
+        const graphDescriptions = {
+            learning_curve: {
+                title: '学習曲線',
+                description: 'データ量に対するモデルの学習進捗を示します',
+                insights: {
+                    good: '学習データと検証データの精度が近い場合、モデルは適切に学習しています',
+                    overfit: '学習データの精度が高く、検証データの精度が低い場合、過学習の可能性があります',
+                    underfit: '両方の精度が低い場合、より多くのデータかより複雑なモデルが必要です'
+                }
+            },
+            confusion_matrix: {
+                title: '混同行列',
+                description: '実際の分類と予測の関係を示します',
+                insights: {
+                    diagonal: '対角線上の数値が高いほど、正確に分類できています',
+                    offDiagonal: '対角線以外の数値は誤分類を示します'
+                }
+            },
+            roc_curve: {
+                title: 'ROCカーブ',
+                description: '分類器の性能を示す曲線です',
+                insights: {
+                    auc: 'AUC値が1に近いほど優れた分類器です（0.5は無作為判定と同等）',
+                    curve: '曲線が左上に近いほど性能が良いことを示します'
+                }
+            },
+            annotation_impact: {
+                title: 'アノテーション効果',
+                description: '手動アノテーションがモデル性能に与える影響を示します',
+                insights: {
+                    high: 'アノテーション率が高いほど、モデルの精度向上が期待できます',
+                    balance: 'オスとメスのアノテーション数のバランスも重要です'
+                }
+            }
+        };
+        
+        // グラフHTML生成（クリック可能＆ホバー説明付き）
         const graphsHTML = `
             <div class="row">
-                <div class="col-md-6 mb-3">
-                    <h6>学習曲線</h6>
-                    <img src="/evaluation/images/learning_curve_${timestamp}.png" 
-                         class="img-fluid rounded" alt="学習曲線" 
-                         onerror="this.parentElement.innerHTML='<p class=text-muted>グラフが利用できません</p>'">
-                </div>
-                <div class="col-md-6 mb-3">
-                    <h6>混同行列</h6>
-                    <img src="/evaluation/images/confusion_matrix_${timestamp}.png" 
-                         class="img-fluid rounded" alt="混同行列"
-                         onerror="this.parentElement.innerHTML='<p class=text-muted>グラフが利用できません</p>'">
-                </div>
+                ${this.createGraphCard('learning_curve', timestamp, graphDescriptions.learning_curve)}
+                ${this.createGraphCard('confusion_matrix', timestamp, graphDescriptions.confusion_matrix)}
             </div>
             <div class="row">
-                <div class="col-md-6 mb-3">
-                    <h6>ROCカーブ</h6>
-                    <img src="/evaluation/images/roc_curve_${timestamp}.png" 
-                         class="img-fluid rounded" alt="ROCカーブ"
-                         onerror="this.parentElement.innerHTML='<p class=text-muted>グラフが利用できません</p>'">
-                </div>
-                <div class="col-md-6 mb-3">
-                    <h6>アノテーション効果</h6>
-                    <img src="/evaluation/images/annotation_impact_${annotationTimestamp}.png" 
-                         class="img-fluid rounded" alt="アノテーション効果"
-                         onerror="this.parentElement.innerHTML='<p class=text-muted>グラフが利用できません</p>'">
+                ${this.createGraphCard('roc_curve', timestamp, graphDescriptions.roc_curve)}
+                ${this.createGraphCard('annotation_impact', annotationTimestamp, graphDescriptions.annotation_impact)}
+            </div>
+            
+            <!-- グラフ拡大表示用モーダル -->
+            <div class="modal fade" id="graphZoomModal" tabindex="-1">
+                <div class="modal-dialog modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="graphZoomTitle"></h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body text-center">
+                            <img id="graphZoomImage" src="" class="img-fluid" style="max-height: 80vh;">
+                            <div id="graphZoomDescription" class="mt-3 text-start"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
         
         container.innerHTML = graphsHTML;
+        
+        // クリックイベントを設定
+        this.setupGraphInteractions();
+    }
+
+    /**
+     * グラフカードの作成
+     */
+    createGraphCard(graphType, timestamp, description) {
+        const imagePath = graphType === 'annotation_impact' ? 
+            `/evaluation/images/annotation_impact_${timestamp}.png` :
+            `/evaluation/images/${graphType}_${timestamp}.png`;
+        
+        return `
+            <div class="col-md-6 mb-3">
+                <div class="graph-card position-relative" data-graph-type="${graphType}">
+                    <h6 class="d-flex align-items-center">
+                        ${description.title}
+                        <i class="fas fa-info-circle ms-2 text-muted graph-info-icon" 
+                           data-bs-toggle="tooltip" 
+                           data-bs-placement="top"
+                           data-bs-html="true"
+                           title="${description.description}"></i>
+                    </h6>
+                    <div class="graph-container position-relative" style="cursor: zoom-in;">
+                        <img src="${imagePath}" 
+                             class="img-fluid rounded graph-image" 
+                             alt="${description.title}"
+                             data-graph-type="${graphType}"
+                             data-description="${JSON.stringify(description).replace(/"/g, '&quot;')}"
+                             onerror="this.parentElement.innerHTML='<p class=text-muted>グラフが利用できません</p>'">
+                        <div class="graph-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background: rgba(0,0,0,0.7); opacity: 0; transition: opacity 0.3s;">
+                            <i class="fas fa-search-plus text-white fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * グラフのインタラクション設定
+     */
+    setupGraphInteractions() {
+        // ツールチップ初期化
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+        
+        // グラフホバー効果
+        document.querySelectorAll('.graph-container').forEach(container => {
+            const overlay = container.querySelector('.graph-overlay');
+            if (overlay) {
+                container.addEventListener('mouseenter', () => {
+                    overlay.style.opacity = '1';
+                });
+                container.addEventListener('mouseleave', () => {
+                    overlay.style.opacity = '0';
+                });
+            }
+        });
+        
+        // グラフクリックで拡大表示
+        document.querySelectorAll('.graph-image').forEach(img => {
+            img.addEventListener('click', (e) => {
+                const graphType = e.target.dataset.graphType;
+                const description = JSON.parse(e.target.dataset.description.replace(/&quot;/g, '"'));
+                this.showGraphZoom(e.target.src, description);
+            });
+        });
+    }
+
+    /**
+     * グラフ拡大表示
+     */
+    showGraphZoom(imageSrc, description) {
+        const modal = new bootstrap.Modal(document.getElementById('graphZoomModal'));
+        document.getElementById('graphZoomTitle').textContent = description.title;
+        document.getElementById('graphZoomImage').src = imageSrc;
+        
+        // 詳細説明を生成
+        let detailsHTML = `
+            <div class="alert alert-info">
+                <h6><i class="fas fa-lightbulb me-2"></i>このグラフについて</h6>
+                <p>${description.description}</p>
+            </div>
+            <div class="row">
+        `;
+        
+        // インサイトを追加
+        for (const [key, insight] of Object.entries(description.insights || {})) {
+            detailsHTML += `
+                <div class="col-md-6 mb-3">
+                    <div class="card border-0 bg-light">
+                        <div class="card-body">
+                            <h6 class="card-title">${this.getInsightTitle(key)}</h6>
+                            <p class="card-text small">${insight}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        detailsHTML += '</div>';
+        
+        // 現在の値に基づく解釈を追加
+        detailsHTML += this.getGraphInterpretation(description.title);
+        
+        document.getElementById('graphZoomDescription').innerHTML = detailsHTML;
+        modal.show();
+    }
+
+    /**
+     * インサイトタイトルの取得
+     */
+    getInsightTitle(key) {
+        const titles = {
+            good: '✅ 良好な状態',
+            overfit: '⚠️ 過学習の兆候',
+            underfit: '📊 学習不足の兆候',
+            diagonal: '🎯 正解率',
+            offDiagonal: '❌ 誤分類',
+            auc: '📈 AUC値',
+            curve: '📉 曲線の形状',
+            high: '⬆️ 高アノテーション率',
+            balance: '⚖️ バランス'
+        };
+        return titles[key] || key;
+    }
+
+    /**
+     * グラフの現在値に基づく解釈
+     */
+    getGraphInterpretation(graphTitle) {
+        const summary = this.learningResults.summary || {};
+        const accuracy = (summary.overall_accuracy * 100).toFixed(1);
+        const annotationRate = (summary.annotation_rate * 100).toFixed(1);
+        
+        let interpretation = '<div class="alert alert-success mt-3"><h6>📊 現在の状態</h6>';
+        
+        switch(graphTitle) {
+            case '学習曲線':
+                if (accuracy >= 85) {
+                    interpretation += `<p>精度${accuracy}%は優秀です！モデルは適切に学習されています。</p>`;
+                } else if (accuracy >= 70) {
+                    interpretation += `<p>精度${accuracy}%は良好ですが、データ追加でさらに改善可能です。</p>`;
+                } else {
+                    interpretation += `<p>精度${accuracy}%は改善の余地があります。より多くのデータを追加しましょう。</p>`;
+                }
+                break;
+                
+            case 'アノテーション効果':
+                if (annotationRate >= 50) {
+                    interpretation += `<p>アノテーション率${annotationRate}%は素晴らしいです！</p>`;
+                } else if (annotationRate >= 30) {
+                    interpretation += `<p>アノテーション率${annotationRate}%は良好です。さらに追加すると精度が向上します。</p>`;
+                } else {
+                    interpretation += `<p>アノテーション率${annotationRate}%は低めです。アノテーションを増やすと大幅な改善が期待できます。</p>`;
+                }
+                break;
+        }
+        
+        interpretation += '</div>';
+        return interpretation;
     }
 
 
@@ -935,16 +1184,22 @@ class UnifiedLearningSystem {
         return name.substring(0, availableLength) + '...' + extension;
     }
 
-    // フェーズ判定メソッド
+    /**
+     * フェーズ判定メソッド（修正版）
+     */
     determineCurrentPhase() {
-        // データセット統計に基づいてフェーズを判定
         const stats = this.datasetStats;
         const total = (stats.male_count || 0) + (stats.female_count || 0);
         
-        if (total < 1) {
-            this.currentPhase = 'preparation';
-        } else if (this.learningResults) {
+        // 最新の結果がある場合は結果分析フェーズから開始
+        if (this.hasLatestResults) {
             this.currentPhase = 'analysis';
+            // 最新結果を表示
+            setTimeout(() => {
+                this.displayUnifiedResults();
+            }, 100);
+        } else if (total < 1) {
+            this.currentPhase = 'preparation';
         } else {
             this.currentPhase = 'preparation';
         }
@@ -1135,23 +1390,83 @@ class UnifiedLearningSystem {
         }
     }
 
+    /**
+     * 学習履歴の表示（拡張版）
+     */
     displayLearningHistory(history) {
         const container = document.getElementById('unified-learning-history');
         if (!container || history.length === 0) return;
         
         const historyHTML = history.slice(0, 5).map(item => {
             const accuracy = (item.accuracy * 100).toFixed(1);
+            const typeLabel = item.type === 'evaluation' ? '評価' : 'アノテーション分析';
+            const typeIcon = item.type === 'evaluation' ? 'fa-chart-line' : 'fa-tags';
+            
             return `
-                <div class="border-bottom py-2">
-                    <div class="d-flex justify-content-between">
-                        <span><strong>${item.type}:</strong> ${accuracy}%</span>
+                <div class="border-bottom py-2 history-item" style="cursor: pointer;" 
+                     onclick="window.unifiedLearningSystem.loadHistoricalResult('${item.timestamp}', '${item.type}')">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>
+                            <i class="fas ${typeIcon} me-2"></i>
+                            <strong>${typeLabel}:</strong> ${accuracy}%
+                        </span>
                         <small class="text-muted">${item.date}</small>
+                    </div>
+                    <div class="text-end">
+                        <small class="text-primary">クリックして詳細を表示</small>
                     </div>
                 </div>
             `;
         }).join('');
         
         container.innerHTML = historyHTML;
+    }
+    /**
+     * 履歴結果の読み込みと表示
+     */
+    async loadHistoricalResult(timestamp, type) {
+        try {
+            console.log('履歴結果を読み込み:', timestamp, type);
+            
+            // 履歴から該当する結果を探す
+            const response = await fetch('/learning/learning-history');
+            if (!response.ok) return;
+            
+            const data = await response.json();
+            const history = data.history || [];
+            const result = history.find(item => item.timestamp === timestamp);
+            
+            if (result) {
+                // 結果を設定
+                this.learningResults = {
+                    summary: {
+                        overall_accuracy: result.cv_mean || 0,
+                        precision: result.classification_report?.weighted_avg?.precision || 0,
+                        recall: result.classification_report?.weighted_avg?.recall || 0,
+                        annotation_rate: result.dataset?.annotation_rate || 0
+                    },
+                    evaluation: result,
+                    metadata: {
+                        timestamp: result.timestamp,
+                        isHistorical: true
+                    },
+                    annotation_analysis: {
+                        dataset: result.dataset || {},
+                        annotation_timestamp: result.timestamp
+                    }
+                };
+                
+                // 結果を表示
+                this.displayUnifiedResults();
+                
+                // 履歴表示であることを通知
+                this.showSuccessMessage(`${result.date} の結果を表示しています`);
+            }
+            
+        } catch (error) {
+            console.error('履歴結果読み込みエラー:', error);
+            this.showError('履歴結果の読み込みに失敗しました');
+        }
     }
 }
 

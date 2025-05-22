@@ -978,3 +978,43 @@ h1 {
         height: 6px;
     }
 }
+
+/* グラフカードのホバー効果 */
+.graph-card {
+    transition: transform 0.3s ease;
+}
+
+.graph-card:hover {
+    transform: translateY(-5px);
+}
+
+.graph-info-icon {
+    cursor: help;
+    font-size: 0.9rem;
+}
+
+.graph-container {
+    position: relative;
+    overflow: hidden;
+    border-radius: 8px;
+}
+
+.graph-overlay {
+    pointer-events: none;
+}
+
+/* ツールチップのカスタマイズ */
+.tooltip-inner {
+    max-width: 300px;
+    text-align: left;
+}
+
+/* 履歴アイテムのホバー効果 */
+.history-item:hover {
+    background-color: #f8f9fa;
+    transition: background-color 0.2s ease;
+}
+
+.history-item:hover .text-primary {
+    text-decoration: underline;
+}
