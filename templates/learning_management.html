@@ -3,8 +3,7 @@
 {% block title %}統合学習システム - ウニ生殖乳頭分析システム{% endblock %}
 
 {% block extra_css %}
-<!-- ★修正: 存在するCSSファイルのみ読み込み -->
-<link rel="stylesheet" href="{{ url_for('static', filename='css/unified-learning.css') }}">
+
 {% endblock %}
 
 {% block content %}
@@ -353,12 +352,9 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- ★修正: Chart.js CDNリンクの確認 -->
+<!-- Chart.js CDN -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 
-<!-- 既存のアノテーション機能 -->
-<script src="{{ url_for('static', filename='js/annotation_tools.js') }}"></script>
-
 <!-- 統合学習システム -->
-<script src="{{ url_for('static', filename='js/unified-learning-system.js') }}"></script>
+<script src="{{ url_for('static', filename='js/learning.js') }}"></script>
 {% endblock %}

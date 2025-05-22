@@ -1,7 +1,12 @@
 /**
- * 統合学習システム - unified-learning-system.js
- * learning-management.jsを置き換える統一システム
+ * ウニ生殖乳頭分析システム - 統合学習システム
+ * unified-learning-system.js + annotation_tools.js + evaluation/* の統合版
+ * 学習管理、アノテーション、評価機能を統合
  */
+
+// ===========================================
+// 統合学習システムクラス
+// ===========================================
 
 class UnifiedLearningSystem {
     constructor() {
@@ -712,78 +717,7 @@ class UnifiedLearningSystem {
         this.showElement(sectionId);
     }
 
-    // ===== ユーティリティメソッド =====
-
-    setElementText(elementId, text) {
-        const element = document.getElementById(elementId);
-        if (element) element.textContent = text;
-    }
-
-    showElement(elementId) {
-        const element = document.getElementById(elementId);
-        if (element) element.classList.remove('d-none');
-    }
-
-    hideElement(elementId) {
-        const element = document.getElementById(elementId);
-        if (element) element.classList.add('d-none');
-    }
-
-    showSuccessMessage(message) {
-        console.log('成功:', message);
-        // Toast表示またはアラート
-        this.showUserMessage(message, 'success');
-    }
-
-    showError(message) {
-        console.error('エラー:', message);
-        this.showUserMessage(message, 'danger');
-    }
-
-    showUserMessage(message, type) {
-        const alertDiv = document.createElement('div');
-        alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-        alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 1060; max-width: 300px;';
-        alertDiv.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        document.body.appendChild(alertDiv);
-        
-        // 自動削除
-        setTimeout(() => alertDiv.remove(), 5000);
-    }
-
-    updateStatus(message, alertClass, progress) {
-        // 統一ステータス更新
-        const statusElement = document.getElementById('unified-status');
-        if (statusElement) {
-            statusElement.className = `alert ${alertClass}`;
-            statusElement.textContent = message;
-            statusElement.classList.remove('d-none');
-        }
-        
-        // プログレスバー更新
-        const progressBar = document.getElementById('unified-progress-bar');
-        const progressContainer = document.getElementById('unified-progress');
-        
-        if (progressBar && progressContainer) {
-            progressContainer.classList.remove('d-none');
-            progressBar.style.width = `${progress}%`;
-            progressBar.textContent = `${Math.round(progress)}%`;
-        }
-    }
-
-    getStatusAlertClass(status) {
-        switch (status) {
-            case 'completed': return 'alert-success';
-            case 'failed':
-            case 'error': return 'alert-danger';
-            default: return 'alert-info';
-        }
-    }
-
-    // 学習データ関連のヘルパーメソッド
+    // ===== 学習データ関連のヘルパーメソッド =====
     selectImageForAnnotation(imagePath) {
         console.log('アノテーション開始:', imagePath);
         if (typeof openAnnotationModal === 'function') {
@@ -876,6 +810,76 @@ class UnifiedLearningSystem {
                 return false; // 分析フェーズは常に継続可能
             default:
                 return false;
+        }
+    }
+
+    // ===== ユーティリティメソッド =====
+
+    setElementText(elementId, text) {
+        const element = document.getElementById(elementId);
+        if (element) element.textContent = text;
+    }
+
+    showElement(elementId) {
+        const element = document.getElementById(elementId);
+        if (element) element.classList.remove('d-none');
+    }
+
+    hideElement(elementId) {
+        const element = document.getElementById(elementId);
+        if (element) element.classList.add('d-none');
+    }
+
+    showSuccessMessage(message) {
+        console.log('成功:', message);
+        this.showUserMessage(message, 'success');
+    }
+
+    showError(message) {
+        console.error('エラー:', message);
+        this.showUserMessage(message, 'danger');
+    }
+
+    showUserMessage(message, type) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+        alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 1060; max-width: 300px;';
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(alertDiv);
+        
+        // 自動削除
+        setTimeout(() => alertDiv.remove(), 5000);
+    }
+
+    updateStatus(message, alertClass, progress) {
+        // 統一ステータス更新
+        const statusElement = document.getElementById('unified-status');
+        if (statusElement) {
+            statusElement.className = `alert ${alertClass}`;
+            statusElement.textContent = message;
+            statusElement.classList.remove('d-none');
+        }
+        
+        // プログレスバー更新
+        const progressBar = document.getElementById('unified-progress-bar');
+        const progressContainer = document.getElementById('unified-progress');
+        
+        if (progressBar && progressContainer) {
+            progressContainer.classList.remove('d-none');
+            progressBar.style.width = `${progress}%`;
+            progressBar.textContent = `${Math.round(progress)}%`;
+        }
+    }
+
+    getStatusAlertClass(status) {
+        switch (status) {
+            case 'completed': return 'alert-success';
+            case 'failed':
+            case 'error': return 'alert-danger';
+            default: return 'alert-info';
         }
     }
 
@@ -998,6 +1002,506 @@ class UnifiedLearningSystem {
     }
 }
 
+// ===========================================
+// アノテーションツール
+// ===========================================
+
+// モジュール内のデータを保持するための変数
+const annotationTools = {
+    selectedCard: null,
+    canvas: null,
+    context: null,
+    isDrawing: false,
+    lastX: 0,
+    lastY: 0,
+    currentTool: 'pen',
+    toolSize: 5,
+};
+
+/**
+ * アノテーションモーダルを開く
+ * @param {string} paramImagePath - 画像パス
+ */
+function openAnnotationModal(paramImagePath) {
+    console.log('アノテーションモーダルを開く:', paramImagePath);
+    
+    if (!paramImagePath) {
+        alert('サンプル画像が指定されていません');
+        return;
+    }
+    
+    // 擬似カードオブジェクトを作成
+    annotationTools.selectedCard = {
+        dataset: {
+            path: paramImagePath
+        }
+    };
+    
+    // モーダルを作成
+    createAnnotationModal();
+    
+    // Bootstrapモーダルを初期化して表示
+    const annotationModal = new bootstrap.Modal(document.getElementById('annotationModal'));
+    
+    // キャンバスの設定
+    setupAnnotationCanvas(annotationTools.selectedCard);
+    
+    // モーダルが閉じられたときのクリーンアップ
+    document.getElementById('annotationModal').addEventListener('hidden.bs.modal', cleanupAnnotationModal);
+    
+    // モーダルを表示
+    annotationModal.show();
+}
+
+/**
+ * アノテーションモーダルのHTMLを作成
+ */
+function createAnnotationModal() {
+    const modalHTML = `
+    <div class="modal fade" id="annotationModal" tabindex="-1" aria-labelledby="annotationModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="annotationModalLabel">生殖乳頭アノテーション</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        生殖乳頭の周囲を赤いペンで囲んでください。複数の乳頭がある場合は、それぞれを個別に囲みます。
+                    </div>
+                    <div class="text-center mb-3">
+                        <canvas id="annotationCanvas" style="max-width: 100%; border: 1px solid #ddd;"></canvas>
+                    </div>
+                    <div class="d-flex justify-content-center mb-3">
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-outline-primary" id="penTool">
+                                <i class="fas fa-pen"></i> ペン
+                            </button>
+                            <button type="button" class="btn btn-outline-danger" id="eraserTool">
+                                <i class="fas fa-eraser"></i> 消しゴム
+                            </button>
+                            <button type="button" class="btn btn-outline-success" id="circleTool">
+                                <i class="fas fa-circle"></i> 円形
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="toolSize" class="form-label">ツールサイズ: <span id="toolSizeValue">5</span>px</label>
+                        <input type="range" class="form-range" id="toolSize" min="1" max="20" value="5">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="button" class="btn btn-primary" id="saveAnnotation">
+                        <i class="fas fa-save me-1"></i> 学習データとして保存
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+/**
+ * アノテーションキャンバスの設定
+ * @param {object} selectedCard - 選択されたカード情報
+ */
+function setupAnnotationCanvas(selectedCard) {
+    const canvas = document.getElementById('annotationCanvas');
+    annotationTools.canvas = canvas;
+    annotationTools.context = canvas.getContext('2d');
+    
+    // 画像の読み込み
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function() {
+        // キャンバスのサイズを画像に合わせる
+        canvas.width = img.width;
+        canvas.height = img.height;
+        
+        // 画像を描画
+        annotationTools.context.drawImage(img, 0, 0);
+        
+        // アノテーションツールの初期化
+        initAnnotationToolButtons();
+        initAnnotationEvents();
+    };
+    img.onerror = function() {
+        console.error('画像の読み込みに失敗しました:', img.src);
+        alert('画像の読み込みに失敗しました');
+    };
+    
+    // 画像パスの整形
+    let imagePath = selectedCard.dataset.path;
+    
+    // パスの先頭に/sampleを追加（必要に応じて）
+    if (!imagePath.startsWith('/')) {
+        imagePath = '/sample/' + imagePath;
+    } else {
+        imagePath = '/sample' + imagePath;
+    }
+    
+    console.log('読み込む画像パス:', imagePath);
+    img.src = imagePath;
+}
+
+/**
+ * アノテーションツールのボタン初期化
+ */
+function initAnnotationToolButtons() {
+    // ツール選択
+    document.getElementById('penTool').addEventListener('click', function() {
+        annotationTools.currentTool = 'pen';
+        updateToolButtons();
+    });
+    
+    document.getElementById('eraserTool').addEventListener('click', function() {
+        annotationTools.currentTool = 'eraser';
+        updateToolButtons();
+    });
+    
+    document.getElementById('circleTool').addEventListener('click', function() {
+        annotationTools.currentTool = 'circle';
+        updateToolButtons();
+    });
+    
+    // ツールサイズの変更
+    document.getElementById('toolSize').addEventListener('input', function() {
+        annotationTools.toolSize = parseInt(this.value);
+        document.getElementById('toolSizeValue').textContent = annotationTools.toolSize;
+    });
+    
+    // 保存ボタン
+    document.getElementById('saveAnnotation').addEventListener('click', saveAnnotationData);
+    
+    // 初期状態のボタン更新
+    updateToolButtons();
+}
+
+/**
+ * ツールボタンの状態を更新
+ */
+function updateToolButtons() {
+    document.getElementById('penTool').classList.remove('active');
+    document.getElementById('eraserTool').classList.remove('active');
+    document.getElementById('circleTool').classList.remove('active');
+    
+    if (annotationTools.currentTool === 'pen') {
+        document.getElementById('penTool').classList.add('active');
+    } else if (annotationTools.currentTool === 'eraser') {
+        document.getElementById('eraserTool').classList.add('active');
+    } else if (annotationTools.currentTool === 'circle') {
+        document.getElementById('circleTool').classList.add('active');
+    }
+}
+
+/**
+ * アノテーションキャンバスのイベント初期化
+ */
+function initAnnotationEvents() {
+    const canvas = annotationTools.canvas;
+    
+    // 描画開始
+    canvas.addEventListener('mousedown', function(e) {
+        annotationTools.isDrawing = true;
+        
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        
+        annotationTools.lastX = (e.clientX - rect.left) * scaleX;
+        annotationTools.lastY = (e.clientY - rect.top) * scaleY;
+        
+        if (annotationTools.currentTool === 'circle') {
+            // 円ツールの場合は一時的な円を描画
+            const ctx = annotationTools.context;
+            ctx.beginPath();
+            ctx.arc(annotationTools.lastX, annotationTools.lastY, annotationTools.toolSize, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+            ctx.fill();
+        }
+    });
+    
+    // 描画中
+    canvas.addEventListener('mousemove', function(e) {
+        if (!annotationTools.isDrawing) return;
+        
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+        
+        const ctx = annotationTools.context;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.lineWidth = annotationTools.toolSize;
+        
+        if (annotationTools.currentTool === 'pen') {
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)';
+            
+            ctx.beginPath();
+            ctx.moveTo(annotationTools.lastX, annotationTools.lastY);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        } else if (annotationTools.currentTool === 'eraser') {
+            ctx.globalCompositeOperation = 'destination-out';
+            
+            ctx.beginPath();
+            ctx.moveTo(annotationTools.lastX, annotationTools.lastY);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        }
+        
+        annotationTools.lastX = x;
+        annotationTools.lastY = y;
+    });
+    
+    // 描画終了
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseout', stopDrawing);
+    
+    // タッチデバイス対応
+    enableTouchSupport(canvas);
+}
+
+/**
+ * 描画停止処理
+ */
+function stopDrawing() {
+    annotationTools.isDrawing = false;
+    // 元の描画モードに戻す
+    annotationTools.context.globalCompositeOperation = 'source-over';
+}
+
+/**
+ * タッチデバイス対応の有効化
+ * @param {HTMLCanvasElement} canvas - 対象のキャンバス要素
+ */
+function enableTouchSupport(canvas) {
+    // タッチイベントをマウスイベントに変換
+    function touchToMouse(touchEvent, mouseEventType) {
+        touchEvent.preventDefault();
+        const touch = touchEvent.touches[0] || touchEvent.changedTouches[0];
+        const mouseEvent = new MouseEvent(mouseEventType, {
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+            buttons: 1
+        });
+        canvas.dispatchEvent(mouseEvent);
+    }
+    
+    canvas.addEventListener('touchstart', e => touchToMouse(e, 'mousedown'), { passive: false });
+    canvas.addEventListener('touchmove', e => touchToMouse(e, 'mousemove'), { passive: false });
+    canvas.addEventListener('touchend', e => touchToMouse(e, 'mouseup'), { passive: false });
+    canvas.addEventListener('touchcancel', e => touchToMouse(e, 'mouseout'), { passive: false });
+}
+
+/**
+ * アノテーションデータを保存
+ */
+function saveAnnotationData() {
+    try {
+        showLoading(); // ローディング表示を追加
+        console.log('アノテーション保存開始');
+
+        // キャンバスのデータをBase64形式で取得
+        const annotationData = annotationTools.canvas.toDataURL('image/png');
+        console.log('Base64データサイズ:', calculateImageSize(annotationData), 'KB');
+
+        const selectedCard = annotationTools.selectedCard;
+        console.log('選択カード:', selectedCard.dataset.path);
+
+        // 画像データをサーバーに送信
+        fetch('/learning/save-annotation', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                image_data: annotationData,
+                original_path: selectedCard.dataset.path
+            })
+        })
+        .then(response => {
+            console.log('サーバーレスポンスステータス:', response.status);
+            if (!response.ok) {
+                throw new Error('サーバーレスポンスが不正です');
+            }
+            return response.json();
+        })
+        .then(data => {
+            hideLoading(); // ローディング表示を非表示
+            console.log('アノテーション保存レスポンス:', data);
+            
+            if (data.error) {
+                console.error('保存エラー:', data.error);
+                alert('エラー: ' + data.error);
+            } else {
+                alert('アノテーションを保存しました');
+                saveToSession('annotationSaved', true);
+                console.log('保存成功フラグ設定');
+                
+                // モーダルを閉じる
+                bootstrap.Modal.getInstance(document.getElementById('annotationModal')).hide();
+                
+                // 学習管理画面のデータ更新コールバック
+                if (typeof window.onAnnotationSaved === 'function') {
+                    window.onAnnotationSaved();
+                }
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('保存エラー:', error);
+            alert('保存中にエラーが発生しました: ' + error);
+        });
+    } catch (e) {
+        hideLoading();
+        console.error('アノテーション処理エラー:', e);
+        alert('アノテーションの保存中にエラーが発生しました: ' + e);
+    }
+}
+
+/**
+ * アノテーションモーダルのクリーンアップ
+ */
+function cleanupAnnotationModal() {
+    // リソースの解放やイベントリスナーの削除など
+    annotationTools.canvas = null;
+    annotationTools.context = null;
+    annotationTools.isDrawing = false;
+    
+    // モーダル要素の削除
+    document.getElementById('annotationModal').remove();
+}
+
+// ===========================================
+// 評価システム（簡易版）
+// ===========================================
+
+// グローバル変数でChart.jsインスタンスを管理
+let annotationChart = null;
+
+/**
+ * アノテーション分析結果の表示
+ * @param {Object} data - 分析結果データ
+ */
+function displayAnnotationAnalysis(data) {
+    console.log('アノテーション分析結果の表示開始:', data);
+    
+    // 重複実行を防ぐためのフラグチェック
+    if (window.annotationAnalysisDisplayed) {
+        console.log('アノテーション分析結果は既に表示済みです');
+        return;
+    }
+    
+    // 表示フラグを設定
+    window.annotationAnalysisDisplayed = true;
+    
+    try {
+        // データセット情報を表示
+        updateAnnotationDatasetInfo(data);
+       
+        // アノテーション影響の画像
+        updateAnnotationImpactImage(data);
+       
+        // アノテーションのインサイト
+        updateAnnotationInsight(data);
+    } catch (error) {
+        console.error('アノテーション分析表示エラー:', error);
+    }
+    
+    // 一定時間後にフラグをリセット
+    setTimeout(() => {
+        window.annotationAnalysisDisplayed = false;
+    }, 5000);
+}
+
+/**
+ * アノテーションデータセット情報の更新
+ * @param {Object} data - 分析データ
+ */
+function updateAnnotationDatasetInfo(data) {
+    const dataset = data.dataset || {};
+   
+    // アノテーション率
+    const annotationRate = dataset.annotation_rate || 0;
+    console.log('アノテーション率更新:', (annotationRate * 100).toFixed(1) + '%');
+}
+
+/**
+ * アノテーション影響画像の更新
+ * @param {Object} data - 分析データ
+ */
+function updateAnnotationImpactImage(data) {
+    // 新しい画像配信ルートを使用
+    if (data.images && data.images.annotation_impact) {
+        const imgSrc = '/evaluation/images/' + data.images.annotation_impact;
+        console.log('アノテーション影響画像:', imgSrc);
+    } else {
+        // 画像がない場合はデータからグラフを生成
+        renderAnnotationChart(data.dataset || {});
+    }
+}
+
+/**
+ * アノテーションのインサイト更新
+ * @param {Object} data - 分析データ
+ */
+function updateAnnotationInsight(data) {
+    const dataset = data.dataset || {};
+    const annotationRate = dataset.annotation_rate || 0;
+    let insightMessage = '';
+   
+    if (annotationRate < 0.3) {
+        insightMessage = 'アノテーション率が低いため、モデルの性能が十分に発揮されていない可能性があります。';
+    } else if (annotationRate < 0.7) {
+        insightMessage = 'アノテーションの割合は中程度です。より多くのアノテーションを追加することで、モデルの性能向上が期待できます。';
+    } else {
+        insightMessage = 'アノテーション率が高く、モデルの学習に十分なデータが提供されています。';
+    }
+   
+    console.log('アノテーションインサイト:', insightMessage);
+}
+
+/**
+ * データセット情報からグラフを描画（Chart.jsを使用）
+ * @param {Object} dataset - データセット情報
+ */
+function renderAnnotationChart(dataset) {
+    try {
+        console.log('グラフ描画開始:', dataset);
+        
+        // 既存のChart.jsインスタンスがあれば完全に破棄
+        if (annotationChart) {
+            console.log('既存のChart.jsインスタンスを破棄中...');
+            annotationChart.destroy();
+            annotationChart = null;
+        }
+        
+        // Chart.jsが読み込まれているか確認
+        if (typeof Chart !== 'undefined') {
+            console.log('Chart.jsが利用可能です');
+            // ここでグラフを作成する処理を実装
+        } else {
+            console.log('Chart.js未読み込み - 代替表示を作成');
+        }
+        
+    } catch (error) {
+        console.error('アノテーショングラフ描画エラー:', error);
+    }
+}
+
+// ===========================================
+// グローバル初期化とエクスポート
+// ===========================================
+
 // グローバルインスタンス作成
 window.unifiedLearningSystem = new UnifiedLearningSystem();
 
@@ -1005,3 +1509,7 @@ window.unifiedLearningSystem = new UnifiedLearningSystem();
 document.addEventListener('DOMContentLoaded', () => {
     window.unifiedLearningSystem.initialize();
 });
+
+// 必要な関数のグローバルエクスポート
+window.openAnnotationModal = openAnnotationModal;
+window.displayAnnotationAnalysis = displayAnnotationAnalysis;

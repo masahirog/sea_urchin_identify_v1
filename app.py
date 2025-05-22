@@ -1,4 +1,4 @@
-# app.py - 最終統合版（重複削除・最適化）
+# app.py - 最終統合版（import文修正済み）
 import os
 import logging
 from flask import Flask, send_from_directory, jsonify
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # アプリケーション初期化
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
-# ★統合: 設定の一元化
+# 設定の一元化
 app.config.update({
     'UPLOAD_FOLDER': UPLOAD_DIR,
     'EXTRACTED_FOLDER': EXTRACTED_DIR,
@@ -46,7 +46,7 @@ if not os.path.exists(model_path):
     create_test_model(app.config['MODEL_FOLDER'])
     logger.info(f"テストモデル生成完了: {model_path}")
 
-# ★統合: グローバル変数の一元化
+# グローバル変数の一元化
 processing_queue = queue.Queue()
 processing_results = {}
 processing_status = {}
@@ -72,20 +72,16 @@ processing_thread.daemon = True
 processing_thread.start()
 logger.info("処理ワーカースレッドを開始しました")
 
-# ★統合: ルート登録（重複削除・最適化）
-from routes.main_routes import main_bp
-from routes.video_routes import video_bp
-from routes.image_routes import image_bp
-from routes.learning_routes import learning_bp
-from routes.api_routes import api_bp
+# ★修正: 統合済みルートファイル名に変更
+from routes.main import main_bp
+from routes.video import video_bp  
+from routes.learning import learning_bp
 
 app.register_blueprint(main_bp)
 app.register_blueprint(video_bp, url_prefix='/video')
-app.register_blueprint(image_bp, url_prefix='/image')
 app.register_blueprint(learning_bp, url_prefix='/learning')
-app.register_blueprint(api_bp, url_prefix='/api')
 
-# ★統合: ファイル配信ルートの一元化
+# ファイル配信ルートの一元化
 @app.route('/uploads/<filename>')
 def get_uploaded_file(filename):
     """一時アップロードファイル配信"""
@@ -106,7 +102,7 @@ def serve_sample_image(filename):
     """サンプル画像配信"""
     return send_from_directory(STATIC_SAMPLES_DIR, filename)
 
-# ★統合: システム状態API
+# システム状態API
 @app.route('/api/system-status')
 def system_status():
     """システム全体の状態を取得"""
@@ -149,22 +145,6 @@ def system_status():
     except Exception as e:
         logger.error(f"システム状態取得エラー: {str(e)}")
         return jsonify({'error': 'システム状態の取得に失敗しました'}), 500
-
-# デバッグ用ルート（開発時のみ）
-@app.route('/debug/routes')
-def debug_routes():
-    """デバッグ用：登録ルート表示"""
-    if not app.config.get('DEBUG', False):
-        return jsonify({'error': 'デバッグモードでのみ利用可能'}), 403
-        
-    routes = []
-    for rule in app.url_map.iter_rules():
-        routes.append({
-            'endpoint': rule.endpoint,
-            'methods': list(rule.methods),
-            'rule': str(rule)
-        })
-    return jsonify({'routes': routes, 'count': len(routes)})
 
 # エラーハンドラー
 @app.errorhandler(404)
