@@ -39,7 +39,9 @@ class UrchinPapillaeAnalyzer:
 
     def load_models(self):
         """保存されたモデルを読み込む"""
-        model_path = os.path.join('models/saved', "sea_urchin_rf_model.pkl")
+        from config import MODELS_DIR
+        model_path = os.path.join(MODELS_DIR, 'saved', "sea_urchin_rf_model.pkl")
+        
         if os.path.exists(model_path):
             try:
                 self.rf_model, self.scaler = joblib.load(model_path)
