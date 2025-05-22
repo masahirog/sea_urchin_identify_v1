@@ -12,7 +12,7 @@
 - 評価グラフ生成
 """
 
-import os
+
 import numpy as np
 import pandas as pd
 import json
@@ -24,9 +24,28 @@ import traceback
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib import font_manager as fm
+import os
+
+
+# プロジェクト内のフォントファイルを登録
+font_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 
+                        'static', 'fonts', 'NotoSansCJKjp-Regular.otf')
+
+if os.path.exists(font_path):
+    # フォントを登録
+    fm.fontManager.addfont(font_path)
+    prop = fm.FontProperties(fname=font_path)
+    plt.rcParams['font.family'] = prop.get_name()
+    plt.rcParams['axes.unicode_minus'] = False
+    print(f"カスタムフォントを読み込みました: {font_path}")
+else:
+    print(f"警告: フォントファイルが見つかりません: {font_path}")
+    # フォールバック設定
+    plt.rcParams['font.family'] = 'sans-serif'
+
 from sklearn.metrics import confusion_matrix, classification_report, roc_curve, auc
 from sklearn.model_selection import cross_val_score, learning_curve
-
 
 class UnifiedEvaluator:
     """統合モデル評価エンジン"""
@@ -91,7 +110,7 @@ class UnifiedEvaluator:
             traceback.print_exc()
             return {"error": error_msg}
 
-    def analyze_annotation_impact(self, dataset_dir, model_path=None, save_results=True):
+    def analyze_annotation_impact(self, dataset_dir, model_path=None, save_results=True, timestamp=None):
         """
         アノテーション影響分析
         
@@ -99,6 +118,7 @@ class UnifiedEvaluator:
             dataset_dir: データセットディレクトリ
             model_path: モデルファイルパス
             save_results: 結果を保存するかどうか
+            timestamp: 使用するタイムスタンプ（オプション）
             
         Returns:
             dict: 分析結果
@@ -115,8 +135,8 @@ class UnifiedEvaluator:
             # モデル情報取得
             model_info = self._get_model_info(model_path)
             
-            # 分析結果作成
-            analysis = self._create_annotation_analysis(dataset_stats, model_info)
+            # 分析結果作成（タイムスタンプを渡す）
+            analysis = self._create_annotation_analysis(dataset_stats, model_info, timestamp)
             
             # 結果保存
             if save_results:
@@ -538,12 +558,18 @@ class UnifiedEvaluator:
         
         return model_info
 
-    def _create_annotation_analysis(self, dataset_stats, model_info):
+    def _create_annotation_analysis(self, dataset_stats, model_info, timestamp=None):
         """アノテーション分析結果の作成"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # ★修正: timestampパラメータを追加して処理
+        if timestamp:
+            # 既に他のグラフで使用されているISO形式のタイムスタンプをそのまま使用
+            formatted_timestamp = timestamp
+        else:
+            # 新規の場合は現在時刻から生成（ISO形式）
+            formatted_timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
         
         return {
-            "timestamp": timestamp,
+            "timestamp": formatted_timestamp,  # ISO形式で統一
             "dataset": dataset_stats,
             **model_info
         }
@@ -555,14 +581,14 @@ class UnifiedEvaluator:
             
             # JSON保存
             os.makedirs(EVALUATION_DATA_DIR, exist_ok=True)
-            timestamp = analysis["timestamp"]
+            timestamp = analysis["timestamp"]  # これは元の形式のまま使用
             analysis_path = os.path.join(EVALUATION_DATA_DIR, f"annotation_impact_{timestamp}.json")
             
             with open(analysis_path, 'w') as f:
                 json.dump(analysis, f, indent=2)
             print(f"アノテーション分析結果保存: {analysis_path}")
             
-            # グラフ生成
+            # グラフ生成（timestampをそのまま渡す）
             self._create_annotation_plot(analysis, timestamp)
             
             return {
@@ -579,7 +605,6 @@ class UnifiedEvaluator:
         try:
             from config import STATIC_EVALUATION_DIR
             os.makedirs(STATIC_EVALUATION_DIR, exist_ok=True)
-            
             dataset = analysis.get("dataset", {})
             male_annotated = dataset.get("male_annotated", 0)
             female_annotated = dataset.get("female_annotated", 0)
@@ -729,65 +754,6 @@ def evaluate_model(X, y, model, model_path=None, output_dir=None):
     evaluator = UnifiedEvaluator()
     return evaluator.evaluate_model(X, y, model, model_path)
 
-def analyze_annotation_impact(self, dataset_dir, model_path=None, save_results=True, timestamp=None):
-    """
-    アノテーション影響分析
-    
-    Args:
-        dataset_dir: データセットディレクトリ
-        model_path: モデルファイルパス
-        save_results: 結果を保存するかどうか
-        timestamp: 使用するタイムスタンプ（オプション）
-        
-    Returns:
-        dict: 分析結果
-    """
-    try:
-        print(f"アノテーション影響分析開始 - データセット: {dataset_dir}")
-        
-        # アノテーションデータ取得
-        annotation_data = self._load_annotation_data()
-        
-        # データセット統計計算
-        dataset_stats = self._calculate_dataset_stats(dataset_dir, annotation_data)
-        
-        # モデル情報取得
-        model_info = self._get_model_info(model_path)
-        
-        # 分析結果作成（タイムスタンプを渡す）
-        analysis = self._create_annotation_analysis(dataset_stats, model_info, timestamp)
-        
-        # 結果保存
-        if save_results:
-            saved_results = self._save_annotation_analysis(analysis)
-            analysis.update(saved_results)
-        
-        print("アノテーション影響分析完了")
-        return analysis
-        
-    except Exception as e:
-        error_msg = f"アノテーション影響分析エラー: {str(e)}"
-        print(error_msg)
-        traceback.print_exc()
-        return {"error": error_msg}
-
-
-def _create_annotation_analysis(self, dataset_stats, model_info, timestamp=None):
-    """アノテーション分析結果の作成"""
-    # ★修正: 外部から指定されたタイムスタンプを使用、なければ新規生成
-    if timestamp:
-        # ISO形式のタイムスタンプをYYYYMMDD_HHMMSS形式に変換
-        from datetime import datetime
-        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00') if 'Z' in timestamp else timestamp)
-        formatted_timestamp = dt.strftime("%Y%m%d_%H%M%S")
-    else:
-        formatted_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
-    return {
-        "timestamp": formatted_timestamp,
-        "dataset": dataset_stats,
-        **model_info
-    }
 
 def get_model_evaluation_history(evaluation_dir=None):
     """後方互換性用の評価履歴取得関数"""

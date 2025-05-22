@@ -66,6 +66,10 @@ Desktop.ini
 !/static/images/annotations/.gitkeep
 !/static/images/evaluations/.gitkeep
 
+# フォントファイル（必要に応じて）
+/static/fonts/*
+
+
 # ==================== 保持するもの ====================
 # 設定ファイルのみ追跡
 # static/annotation_mapping.json は除外しない（つまり追跡する）
