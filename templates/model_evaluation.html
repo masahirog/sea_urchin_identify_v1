@@ -1,65 +1,74 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="ウニ生殖乳頭分析システムのモデル評価ダッシュボード - モデル精度やアノテーション影響の分析">
-    <title>モデル評価ダッシュボード</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/model_evaluation.css') }}">
-</head>
-<body>
-    <div class="container mt-3 mb-5">
-        <h1 class="text-center mb-4">モデル評価ダッシュボード</h1>
-        
-        <div class="mb-3">
-            <a href="/" class="btn btn-outline-secondary">
-                <i class="fas fa-arrow-left" aria-hidden="true"></i> メインページに戻る
-            </a>
-        </div>
-        
-        <!-- 操作パネル -->
-        <div class="card mb-4">
-            <div class="card-header bg-primary text-white">
-                <h5><i class="fas fa-cogs" aria-hidden="true"></i> モデル評価操作</h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
+{% extends "base.html" %}
+
+{% block title %}モデル評価ダッシュボード - ウニ生殖乳頭分析システム{% endblock %}
+
+{% block description %}ウニ生殖乳頭分析システムのモデル評価ダッシュボード - モデル精度やアノテーション影響の分析{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/model_evaluation.css') }}">
+{% endblock %}
+
+{% block content %}
+<!-- メインタブナビゲーション -->
+<ul class="nav nav-tabs" id="evaluationTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="evaluation-tab" data-bs-toggle="tab" data-bs-target="#evaluation" 
+                type="button" role="tab" aria-controls="evaluation" aria-selected="true">
+            <i class="fas fa-chart-line" aria-hidden="true"></i> モデル評価
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="annotation-tab" data-bs-toggle="tab" data-bs-target="#annotation" 
+                type="button" role="tab" aria-controls="annotation" aria-selected="false">
+            <i class="fas fa-tags" aria-hidden="true"></i> アノテーション分析
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" 
+                type="button" role="tab" aria-controls="history" aria-selected="false">
+            <i class="fas fa-history" aria-hidden="true"></i> 評価履歴
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" 
+                type="button" role="tab" aria-controls="settings" aria-selected="false">
+            <i class="fas fa-cog" aria-hidden="true"></i> 設定
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="evaluationTabContent">
+    <!-- モデル評価タブ -->
+    <div class="tab-pane fade show active" id="evaluation" role="tabpanel" aria-labelledby="evaluation-tab">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-play" aria-hidden="true"></i> 評価実行</h5>
+                    </div>
+                    <div class="card-body">
                         <button id="run-evaluation-btn" class="btn btn-primary mb-3 w-100">
                             <i class="fas fa-play" aria-hidden="true"></i> 新しいモデル評価を実行
                         </button>
                         <p class="small text-muted">現在のデータセットとモデルを使用して包括的な評価を実行します。</p>
+                        
+                        <div id="evaluationStatus" class="alert alert-info d-none" role="alert">
+                            処理を開始してください
+                        </div>
+                        <div class="progress mb-3 d-none" id="evaluationProgressContainer">
+                            <div id="evaluationProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
                     </div>
-                    <div class="col-md-6">
-                        <button id="analyze-annotations-btn" class="btn btn-success mb-3 w-100">
-                            <i class="fas fa-search" aria-hidden="true"></i> アノテーション影響分析を実行
-                        </button>
-                        <p class="small text-muted">アノテーションデータがモデルの学習・精度に与える影響を分析します。</p>
-                    </div>
-                </div>
-                <div id="evaluationStatus" class="alert alert-info d-none" role="alert">
-                    処理を開始してください
-                </div>
-                <div class="progress mb-3 d-none" id="evaluationProgressContainer">
-                    <div id="evaluationProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
-                         role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                 </div>
             </div>
-        </div>
-        
-        <div class="row">
-            <!-- 左側のメイン評価パネル -->
+            
             <div class="col-md-8">
-                <!-- 元のHTMLを保持 -->
                 <div class="card">
                     <div class="card-header">
                         <h5><i class="fas fa-chart-line" aria-hidden="true"></i> モデル評価結果</h5>
                     </div>
                     <div class="card-body">
-                        <!-- ここに追加 -->
                         <div id="evaluationPlaceholder" class="text-center py-5">
                             <i class="fas fa-chart-bar fa-3x mb-3 text-muted" aria-hidden="true"></i>
                             <p class="text-muted">評価を実行するか、履歴から結果を選択してください</p>
@@ -104,7 +113,7 @@
                                 </div>
                             </div>
                             
-                            <!-- ROCカーブ -->
+                            <!-- ROCカーブとクロスバリデーション -->
                             <div class="row mb-4">
                                 <div class="col-md-6">
                                     <h6>ROCカーブ</h6>
@@ -189,9 +198,29 @@
                         </div>
                     </div>
                 </div>
-                
-                <!-- アノテーション影響分析 -->
-                <div class="card mt-4">
+            </div>
+        </div>
+    </div>
+
+    <!-- アノテーション分析タブ -->
+    <div class="tab-pane fade" id="annotation" role="tabpanel" aria-labelledby="annotation-tab">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-search" aria-hidden="true"></i> 分析実行</h5>
+                    </div>
+                    <div class="card-body">
+                        <button id="analyze-annotations-btn" class="btn btn-success mb-3 w-100">
+                            <i class="fas fa-search" aria-hidden="true"></i> アノテーション影響分析を実行
+                        </button>
+                        <p class="small text-muted">アノテーションデータがモデルの学習・精度に与える影響を分析します。</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-8">
+                <div class="card">
                     <div class="card-header">
                         <h5><i class="fas fa-tags" aria-hidden="true"></i> アノテーション影響分析</h5>
                     </div>
@@ -245,7 +274,7 @@
                             </div>
                             
                             <div class="text-center">
-                                <a href="/sample/analyze" class="btn btn-primary">
+                                <a href="{{ url_for('sample.analyze_samples_page') }}" class="btn btn-primary">
                                     <i class="fas fa-pen" aria-hidden="true"></i> サンプルアノテーションページへ
                                 </a>
                             </div>
@@ -253,41 +282,59 @@
                     </div>
                 </div>
             </div>
-            
-            <!-- 右側の履歴パネル -->
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="fas fa-history" aria-hidden="true"></i> 評価履歴</h5>
-                    </div>
-                    <div class="card-body p-0">
-                        <div id="historyList" class="list-group list-group-flush">
-                            <!-- ここに履歴項目が表示されます -->
-                            <div class="text-center py-3">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">Loading...</span>
-                                </div>
-                                <p class="mt-2 text-muted">履歴を読み込んでいます...</p>
-                            </div>
+        </div>
+    </div>
+
+    <!-- 評価履歴タブ -->
+    <div class="tab-pane fade" id="history" role="tabpanel" aria-labelledby="history-tab">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-history" aria-hidden="true"></i> 評価履歴</h5>
+            </div>
+            <div class="card-body p-0">
+                <div id="historyList" class="list-group list-group-flush">
+                    <!-- ここに履歴項目が表示されます -->
+                    <div class="text-center py-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
                         </div>
+                        <p class="mt-2 text-muted">履歴を読み込んでいます...</p>
                     </div>
                 </div>
-                
-                <div class="card mt-3 border-danger">
-                    <div class="card-header bg-danger text-white">
-                        <h5><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> 危険な操作</h5>
+            </div>
+        </div>
+    </div>
+
+    <!-- 設定タブ -->
+    <div class="tab-pane fade" id="settings" role="tabpanel" aria-labelledby="settings-tab">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-cog" aria-hidden="true"></i> システム設定</h5>
                     </div>
                     <div class="card-body">
-                        <div class="alert alert-warning">
+                        <p class="text-muted">システムの各種設定を行えます。</p>
+                        <p class="text-muted">現在利用可能な設定はありません。</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card border-warning">
+                    <div class="card-header bg-warning text-dark">
+                        <h6 class="mb-0"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> 高度な操作</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-warning small">
                             <i class="fas fa-exclamation-circle me-2"></i>
-                            警告: この操作はすべてのアノテーションデータを削除します。この操作は取り消せません。
+                            注意: この操作はすべてのアノテーションデータを削除します。
                         </div>
                         <div class="mb-3">
-                            <label for="resetConfirmation" class="form-label">確認のため、「DELETE ANNOTATION」と入力してください：</label>
-                            <input type="text" class="form-control" id="resetConfirmation" placeholder="DELETE ANNOTATION">
-                            <div class="form-text text-danger">大文字小文字も一致する必要があります</div>
+                            <label for="resetConfirmation" class="form-label small">確認のため、「DELETE ANNOTATION」と入力してください：</label>
+                            <input type="text" class="form-control form-control-sm" id="resetConfirmation" placeholder="DELETE ANNOTATION">
                         </div>
-                        <button id="resetAnnotationsBtn" class="btn btn-danger">
+                        <button id="resetAnnotationsBtn" class="btn btn-outline-danger btn-sm w-100">
                             <i class="fas fa-trash" aria-hidden="true"></i> アノテーションデータをリセット
                         </button>
                     </div>
@@ -295,120 +342,104 @@
             </div>
         </div>
     </div>
-    
-    <!-- ローディングオーバーレイ -->
-    <div id="loadingOverlay" class="d-none" aria-live="polite">
-        <div class="spinner-border text-light me-3" role="status">
-            <span class="visually-hidden">処理中...</span>
-        </div>
-        処理中...
-    </div>
+</div>
+{% endblock %}
 
-    <!-- JavaScript -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-    <script src="{{ url_for('static', filename='js/utilities.js') }}"></script>
-    
-    <!-- ★修正: JavaScriptファイルのパスを新しいディレクトリ構造に変更 -->
-    <script src="{{ url_for('static', filename='js/evaluation/evaluation-utils.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/evaluation/evaluation-history.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/evaluation/annotation-analysis.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/evaluation/evaluation-core.js') }}"></script>
-    
-    <script>
-    // 評価実行ボタンのイベントリスナー追加（コアファイル読み込み前にボタンが見つからない問題を解決）
-    document.addEventListener('DOMContentLoaded', function() {
-        // 評価実行ボタン
-        const runEvaluationBtn = document.getElementById('run-evaluation-btn');
-        if (runEvaluationBtn && typeof runModelEvaluation === 'function') {
-            runEvaluationBtn.addEventListener('click', runModelEvaluation);
-        } else {
-            console.error('評価実行ボタンまたは関数が見つかりません');
-        }
-    });
-    
-    // evalution_runner初期化関数（evaluation-core.jsから移動）
-    function initEvaluationRunner() {
-        console.log('評価実行モジュールの初期化開始');
-        
-        const runEvaluationBtn = document.getElementById('run-evaluation-btn');
-        if (runEvaluationBtn) {
-            console.log('評価実行ボタンが見つかりました');
-            runEvaluationBtn.addEventListener('click', function() {
-                console.log('評価実行ボタンがクリックされました');
-                runModelEvaluation();
-            });
-        } else {
-            console.error('評価実行ボタンが見つかりません: run-evaluation-btn');
-        }
-        
-        console.log('評価実行モジュールの初期化完了');
+{% block extra_js %}
+<!-- Chart.js for annotations -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+
+<!-- Evaluation scripts -->
+<script src="{{ url_for('static', filename='js/evaluation/evaluation-utils.js') }}"></script>
+<script src="{{ url_for('static', filename='js/evaluation/evaluation-history.js') }}"></script>
+<script src="{{ url_for('static', filename='js/evaluation/annotation-analysis.js') }}"></script>
+<script src="{{ url_for('static', filename='js/evaluation/evaluation-core.js') }}"></script>
+
+<script>
+// 評価実行ボタンのイベントリスナー追加
+document.addEventListener('DOMContentLoaded', function() {
+    const runEvaluationBtn = document.getElementById('run-evaluation-btn');
+    if (runEvaluationBtn && typeof runModelEvaluation === 'function') {
+        runEvaluationBtn.addEventListener('click', runModelEvaluation);
+    } else {
+        console.error('評価実行ボタンまたは関数が見つかりません');
     }
+});
 
-    // モデル評価の実行
-    function runModelEvaluation() {
-        console.log('モデル評価の実行開始');
-        
-        // ローディング表示
-        showLoading();
-        
-        // 「処理中」ステータスの表示
-        updateEvaluationStatus('evaluationStatus', 'alert-info', 'モデル評価を準備中...');
-        showProgressBar('evaluationProgressContainer', 'evaluationProgressBar', 0);
-        
-        console.log('モデル評価リクエスト送信');
-        
-        // リクエスト送信
-        fetch('/evaluation/run_evaluation', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        })
-        .then(response => {
-            console.log('モデル評価レスポンス:', response.status, response.ok);
-            if (!response.ok) {
-                throw new Error(`サーバーエラー: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log('モデル評価データ:', data);
-            hideLoading();
-            
-            if (data.error) {
-                console.error('サーバーエラー:', data.error);
-                updateEvaluationStatus('evaluationStatus', 'alert-danger', 'エラー: ' + data.error);
-                showErrorMessage('エラー: ' + data.error);
-                return;
-            }
-            
-            // タスクIDの保存
-            if (window.modelEvaluation) {
-                window.modelEvaluation.currentTaskId = data.task_id;
-                console.log('タスクID保存:', window.modelEvaluation.currentTaskId);
-            }
-            
-            // 状態表示の更新
-            updateEvaluationStatus('evaluationStatus', 'alert-info', 'モデル評価を開始しました...');
-            updateProgressBar('evaluationProgressBar', 10);
-            
-            // 状態チェックの開始
-            console.log('状態チェック開始');
-            if (typeof startStatusCheck === 'function') {
-                startStatusCheck();
-            }
-            
-            // 成功メッセージの表示
-            showSuccessMessage('モデル評価を開始しました。完了までお待ちください。');
-        })
-        .catch(error => {
-            console.error('モデル評価実行エラー:', error);
-            hideLoading();
-            updateEvaluationStatus('evaluationStatus', 'alert-danger', 'エラー: ' + error.message);
-            showErrorMessage('モデル評価実行中にエラーが発生しました: ' + error.message);
+// evalution_runner初期化関数
+function initEvaluationRunner() {
+    console.log('評価実行モジュールの初期化開始');
+    
+    const runEvaluationBtn = document.getElementById('run-evaluation-btn');
+    if (runEvaluationBtn) {
+        console.log('評価実行ボタンが見つかりました');
+        runEvaluationBtn.addEventListener('click', function() {
+            console.log('評価実行ボタンがクリックされました');
+            runModelEvaluation();
         });
+    } else {
+        console.error('評価実行ボタンが見つかりません: run-evaluation-btn');
     }
-    </script>
-</body>
-</html>
+    
+    console.log('評価実行モジュールの初期化完了');
+}
+
+// モデル評価の実行
+function runModelEvaluation() {
+    console.log('モデル評価の実行開始');
+    
+    showLoading();
+    
+    updateEvaluationStatus('evaluationStatus', 'alert-info', 'モデル評価を準備中...');
+    showProgressBar('evaluationProgressContainer', 'evaluationProgressBar', 0);
+    
+    console.log('モデル評価リクエスト送信');
+    
+    fetch('/evaluation/run_evaluation', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => {
+        console.log('モデル評価レスポンス:', response.status, response.ok);
+        if (!response.ok) {
+            throw new Error(`サーバーエラー: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('モデル評価データ:', data);
+        hideLoading();
+        
+        if (data.error) {
+            console.error('サーバーエラー:', data.error);
+            updateEvaluationStatus('evaluationStatus', 'alert-danger', 'エラー: ' + data.error);
+            showErrorMessage('エラー: ' + data.error);
+            return;
+        }
+        
+        if (window.modelEvaluation) {
+            window.modelEvaluation.currentTaskId = data.task_id;
+            console.log('タスクID保存:', window.modelEvaluation.currentTaskId);
+        }
+        
+        updateEvaluationStatus('evaluationStatus', 'alert-info', 'モデル評価を開始しました...');
+        updateProgressBar('evaluationProgressBar', 10);
+        
+        console.log('状態チェック開始');
+        if (typeof startStatusCheck === 'function') {
+            startStatusCheck();
+        }
+        
+        showSuccessMessage('モデル評価を開始しました。完了までお待ちください。');
+    })
+    .catch(error => {
+        console.error('モデル評価実行エラー:', error);
+        hideLoading();
+        updateEvaluationStatus('evaluationStatus', 'alert-danger', 'エラー: ' + error.message);
+        showErrorMessage('モデル評価実行中にエラーが発生しました: ' + error.message);
+    });
+}
+</script>
+{% endblock %}

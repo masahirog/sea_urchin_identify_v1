@@ -1,141 +1,175 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>サンプル分析 - ウニ生殖乳頭分析システム</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/analyze_samples.css') }}">
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1><i class="fas fa-microscope"></i> ウニ生殖乳頭分析システム</h1>
-            <nav>
-                <a href="{{ url_for('main.index') }}" class="nav-link">
-                    <i class="fas fa-home"></i> ホーム
-                </a>
-                <a href="{{ url_for('sample.analyze_samples_page') }}" class="nav-link active">
-                    <i class="fas fa-search"></i> サンプル分析
-                </a>
-                <a href="{{ url_for('main.get_task_history') }}" class="nav-link">
-                    <i class="fas fa-history"></i> 履歴
-                </a>
-            </nav>
-        </header>
+{% extends "base.html" %}
 
-        <main>
-            <!-- 手順説明 -->
-            <div class="steps-container">
-                <div class="step">
-                    <div class="step-number">1</div>
-                    <h3>サンプルのアップロード</h3>
-                    <p>ウニの生殖乳頭画像をアップロードし、オスかメスかを指定します。</p>
-                </div>
-                <div class="step">
-                    <div class="step-number">2</div>
-                    <h3>手動アノテーション</h3>
-                    <p>画像内の生殖乳頭をペンツールで囲んで、正確な形状を指定します。</p>
-                </div>
-                <div class="step">
-                    <div class="step-number">3</div>
-                    <h3>学習データの保存</h3>
-                    <p>アノテーション結果が学習データとして保存され、将来の自動判別に利用されます。</p>
+{% block title %}サンプル分析 - ウニ生殖乳頭分析システム{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/analyze_samples.css') }}">
+{% endblock %}
+
+{% block content %}
+<!-- メインタブナビゲーション -->
+<ul class="nav nav-tabs" id="sampleTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload" 
+                type="button" role="tab" aria-controls="upload" aria-selected="true">
+            <i class="fas fa-cloud-upload-alt" aria-hidden="true"></i> サンプルアップロード
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="samples-tab" data-bs-toggle="tab" data-bs-target="#samples" 
+                type="button" role="tab" aria-controls="samples" aria-selected="false">
+            <i class="fas fa-images" aria-hidden="true"></i> サンプル一覧
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="analysis-tab" data-bs-toggle="tab" data-bs-target="#analysis" 
+                type="button" role="tab" aria-controls="analysis" aria-selected="false">
+            <i class="fas fa-chart-line" aria-hidden="true"></i> 分析結果
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="sampleTabContent">
+    <!-- サンプルアップロードタブ -->
+    <div class="tab-pane fade show active" id="upload" role="tabpanel" aria-labelledby="upload-tab">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-cloud-upload-alt" aria-hidden="true"></i> 新規サンプルアップロード</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="uploadSampleForm">
+                            <div class="mb-3">
+                                <label for="sampleFile" class="form-label">サンプル画像</label>
+                                <input type="file" id="sampleFile" name="image" accept="image/*" class="form-control">
+                                <div class="form-text">ウニの生殖乳頭サンプル画像を選択してください。</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="sampleGender" class="form-label">性別</label>
+                                <select id="sampleGender" name="gender" class="form-select">
+                                    <option value="male">オス</option>
+                                    <option value="female">メス</option>
+                                </select>
+                                <div class="form-text">サンプルの性別を選択してください。</div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-upload"></i> アップロード
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-info-circle" aria-hidden="true"></i> 処理手順</h5>
+                    </div>
+                    <div class="card-body">
+                        <ol class="list-group list-group-numbered list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between align-items-start">
+                                <div class="ms-2 me-auto">
+                                    <div class="fw-bold">サンプルアップロード</div>
+                                    <small>ウニの生殖乳頭画像をアップロードし、性別を指定</small>
+                                </div>
+                                <span class="badge bg-primary rounded-pill">1</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-start">
+                                <div class="ms-2 me-auto">
+                                    <div class="fw-bold">手動アノテーション</div>
+                                    <small>画像内の生殖乳頭をペンツールで囲んで指定</small>
+                                </div>
+                                <span class="badge bg-primary rounded-pill">2</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-start">
+                                <div class="ms-2 me-auto">
+                                    <div class="fw-bold">学習データ保存</div>
+                                    <small>アノテーション結果を学習データとして保存</small>
+                                </div>
+                                <span class="badge bg-primary rounded-pill">3</span>
+                            </li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-            <!-- 新規サンプルアップロード -->
-            <div class="upload-section">
-                <h2><i class="fas fa-cloud-upload-alt"></i> 新規サンプルのアップロード</h2>
-                
-                <form id="uploadSampleForm" class="upload-form">
-                    <div class="form-group">
-                        <label for="sampleFile">サンプル画像</label>
-                        <div class="file-input-wrapper">
-                            <input type="file" id="sampleFile" name="image" accept="image/*" class="file-input">
-                            <div class="file-input-display">
-                                <i class="fas fa-image"></i>
-                                <span class="file-name">選択されていません</span>
-                            </div>
+    <!-- サンプル一覧タブ -->
+    <div class="tab-pane fade" id="samples" role="tabpanel" aria-labelledby="samples-tab">
+        <div class="row">
+            <!-- オスのサンプル -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5><i class="fas fa-mars text-primary" aria-hidden="true"></i> オスの生殖乳頭サンプル</h5>
+                        <span class="badge bg-primary">{{ male_samples|length }}枚</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="image-container">
+                            {% if male_samples %}
+                                {% for sample in male_samples %}
+                                <div class="image-card sample-card" data-path="papillae/male/{{ sample }}">
+                                    <img src="{{ url_for('sample.get_sample', path='papillae/male/' + sample) }}" 
+                                         alt="{{ sample }}" class="image-preview">
+                                    <div class="image-info">{{ sample }}</div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="text-center text-muted py-5">
+                                    <i class="fas fa-info-circle fa-3x mb-3" aria-hidden="true"></i>
+                                    <p>オスのサンプルがありません</p>
+                                </div>
+                            {% endif %}
                         </div>
-                        <small>アップロードするウニの生殖乳頭サンプル画像を選択してください。</small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="sampleGender">性別</label>
-                        <select id="sampleGender" name="gender" class="form-select">
-                            <option value="male">オス</option>
-                            <option value="female">メス</option>
-                        </select>
-                        <small>サンプルの性別を選択してください。</small>
-                    </div>
-                    
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-upload"></i> アップロード
-                    </button>
-                </form>
-            </div>
-
-            <!-- サンプル一覧 -->
-            <div class="samples-grid">
-                <!-- オスのサンプル -->
-                <div class="sample-category">
-                    <h2><i class="fas fa-mars"></i> オスの生殖乳頭サンプル ({{ male_samples|length }}枚)</h2>
-                    <div class="sample-list">
-                        {% if male_samples %}
-                            {% for sample in male_samples %}
-                            <div class="sample-card" data-path="papillae/male/{{ sample }}">
-                                <img src="{{ url_for('sample.get_sample', path='papillae/male/' + sample) }}" 
-                                     alt="{{ sample }}" class="sample-image">
-                                <div class="sample-info">
-                                    <span class="sample-name">{{ sample }}</span>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        {% else %}
-                            <div class="no-samples">
-                                <i class="fas fa-info-circle"></i>
-                                <p>オスのサンプルがありません</p>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <!-- メスのサンプル -->
-                <div class="sample-category">
-                    <h2><i class="fas fa-venus"></i> メスの生殖乳頭サンプル ({{ female_samples|length }}枚)</h2>
-                    <div class="sample-list">
-                        {% if female_samples %}
-                            {% for sample in female_samples %}
-                            <div class="sample-card" data-path="papillae/female/{{ sample }}">
-                                <img src="{{ url_for('sample.get_sample', path='papillae/female/' + sample) }}" 
-                                     alt="{{ sample }}" class="sample-image">
-                                <div class="sample-info">
-                                    <span class="sample-name">{{ sample }}</span>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        {% else %}
-                            <div class="no-samples">
-                                <i class="fas fa-info-circle"></i>
-                                <p>メスのサンプルがありません</p>
-                            </div>
-                        {% endif %}
                     </div>
                 </div>
             </div>
 
-            <!-- サンプル分析セクション -->
-            <div class="analysis-section">
-                <h2><i class="fas fa-chart-line"></i> サンプル分析</h2>
-                <p>サンプル画像をクリックすると分析結果が表示されます</p>
-                
+            <!-- メスのサンプル -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5><i class="fas fa-venus text-danger" aria-hidden="true"></i> メスの生殖乳頭サンプル</h5>
+                        <span class="badge bg-danger">{{ female_samples|length }}枚</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="image-container">
+                            {% if female_samples %}
+                                {% for sample in female_samples %}
+                                <div class="image-card sample-card" data-path="papillae/female/{{ sample }}">
+                                    <img src="{{ url_for('sample.get_sample', path='papillae/female/' + sample) }}" 
+                                         alt="{{ sample }}" class="image-preview">
+                                    <div class="image-info">{{ sample }}</div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="text-center text-muted py-5">
+                                    <i class="fas fa-info-circle fa-3x mb-3" aria-hidden="true"></i>
+                                    <p>メスのサンプルがありません</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 分析結果タブ -->
+    <div class="tab-pane fade" id="analysis" role="tabpanel" aria-labelledby="analysis-tab">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-line" aria-hidden="true"></i> サンプル分析結果</h5>
+            </div>
+            <div class="card-body">
                 <!-- プレースホルダー -->
                 <div id="analysisPlaceholder" class="text-center py-5">
                     <i class="fas fa-mouse-pointer fa-3x mb-3 text-muted" aria-hidden="true"></i>
-                    <p class="text-muted">上のサンプル画像をクリックして分析を開始してください</p>
+                    <p class="text-muted">サンプル一覧からサンプル画像をクリックして分析を開始してください</p>
                 </div>
                 
                 <!-- 分析結果表示エリア -->
@@ -143,21 +177,12 @@
                     <!-- ここに分析結果が動的に表示されます -->
                 </div>
             </div>
-        </main>
-    </div>
-
-    <!-- ローディングオーバーレイ -->
-    <div id="loadingOverlay" class="d-none">
-        <div class="spinner-border text-light me-3" role="status">
-            <span class="visually-hidden">処理中...</span>
         </div>
-        処理中...
     </div>
+</div>
+{% endblock %}
 
-    <!-- JavaScript -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', filename='js/utilities.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/annotation_tools.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/sample_analysis.js') }}"></script>
-</body>
-</html>
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/annotation_tools.js') }}"></script>
+<script src="{{ url_for('static', filename='js/sample_analysis.js') }}"></script>
+{% endblock %}

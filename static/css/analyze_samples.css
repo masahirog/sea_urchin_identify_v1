@@ -1,13 +1,12 @@
 /**
- * ウニ生殖乳頭分析システム - サンプル分析スタイル
- * サンプル画像分析ページのスタイルを定義
+ * ウニ生殖乳頭分析システム - サンプル分析スタイル（最小版）
+ * analyze_samples.html専用の必要最小限のスタイル
  */
 
-/* 既存のスタイル */
-/* サンプルカード */
+/* サンプルカード - 既存のJavaScriptとの互換性のため保持 */
 .sample-card {
     cursor: pointer;
-    transition: transform 0.2s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
     border: 1px solid #dee2e6;
     background: white;
     border-radius: 12px;
@@ -16,8 +15,8 @@
 }
 
 .sample-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
 }
 
 .sample-card:focus {
@@ -25,18 +24,12 @@
     outline-offset: 2px;
 }
 
-.sample-image {
-    height: 150px;
-    object-fit: cover;
-    width: 100%;
-    border-bottom: 1px solid #dee2e6;
-}
-
 .selected-sample {
     border: 3px solid #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
 }
 
-/* アノテーションキャンバス */
+/* アノテーションキャンバス - 既存のJavaScriptとの互換性のため保持 */
 .annotation-canvas {
     cursor: crosshair;
     border: 1px solid #ddd;
@@ -50,34 +43,7 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* ワークフローステップ */
-.step-number {
-    display: inline-block;
-    width: 40px;
-    height: 40px;
-    line-height: 40px;
-    text-align: center;
-    background: rgba(255, 255, 255, 0.2);
-    color: white;
-    border-radius: 50%;
-    margin-bottom: 1rem;
-    font-size: 1.2rem;
-    font-weight: bold;
-}
-
-.workflow-step {
-    padding: 15px;
-    margin-bottom: 15px;
-    border-radius: 5px;
-    background-color: #f8f9fa;
-    transition: background-color 0.2s ease;
-}
-
-.workflow-step:hover {
-    background-color: #e9ecef;
-}
-
-/* ツールバー */
+/* アノテーションツールバー - 既存のJavaScriptとの互換性のため保持 */
 .annotation-toolbar {
     display: flex;
     gap: 10px;
@@ -97,210 +63,7 @@
     margin-right: 5px;
 }
 
-/* アップロードフォーム */
-.upload-form-container {
-    background-color: #f8f9fa;
-    border-radius: 5px;
-    padding: 15px;
-    margin-bottom: 20px;
-}
-
-/* 新しく追加されたスタイル */
-
-/* 手順説明 */
-.steps-container {
-    display: flex;
-    gap: 2rem;
-    margin-bottom: 3rem;
-    flex-wrap: wrap;
-}
-
-.step {
-    flex: 1;
-    min-width: 250px;
-    padding: 1.5rem;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-radius: 12px;
-    text-align: center;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.step h3 {
-    margin: 0.5rem 0;
-    font-size: 1.1rem;
-}
-
-.step p {
-    margin: 0;
-    font-size: 0.9rem;
-    opacity: 0.9;
-}
-
-/* アップロードセクション */
-.upload-section {
-    background: #f8f9fa;
-    padding: 2rem;
-    border-radius: 12px;
-    margin-bottom: 3rem;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.upload-section h2 {
-    color: #495057;
-    margin-bottom: 1.5rem;
-}
-
-.upload-form {
-    display: grid;
-    grid-template-columns: 1fr 200px auto;
-    gap: 1.5rem;
-    align-items: end;
-}
-
-.form-group {
-    display: flex;
-    flex-direction: column;
-}
-
-.form-group label {
-    font-weight: 600;
-    margin-bottom: 0.5rem;
-    color: #495057;
-}
-
-.file-input-wrapper {
-    position: relative;
-    cursor: pointer;
-}
-
-.file-input {
-    position: absolute;
-    opacity: 0;
-    width: 100%;
-    height: 100%;
-    cursor: pointer;
-}
-
-.file-input-display {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    border: 2px dashed #dee2e6;
-    border-radius: 8px;
-    background: white;
-    transition: all 0.3s ease;
-}
-
-.file-input-display:hover {
-    border-color: #007bff;
-    background: #f8f9fa;
-}
-
-.file-input-display i {
-    color: #6c757d;
-}
-
-.file-name {
-    color: #6c757d;
-}
-
-.form-select {
-    padding: 0.75rem;
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
-    background: white;
-    font-size: 1rem;
-}
-
-.form-group small {
-    margin-top: 0.5rem;
-    color: #6c757d;
-    font-size: 0.85rem;
-}
-
-/* サンプル一覧 */
-.samples-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
-    margin-bottom: 3rem;
-}
-
-.sample-category h2 {
-    color: #495057;
-    margin-bottom: 1.5rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 2px solid #dee2e6;
-}
-
-.sample-category h2 i {
-    margin-right: 0.5rem;
-}
-
-.sample-category h2 i.fa-mars {
-    color: #007bff;
-}
-
-.sample-category h2 i.fa-venus {
-    color: #dc3545;
-}
-
-.sample-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 1rem;
-}
-
-.sample-info {
-    padding: 1rem;
-    text-align: center;
-}
-
-.sample-name {
-    font-size: 0.9rem;
-    color: #495057;
-    font-weight: 500;
-}
-
-.no-samples {
-    text-align: center;
-    padding: 3rem;
-    color: #6c757d;
-}
-
-.no-samples i {
-    font-size: 3rem;
-    margin-bottom: 1rem;
-    opacity: 0.5;
-}
-
-.no-samples p {
-    margin: 0;
-    font-size: 1.1rem;
-}
-
-/* 分析セクション */
-.analysis-section {
-    background: #f8f9fa;
-    padding: 2rem;
-    border-radius: 12px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.analysis-section h2 {
-    color: #495057;
-    margin-bottom: 1rem;
-}
-
-.analysis-section > p {
-    color: #6c757d;
-    margin-bottom: 2rem;
-    text-align: center;
-    font-size: 1.1rem;
-}
-
+/* アノテーション分析結果表示 */
 .analysis-content {
     background: white;
     padding: 2rem;
@@ -344,141 +107,12 @@
     color: #495057;
 }
 
+/* アノテーション制御 */
 .annotation-controls {
     text-align: center;
     margin-top: 2rem;
     padding-top: 1.5rem;
     border-top: 1px solid #dee2e6;
-}
-
-/* アノテーション編集 */
-.annotation-content {
-    background: white;
-    padding: 2rem;
-    border-radius: 12px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.annotation-content h3 {
-    color: #495057;
-    margin-bottom: 1.5rem;
-    text-align: center;
-}
-
-.annotation-image-container {
-    text-align: center;
-    margin: 2rem 0;
-    padding: 1rem;
-    background: #f8f9fa;
-    border-radius: 10px;
-}
-
-.annotation-tools {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin: 2rem 0;
-    padding: 1.5rem;
-    background: #f8f9fa;
-    border-radius: 10px;
-    flex-wrap: wrap;
-}
-
-.tool-btn {
-    padding: 0.75rem 1.25rem;
-    border: 1px solid #dee2e6;
-    background: white;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-size: 0.9rem;
-}
-
-.tool-btn:hover {
-    background: #e9ecef;
-}
-
-.tool-btn.active {
-    background: #007bff;
-    color: white;
-    border-color: #007bff;
-}
-
-.tool-settings {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-left: auto;
-    font-size: 0.9rem;
-}
-
-.tool-settings label {
-    font-weight: 500;
-    color: #495057;
-}
-
-#brushSize {
-    width: 100px;
-}
-
-#brushSizeValue {
-    font-weight: 600;
-    color: #495057;
-}
-
-.annotation-save {
-    text-align: center;
-    margin-top: 2rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid #dee2e6;
-}
-
-/* ボタンスタイル */
-.btn {
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 1rem;
-    font-weight: 500;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    transition: all 0.3s ease;
-    margin: 0 0.25rem;
-}
-
-.btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.btn-primary {
-    background: #007bff;
-    color: white;
-}
-
-.btn-primary:hover {
-    background: #0056b3;
-}
-
-.btn-success {
-    background: #28a745;
-    color: white;
-}
-
-.btn-success:hover {
-    background: #1e7e34;
-}
-
-.btn-secondary {
-    background: #6c757d;
-    color: white;
-}
-
-.btn-secondary:hover {
-    background: #545b62;
 }
 
 /* レスポンシブ調整 */
@@ -487,38 +121,11 @@
         max-width: 100%;
     }
     
-    .workflow-step {
-        margin-bottom: 10px;
-    }
-    
-    .steps-container {
-        flex-direction: column;
-    }
-    
-    .upload-form {
-        grid-template-columns: 1fr;
-        gap: 1rem;
-    }
-    
-    .samples-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .sample-list {
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    }
-    
     .analysis-grid {
         grid-template-columns: 1fr;
     }
     
-    .annotation-tools {
+    .annotation-toolbar {
         flex-direction: column;
-        align-items: stretch;
-    }
-    
-    .tool-settings {
-        margin-left: 0;
-        justify-content: center;
     }
 }
