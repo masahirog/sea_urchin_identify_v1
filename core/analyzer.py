@@ -215,7 +215,7 @@ class UnifiedAnalyzer:
     
     def train_model(self, dataset_dir, task_id):
         """
-        データセットからモデルを学習
+        データセットからモデルを学習（修正版）
         
         Args:
             dataset_dir: データセットディレクトリ
@@ -239,18 +239,26 @@ class UnifiedAnalyzer:
             }
         
         try:
-            # データセット検証
-            male_dir = os.path.join(dataset_dir, "male")
-            female_dir = os.path.join(dataset_dir, "female")
+            # 修正: 正しいデータセットディレクトリを使用
+            from config import STATIC_SAMPLES_DIR
+            
+            # データセット検証（修正版）
+            male_dir = os.path.join(STATIC_SAMPLES_DIR, "papillae", "male")
+            female_dir = os.path.join(STATIC_SAMPLES_DIR, "papillae", "female")
             
             if not os.path.exists(male_dir) or not os.path.exists(female_dir):
-                raise Exception("データセットディレクトリが見つかりません")
+                raise Exception(f"データセットディレクトリが見つかりません: {male_dir}, {female_dir}")
             
             male_images = [f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
             female_images = [f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
             
+            if len(male_images) == 0 and len(female_images) == 0:
+                raise Exception("学習データが見つかりません")
+            
+            # 修正: より緩い条件
             if len(male_images) == 0 or len(female_images) == 0:
-                raise Exception("学習データが不足しています")
+                print(f"警告: 片方の性別のデータがありません。オス:{len(male_images)}枚, メス:{len(female_images)}枚")
+                # 警告は出すが続行
             
             print(f"学習データ: オス{len(male_images)}枚, メス{len(female_images)}枚")
             
@@ -262,6 +270,15 @@ class UnifiedAnalyzer:
             
             if len(X) == 0:
                 raise Exception("特徴量が抽出できませんでした")
+            
+            # 修正: 最小データ数チェック
+            if len(X) < 2:
+                raise Exception(f"学習には最低2つのサンプルが必要です。現在: {len(X)}個")
+            
+            # クラス数チェック
+            unique_classes = len(set(y))
+            if unique_classes < 2:
+                raise Exception(f"学習には最低2つのクラスが必要です。現在: {unique_classes}クラス")
             
             # モデル学習
             accuracy = self._train_classification_model(X, y, task_id)

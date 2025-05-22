@@ -289,6 +289,8 @@ class UnifiedEvaluator:
             from config import STATIC_EVALUATION_DIR
             os.makedirs(STATIC_EVALUATION_DIR, exist_ok=True)
             
+            print(f"グラフ生成開始: {STATIC_EVALUATION_DIR}")  # ★デバッグ用ログ追加
+            
             # 学習曲線
             self._plot_learning_curve(results, timestamp, STATIC_EVALUATION_DIR)
             
@@ -302,6 +304,8 @@ class UnifiedEvaluator:
             
         except Exception as e:
             print(f"評価グラフ生成エラー: {str(e)}")
+            import traceback
+            traceback.print_exc()  # ★詳細エラー情報を出力
 
     def _plot_learning_curve(self, results, timestamp, output_dir):
         """学習曲線プロット"""

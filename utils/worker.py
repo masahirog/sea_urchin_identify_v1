@@ -7,6 +7,7 @@ import os
 import numpy as np
 import joblib
 import traceback
+from datetime import datetime
 
 
 def processing_worker(queue, status_dict, app_config):
@@ -143,7 +144,6 @@ def processing_worker(queue, status_dict, app_config):
                                 os.makedirs(EVALUATION_DATA_DIR, exist_ok=True)
                                 
                                 # モデル評価実行（出力ディレクトリを明示的に指定）
-                                from utils.model_evaluation import evaluate_model
                                 eval_results = evaluate_model(
                                     X_scaled, y, model, 
                                     output_dir=EVALUATION_DATA_DIR  # ★修正: 明示的に指定
@@ -183,9 +183,7 @@ def processing_worker(queue, status_dict, app_config):
                     # 進捗状況を更新
                     status_dict[task_id]["message"] = "アノテーション影響分析準備中..."
                     status_dict[task_id]["progress"] = 20
-                    
-                    # ★修正: アノテーション影響分析実行（新しいディレクトリ構造使用）
-                    from utils.model_evaluation import analyze_annotation_impact
+
                     
                     # configから評価データディレクトリを取得
                     from config import EVALUATION_DATA_DIR
@@ -451,14 +449,19 @@ def execute_feature_extraction_phase(task_id, dataset_dir, status_dict):
     })
     
     try:
-        # データセットの画像をスキャン
-        male_dir = os.path.join(dataset_dir, "male")
-        female_dir = os.path.join(dataset_dir, "female")
+        from config import STATIC_SAMPLES_DIR
         
+        # 実際の学習データは static/images/samples/papillae/ にある
+        male_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'male')
+        female_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'female')
+        
+        # 画像ファイルをチェック
         male_images = [f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))] if os.path.exists(male_dir) else []
         female_images = [f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))] if os.path.exists(female_dir) else []
         
         total_images = len(male_images) + len(female_images)
+        
+        print(f"検出された画像数: オス={len(male_images)}, メス={len(female_images)}, 合計={total_images}")
         
         # 進捗更新
         status_dict[task_id].update({
@@ -466,9 +469,12 @@ def execute_feature_extraction_phase(task_id, dataset_dir, status_dict):
             "progress": 20
         })
         
-        # 実際の特徴量抽出は後続のモデル訓練で行われるため、ここでは検証のみ
-        if total_images < 10:
-            raise Exception(f"特徴量抽出には最低10枚の画像が必要です (現在: {total_images}枚)")
+        # ★修正: 最低要件を緩和（10枚→4枚）かつオス・メス両方必須
+        if total_images < 4:
+            raise Exception(f"特徴量抽出には最低4枚の画像が必要です (現在: {total_images}枚)")
+        
+        if len(male_images) == 0 or len(female_images) == 0:
+            raise Exception(f"オスとメスの両方の画像が必要です (オス: {len(male_images)}枚, メス: {len(female_images)}枚)")
         
         # フェーズ完了
         phases_completed = status_dict[task_id].get('phases_completed', [])
@@ -483,7 +489,6 @@ def execute_feature_extraction_phase(task_id, dataset_dir, status_dict):
         
     except Exception as e:
         raise Exception(f"特徴量抽出フェーズでエラー: {str(e)}")
-
 
 def execute_model_training_phase(task_id, dataset_dir, status_dict):
     """
@@ -500,6 +505,11 @@ def execute_model_training_phase(task_id, dataset_dir, status_dict):
     
     try:
         from core.analyzer import UnifiedAnalyzer as UrchinPapillaeAnalyzer
+        from config import STATIC_SAMPLES_DIR
+        
+        # ★修正: 正しいデータセットディレクトリを使用
+        actual_dataset_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
+        print(f"実際の学習データディレクトリ: {actual_dataset_dir}")
         
         # モデル訓練実行
         analyzer = UrchinPapillaeAnalyzer()
@@ -510,7 +520,8 @@ def execute_model_training_phase(task_id, dataset_dir, status_dict):
             "progress": 50
         })
         
-        success = analyzer.train_model(dataset_dir, task_id)
+        # ★修正: 正しいディレクトリでモデル訓練
+        success = analyzer.train_model(actual_dataset_dir, task_id)
         
         if not success:
             raise Exception("モデル訓練に失敗しました")
@@ -526,12 +537,11 @@ def execute_model_training_phase(task_id, dataset_dir, status_dict):
         
         print(f"フェーズ2完了: モデル訓練 - {task_id}")
         
-        # 訓練結果を返す (status_dictから取得)
+        # 訓練結果を返す
         return status_dict.get(task_id, {}).get('result', {})
         
     except Exception as e:
         raise Exception(f"モデル訓練フェーズでエラー: {str(e)}")
-
 
 def execute_basic_evaluation_phase(task_id, dataset_dir, status_dict, training_result):
     """
@@ -574,6 +584,8 @@ def execute_basic_evaluation_phase(task_id, dataset_dir, status_dict, training_r
         raise Exception(f"基本評価フェーズでエラー: {str(e)}")
 
 
+from core.evaluator import UnifiedEvaluator
+
 def execute_detailed_analysis_phase(task_id, dataset_dir, status_dict, evaluation_result):
     """
     フェーズ4: 詳細分析
@@ -588,25 +600,21 @@ def execute_detailed_analysis_phase(task_id, dataset_dir, status_dict, evaluatio
     })
     
     try:
-        # 詳細評価の実行
-        from config import MODELS_DIR
+        from config import MODELS_DIR, STATIC_SAMPLES_DIR
         model_path = os.path.join(MODELS_DIR, 'saved', 'sea_urchin_rf_model.pkl')
+        
+        # 正しいデータセットディレクトリを使用
+        actual_dataset_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
         
         if os.path.exists(model_path):
             # データセットからの特徴量抽出
-            X, y = process_dataset_for_evaluation(dataset_dir)
+            X, y = process_dataset_for_evaluation(actual_dataset_dir)
             
             if X is not None and y is not None:
-                # モデル評価実行
-                from utils.model_evaluation import evaluate_model
-                from config import EVALUATION_DATA_DIR
-                
-                model, scaler = joblib.load(model_path)
-                X_scaled = scaler.transform(X)
-                
-                eval_results = evaluate_model(
-                    X_scaled, y, model, 
-                    output_dir=EVALUATION_DATA_DIR
+                # ★修正: UnifiedEvaluatorを使用
+                evaluator = UnifiedEvaluator()
+                eval_results = evaluator.evaluate_model(
+                    X, y, model_path=model_path, save_results=True
                 )
                 
                 # 進捗更新
@@ -634,9 +642,7 @@ def execute_detailed_analysis_phase(task_id, dataset_dir, status_dict, evaluatio
             
     except Exception as e:
         print(f"詳細分析エラー (継続): {str(e)}")
-        # エラーでも処理は継続
         return evaluation_result
-
 
 def execute_annotation_impact_phase(task_id, dataset_dir, status_dict):
     """
@@ -652,15 +658,16 @@ def execute_annotation_impact_phase(task_id, dataset_dir, status_dict):
     })
     
     try:
-        # アノテーション影響分析の実行
-        from utils.model_evaluation import analyze_annotation_impact
-        from config import MODELS_DIR, EVALUATION_DATA_DIR
-        
+        from config import MODELS_DIR, STATIC_SAMPLES_DIR
         model_path = os.path.join(MODELS_DIR, 'saved', 'sea_urchin_rf_model.pkl')
         
-        annotation_result = analyze_annotation_impact(
-            dataset_dir, model_path, 
-            output_dir=EVALUATION_DATA_DIR
+        # 正しいデータセットディレクトリを使用
+        actual_dataset_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
+        
+        # ★修正: UnifiedEvaluatorを使用
+        evaluator = UnifiedEvaluator()
+        annotation_result = evaluator.analyze_annotation_impact(
+            actual_dataset_dir, model_path, save_results=True
         )
         
         # 進捗更新
@@ -682,7 +689,6 @@ def execute_annotation_impact_phase(task_id, dataset_dir, status_dict):
         
     except Exception as e:
         print(f"アノテーション効果分析エラー (継続): {str(e)}")
-        # エラーでも処理は継続
         return {"error": str(e)}
 
 

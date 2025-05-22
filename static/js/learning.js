@@ -1,7 +1,6 @@
 /**
- * ウニ生殖乳頭分析システム - 統合学習システム（完全修正版）
- * unified-learning-system.js + annotation_tools.js + evaluation/* の統合版
- * 学習管理、アノテーション、評価機能を統合 + 画像詳細モーダル機能追加
+ * ウニ生殖乳頭分析システム - 統合学習システム（完全版）
+ * 学習管理、アノテーション、評価機能を統合
  */
 
 // ===========================================
@@ -86,10 +85,9 @@ class UnifiedLearningSystem {
     }
 
     /**
-     * イベントリスナー設定（修正版）
+     * イベントリスナー設定
      */
     setupEventListeners() {
-        // 既存のイベントリスナー...
         // データアップロードフォーム
         const uploadForm = document.getElementById('unifiedDataUploadForm');
         if (uploadForm) {
@@ -131,12 +129,12 @@ class UnifiedLearningSystem {
             });
         });
 
-        // ★新規追加: フェーズインジケーターのクリックイベント
+        // フェーズインジケーターのクリックイベント
         this.setupPhaseNavigation();
     }
 
     /**
-     * フェーズナビゲーションの設定（新規メソッド）
+     * フェーズナビゲーションの設定
      */
     setupPhaseNavigation() {
         // データ準備フェーズ
@@ -156,7 +154,7 @@ class UnifiedLearningSystem {
                 this.navigateToPhase('training');
             });
             trainingPhase.style.cursor = 'pointer';
-            trainingPhase.title = 'AI学習フェーズに移動（学習完了後のみ）';
+            trainingPhase.title = 'AI学習フェーズに移動';
         }
 
         // 結果分析フェーズ
@@ -166,14 +164,14 @@ class UnifiedLearningSystem {
                 this.navigateToPhase('analysis');
             });
             analysisPhase.style.cursor = 'pointer';
-            analysisPhase.title = '結果分析フェーズに移動（学習完了後のみ）';
+            analysisPhase.title = '結果分析フェーズに移動';
         }
 
         console.log('フェーズナビゲーション設定完了');
     }
 
     /**
-     * 指定フェーズへのナビゲーション（新規メソッド）
+     * 指定フェーズへのナビゲーション
      * @param {string} targetPhase - 移動先フェーズ ('preparation', 'training', 'analysis')
      */
     navigateToPhase(targetPhase) {
@@ -185,13 +183,7 @@ class UnifiedLearningSystem {
             return;
         }
 
-        // フェーズ移動の検証
-        if (!this.canNavigateToPhase(targetPhase)) {
-            this.showPhaseNavigationError(targetPhase);
-            return;
-        }
-
-        // フェーズ移動実行
+        // フェーズ移動実行（制限なし）
         this.currentPhase = targetPhase;
         this.updatePhaseDisplay();
         this.showPhaseSection();
@@ -203,59 +195,7 @@ class UnifiedLearningSystem {
     }
 
     /**
-     * 指定フェーズに移動可能かチェック（新規メソッド）
-     * @param {string} targetPhase - 移動先フェーズ
-     * @returns {boolean} 移動可能かどうか
-     */
-    canNavigateToPhase(targetPhase) {
-        switch (targetPhase) {
-            case 'preparation':
-                // データ準備フェーズは常に移動可能
-                return true;
-
-            case 'training':
-                // 学習フェーズは十分なデータがある場合のみ
-                const stats = this.datasetStats;
-                const totalCount = (stats.male_count || 0) + (stats.female_count || 0);
-                return totalCount >= 10;
-
-            case 'analysis':
-                // 分析フェーズは学習結果がある場合のみ
-                return this.learningResults !== null || this.hasCompletedTraining();
-
-            default:
-                return false;
-        }
-    }
-
-    /**
-     * フェーズナビゲーションエラーの表示（新規メソッド）
-     * @param {string} targetPhase - 移動しようとしたフェーズ
-     */
-    showPhaseNavigationError(targetPhase) {
-        let errorMessage = '';
-
-        switch (targetPhase) {
-            case 'training':
-                const stats = this.datasetStats;
-                const totalCount = (stats.male_count || 0) + (stats.female_count || 0);
-                errorMessage = `AI学習フェーズに移動するには最低10枚の学習データが必要です。現在: ${totalCount}枚`;
-                break;
-
-            case 'analysis':
-                errorMessage = '結果分析フェーズに移動するには、まずAI学習を完了してください。';
-                break;
-
-            default:
-                errorMessage = `${targetPhase}フェーズに移動できません。`;
-                break;
-        }
-
-        this.showError(errorMessage);
-    }
-
-    /**
-     * フェーズナビゲーション時の固有処理（新規メソッド）
+     * フェーズナビゲーション時の固有処理
      * @param {string} targetPhase - 移動先フェーズ
      */
     handlePhaseNavigation(targetPhase) {
@@ -267,8 +207,10 @@ class UnifiedLearningSystem {
                 break;
 
             case 'training':
-                // 学習フェーズ: 学習詳細を更新
+                // 学習フェーズ: データ状況を確認して適切な表示
                 this.updateTrainingDetails();
+                this.checkTrainingReadiness();
+                
                 // 実行中のタスクがあるかチェック
                 if (this.taskId && this.statusCheckInterval) {
                     this.showSuccessMessage('学習進捗を監視中です');
@@ -276,15 +218,78 @@ class UnifiedLearningSystem {
                 break;
 
             case 'analysis':
-                // 分析フェーズ: 結果を表示
+                // 分析フェーズ: 利用可能な結果を表示
                 if (this.learningResults) {
                     this.displayUnifiedResults();
                 } else {
-                    // 学習結果がない場合は学習履歴を表示
-                    this.loadLearningHistory();
+                    // 学習結果がない場合は履歴または案内を表示
+                    this.showAnalysisGuidance();
                 }
                 break;
         }
+    }
+
+    /**
+     * 学習準備状況をチェック
+     */
+    checkTrainingReadiness() {
+        const stats = this.datasetStats;
+        const maleCount = stats.male_count || 0;
+        const femaleCount = stats.female_count || 0;
+        const totalCount = maleCount + femaleCount;
+        
+        if (totalCount === 0) {
+            this.showTrainingGuidance('データがありません', 'データ準備フェーズで画像をアップロードしてください。');
+        } else if (maleCount === 0 || femaleCount === 0) {
+            this.showTrainingGuidance('データが不足しています', 'より良い学習のため、オスとメス両方のデータをアップロードすることを推奨します。');
+        } else if (totalCount < 5) {
+            this.showTrainingGuidance('データが少なめです', `現在${totalCount}枚のデータがあります。より良い結果のため、追加データをアップロードすることを推奨します。`);
+        } else {
+            // 十分なデータがある場合
+            this.showSuccessMessage('学習準備完了：十分なデータが揃っています');
+        }
+    }
+
+    /**
+     * 学習フェーズでの案内表示
+     */
+    showTrainingGuidance(title, message) {
+        const statusElement = document.getElementById('unified-status');
+        if (statusElement) {
+            statusElement.className = 'alert alert-info';
+            statusElement.innerHTML = `
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>${title}</strong><br>
+                ${message}
+            `;
+            statusElement.classList.remove('d-none');
+        }
+    }
+
+    /**
+     * 分析フェーズでの案内表示
+     */
+    showAnalysisGuidance() {
+        // プレースホルダーを表示
+        this.showElement('results-placeholder');
+        
+        // 学習履歴を読み込み
+        this.loadLearningHistory();
+        
+        // 案内メッセージ
+        const container = document.getElementById('unified-results-content');
+        if (container) {
+            container.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>分析結果について</strong><br>
+                    学習を実行すると、ここに詳細な分析結果が表示されます。
+                    現在利用可能な学習履歴は下記をご確認ください。
+                </div>
+            `;
+        }
+        
+        this.showSuccessMessage('分析フェーズに移動しました。学習を実行すると結果が表示されます。');
     }
 
     /**
@@ -349,8 +354,6 @@ class UnifiedLearningSystem {
         this.setElementText('dataset-male-count', stats.male_count || 0);
         this.setElementText('dataset-female-count', stats.female_count || 0);
         this.setElementText('dataset-annotated-count', stats.annotation_count || 0);
-        
-        // 準備完了度の更新は checkReadiness() で行う
     }
 
     /**
@@ -386,10 +389,11 @@ class UnifiedLearningSystem {
             messageElement.textContent = readiness.message;
         }
         
-        // 学習開始ボタンの表示制御
+        // 学習開始ボタンの表示制御（緩和）
         const startBtn = document.getElementById('start-unified-training-btn');
         if (startBtn) {
-            if (readiness.readiness_percentage >= 60) {
+            const totalCount = (this.datasetStats.male_count || 0) + (this.datasetStats.female_count || 0);
+            if (totalCount > 0) {
                 startBtn.classList.remove('d-none');
             } else {
                 startBtn.classList.add('d-none');
@@ -431,7 +435,7 @@ class UnifiedLearningSystem {
     }
 
     /**
-     * 学習データの表示（修正版）
+     * 学習データの表示
      */
     displayLearningData(data) {
         const container = document.getElementById('learning-data-container');
@@ -450,7 +454,7 @@ class UnifiedLearningSystem {
             return;
         }
         
-        // 画像カードの生成（修正版）
+        // 画像カードの生成
         const imageCards = allImages.map(item => {
             const genderClass = this.getGenderClass(item.category);
             const genderIcon = this.getGenderIcon(item.category);
@@ -551,17 +555,27 @@ class UnifiedLearningSystem {
     }
 
     /**
-     * 統合学習の開始
+     * 統合学習の開始（修正版 - より柔軟な開始条件）
      */
     async startUnifiedTraining() {
         console.log('統合学習開始');
         
         try {
-            // データセット検証
-            const validation = await this.validateDataset();
-            if (!validation.valid) {
-                this.showError(validation.message);
+            // 基本的なデータ存在チェックのみ
+            const stats = this.datasetStats;
+            const totalCount = (stats.male_count || 0) + (stats.female_count || 0);
+            
+            if (totalCount === 0) {
+                this.showError('学習データが必要です。データ準備フェーズで画像をアップロードしてください。');
                 return;
+            }
+            
+            // データが少ない場合は警告を表示するが続行可能
+            if (totalCount < 5) {
+                const confirmed = confirm(`現在のデータ数は${totalCount}枚です。\n学習は可能ですが、より多くのデータがあると精度が向上します。\n\n続行しますか？`);
+                if (!confirmed) {
+                    return;
+                }
             }
             
             // フェーズ切り替え
@@ -602,25 +616,6 @@ class UnifiedLearningSystem {
             // エラー時はフェーズを戻す
             this.currentPhase = 'preparation';
             this.updatePhaseDisplay();
-        }
-    }
-
-    /**
-     * データセット検証
-     */
-    async validateDataset() {
-        try {
-            const response = await fetch('/learning/dataset-validation');
-            if (!response.ok) throw new Error('検証リクエストに失敗しました');
-            
-            return await response.json();
-            
-        } catch (error) {
-            console.error('データセット検証エラー:', error);
-            return {
-                valid: false,
-                message: 'データセットの検証に失敗しました'
-            };
         }
     }
 
@@ -841,17 +836,9 @@ class UnifiedLearningSystem {
         
         container.innerHTML = suggestionsHTML;
     }
-    /**
-     * 学習完了状況をチェック（新規メソッド）
-     * @returns {boolean} 学習が完了しているかどうか
-     */
-    hasCompletedTraining() {
-        // 学習履歴があるかチェック
-        return this.learningResults !== null;
-    }
 
     /**
-     * フェーズ表示の更新（修正版）
+     * フェーズ表示の更新（制限なし版）
      */
     updatePhaseDisplay() {
         // フェーズインジケーター更新
@@ -868,14 +855,9 @@ class UnifiedLearningSystem {
                     element.classList.add('completed');
                 }
                 
-                // 移動可能性に応じてスタイルを調整
-                if (this.canNavigateToPhase(phase)) {
-                    element.style.opacity = '1';
-                    element.style.pointerEvents = 'auto';
-                } else {
-                    element.style.opacity = '0.6';
-                    element.style.pointerEvents = 'none';
-                }
+                // 全フェーズを常にクリック可能に設定
+                element.style.opacity = '1';
+                element.style.pointerEvents = 'auto';
             }
         });
         
@@ -884,7 +866,7 @@ class UnifiedLearningSystem {
     }
 
     /**
-     * フェーズセクション表示（修正版）
+     * フェーズセクション表示
      */
     showPhaseSection() {
         // 全セクション非表示
@@ -915,6 +897,7 @@ class UnifiedLearningSystem {
             this.showElement('results-placeholder');
         }
     }
+
     // ===== 学習データ関連のヘルパーメソッド =====
     
     filterLearningData(filter) {
@@ -953,7 +936,7 @@ class UnifiedLearningSystem {
         const stats = this.datasetStats;
         const total = (stats.male_count || 0) + (stats.female_count || 0);
         
-        if (total < 10) {
+        if (total < 1) {
             this.currentPhase = 'preparation';
         } else if (this.learningResults) {
             this.currentPhase = 'analysis';
@@ -968,7 +951,7 @@ class UnifiedLearningSystem {
         switch (phase) {
             case 'preparation':
                 const total = (this.datasetStats.male_count || 0) + (this.datasetStats.female_count || 0);
-                return total >= 10;
+                return total >= 1;
             case 'training':
                 return this.learningResults != null;
             case 'analysis':
