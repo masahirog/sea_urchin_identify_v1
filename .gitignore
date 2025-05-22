@@ -20,12 +20,11 @@ Thumbs.db
 
 # アプリケーションデータ（ユーザーデータを除外）
 models/saved/*.pkl
-uploads/*
 extracted_images/*
 dataset/*
 static/uploads/*
 static/annotations/*
-samples/papillae/*
+data/*
 
 # ディレクトリ構造は保持
 !uploads/.gitkeep

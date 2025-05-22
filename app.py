@@ -1,4 +1,4 @@
-# app.py の設定部分を修正
+# app.py の設定部分を統一修正
 import os
 import logging
 from flask import Flask, send_from_directory
@@ -21,19 +21,18 @@ logger = logging.getLogger(__name__)
 # アプリケーションの初期化
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
-# ★ 修正: 設定をconfig.pyの定数を使用するように変更
-app.config['UPLOAD_FOLDER'] = UPLOAD_DIR
-app.config['EXTRACTED_FOLDER'] = EXTRACTED_DIR
-app.config['DATASET_FOLDER'] = DATASET_DIR  # ★ ここが重要: data/dataset を指定
+# ★統一: 新しいディレクトリ構造のみを使用
+app.config['UPLOAD_FOLDER'] = UPLOAD_DIR                    # data/uploads (一時)
+app.config['EXTRACTED_FOLDER'] = EXTRACTED_DIR              # data/extracted_frames
+app.config['DATASET_FOLDER'] = DATASET_DIR                  # data/dataset
 app.config['MODEL_FOLDER'] = os.path.join(MODELS_DIR, 'saved')
+app.config['SAMPLES_FOLDER'] = STATIC_SAMPLES_DIR           # static/images/samples (恒久)
 app.config['ALLOWED_EXTENSIONS'] = {'mp4', 'avi', 'mov', 'mkv', 'jpg', 'jpeg', 'png'}
-app.config['SAMPLES_FOLDER'] = LEGACY_SAMPLES_DIR
-app.config['TEMP_FILES_FOLDER'] = LEGACY_STATIC_UPLOADS_DIR
 app.config['TEMP_FILES_MAX_AGE'] = 24  # 時間単位
-app.config['STATIC_FOLDER'] = 'static'  # 静的ファイル用フォルダ
 
-# 必要なディレクトリの作成
-ensure_directories()  # ★ config.pyの関数を使用
+# 必要なディレクトリの作成と移行
+ensure_directories()
+migrate_legacy_directories()  # 初回のみ実行される
 
 # モデルファイルの存在確認、なければテストモデルを生成
 model_path = os.path.join(app.config['MODEL_FOLDER'], 'sea_urchin_rf_model.pkl')
@@ -48,18 +47,18 @@ processing_queue = queue.Queue()
 processing_results = {}
 processing_status = {}
 
-# 起動時に一度クリーンアップを実行
+# 起動時に一度クリーンアップを実行（一時アップロードフォルダのみ）
 with app.app_context():
     cleanup_count = cleanup_temp_files(
-        directory=app.config['TEMP_FILES_FOLDER'],
+        directory=app.config['UPLOAD_FOLDER'],  # data/uploads
         max_age_hours=app.config['TEMP_FILES_MAX_AGE']
     )
     logger.info(f"起動時クリーンアップ: {cleanup_count}ファイルを削除しました")
 
 # 定期的なクリーンアップをスケジュール
-schedule_cleanup(app, interval_hours=6)  # 6時間ごとにクリーンアップ
+schedule_cleanup(app, interval_hours=6)
 
-# ワーカースレッドのインポートと開始
+# ワーカースレッドの開始
 from utils.worker import processing_worker
 processing_thread = threading.Thread(
     target=processing_worker, 
@@ -69,8 +68,6 @@ processing_thread.daemon = True
 processing_thread.start()
 logger.info("処理ワーカースレッドを開始しました")
 
-# ルートの登録
-# app.py のBlueprint登録部分に追加
 # ルートの登録
 from routes.main_routes import main_bp
 from routes.video_routes import video_bp
@@ -86,6 +83,18 @@ app.register_blueprint(sample_bp, url_prefix='/sample')
 app.register_blueprint(evaluation_bp, url_prefix='/evaluation')
 app.register_blueprint(api_bp, url_prefix='/api')
 
+# ★統一: アップロードファイル配信（一時ファイル用）
+@app.route('/uploads/<filename>')
+def get_uploaded_file(filename):
+    """一時アップロードファイルを提供するルート"""
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+# ★統一: サンプル画像配信（恒久ファイル用）
+@app.route('/sample/<path:filename>')
+def serve_sample_image(filename):
+    """サンプル画像の配信"""
+    return send_from_directory(STATIC_SAMPLES_DIR, filename)
+
 # デバッグ用：登録されたルートを出力
 @app.route('/debug/routes')
 def debug_routes():
@@ -99,25 +108,10 @@ def debug_routes():
         })
     return jsonify(routes)
 
-# 起動時にルート情報をログ出力
 if __name__ == '__main__':
     logger.info("登録されているルート:")
     for rule in app.url_map.iter_rules():
-        if 'evaluation' in str(rule):
-            logger.info(f"  {rule} -> {rule.endpoint} [{', '.join(rule.methods)}]")
+        logger.info(f"  {rule} -> {rule.endpoint} [{', '.join(rule.methods)}]")
     
     logger.info("アプリケーションを起動します")
     app.run(host='0.0.0.0', port=8080, debug=True)
-
-
-
-@app.route('/uploads/<filename>')
-def get_uploaded_file(filename):
-    """アップロードされたファイルを提供するルート"""
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
-# サンプル画像配信用ルート
-@app.route('/sample/<path:filename>')
-def serve_sample_image(filename):
-    """サンプル画像の配信"""
-    return send_from_directory(STATIC_SAMPLES_DIR, filename)

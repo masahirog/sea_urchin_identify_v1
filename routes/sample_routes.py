@@ -6,7 +6,7 @@
 from flask import Blueprint, request, jsonify, render_template, send_from_directory, current_app
 from config import (
     STATIC_SAMPLES_DIR, STATIC_ANNOTATIONS_DIR, STATIC_DETECTION_DIR,
-    DATASET_DIR, LEGACY_SAMPLES_DIR, LEGACY_ANNOTATIONS_DIR
+    DATASET_DIR
 )
 from werkzeug.utils import secure_filename
 import os
@@ -46,17 +46,12 @@ def normalize_image_path(image_path):
 
 def get_sample_image_path(relative_path):
     """
-    サンプル画像の実際のパスを取得（新旧ディレクトリ対応）
+    サンプル画像の実際のパスを取得（統一ディレクトリ使用）
     """
-    # 新ディレクトリを優先
-    new_path = os.path.join(STATIC_SAMPLES_DIR, relative_path)
-    if os.path.exists(new_path):
-        return new_path
-    
-    # 旧ディレクトリをフォールバック
-    legacy_path = os.path.join(LEGACY_SAMPLES_DIR, relative_path)
-    if os.path.exists(legacy_path):
-        return legacy_path
+    # 統一ディレクトリのパス
+    full_path = os.path.join(STATIC_SAMPLES_DIR, relative_path)
+    if os.path.exists(full_path):
+        return full_path
     
     current_app.logger.warning(f"サンプル画像が見つかりません: {relative_path}")
     return None
@@ -67,9 +62,9 @@ def analyze_samples_page():
     print("analyze_samples_page が呼び出されました")
     from app import app
     
-    # サンプル画像の取得
-    male_dir = os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', 'male')
-    female_dir = os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', 'female')
+    # サンプル画像の取得（統一ディレクトリから）
+    male_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'male')
+    female_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'female')
     
     male_samples = [f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))] if os.path.exists(male_dir) else []
     female_samples = [f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))] if os.path.exists(female_dir) else []
@@ -129,19 +124,18 @@ def analyze_sample():
                 except Exception as e:
                     current_app.logger.error(f"マッピング読み込みエラー: {str(e)}")
         
-        # ★★★ 修正されたパス変換ロジック ★★★
-        # 画像パスの正しい処理
+        # 画像パスの正しい処理（統一ディレクトリ使用）
         full_image_path = None
 
-        # パターン1: 'papillae/male/xxx.png' -> 'samples/papillae/male/xxx.png'
+        # パターン1: 'papillae/male/xxx.png' -> 'static/images/samples/papillae/male/xxx.png'
         if normalized_path.startswith('papillae/'):
-            full_image_path = os.path.join(app.config['SAMPLES_FOLDER'], normalized_path)
+            full_image_path = os.path.join(STATIC_SAMPLES_DIR, normalized_path)
         elif normalized_path.startswith('samples/'):
             full_image_path = normalized_path
         elif os.path.isabs(normalized_path):
             full_image_path = normalized_path
         else:
-            full_image_path = os.path.join(app.config['SAMPLES_FOLDER'], normalized_path)
+            full_image_path = os.path.join(STATIC_SAMPLES_DIR, normalized_path)
         
         current_app.logger.info(f"フルパス: {full_image_path}, 存在チェック: {os.path.exists(full_image_path)}")
             
@@ -160,14 +154,13 @@ def analyze_sample():
             current_app.logger.debug(f"アノテーション画像を分析: {annotation_path}")
             shape_features = analyze_shape_features(annotation_path, app.config)
         
-        # ★★★ 修正: image_path変数を正しく設定 ★★★
-        # 結果を返す（image_path変数を定義）
+        # 結果を返す（image_path変数を正しく設定）
         result = {
             'basic_stats': basic_stats,
             'detection_result': detection_result,
             'edge_features': edge_features,
             'texture_features': texture_features,
-            'image_path': normalized_path  # ここでimage_pathを定義
+            'image_path': normalized_path
         }
         
         if annotation_path and os.path.exists(annotation_path):
@@ -224,11 +217,11 @@ def upload_sample():
         # 安全なファイル名に変換
         filename = secure_filename(file.filename)
         
-        # 保存先ディレクトリ
+        # 保存先ディレクトリ（統一ディレクトリ使用）
         if gender in ['male', 'female']:
-            target_dir = os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', gender)
+            target_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', gender)
         else:
-            target_dir = os.path.join(app.config['SAMPLES_FOLDER'], 'papillae', 'unknown')
+            target_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'unknown')
         
         # ディレクトリが存在しない場合は作成
         os.makedirs(target_dir, exist_ok=True)
@@ -276,7 +269,7 @@ def get_sample(path):
         current_app.logger.warning(f"不正なパスへのアクセス試行: {path}")
         return jsonify({"error": "不正なパスです"}), 400
     
-    return send_from_directory(app.config['SAMPLES_FOLDER'], path)
+    return send_from_directory(STATIC_SAMPLES_DIR, path)
 
 
 @sample_bp.route('/save-annotation', methods=['POST'])
@@ -313,9 +306,8 @@ def save_annotation():
         name, ext = os.path.splitext(filename)
         annotation_filename = f"{name}_annotation{ext}"
 
-        # 保存先ディレクトリ作成
+        # 保存先ディレクトリ（統一ディレクトリ使用）
         annotation_path = os.path.join(STATIC_ANNOTATIONS_DIR, annotation_filename)
-        
         
         # 同名ファイルが存在する場合はユニークな名前に変更
         if os.path.exists(annotation_path):
@@ -472,8 +464,8 @@ def list_samples():
     # オプションのフィルタリング
     gender = request.args.get('gender')
     
-    # サンプルディレクトリ
-    samples_base_dir = os.path.join(app.config['SAMPLES_FOLDER'], 'papillae')
+    # サンプルディレクトリ（統一ディレクトリ使用）
+    samples_base_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
     
     result = {
         'male': [],
