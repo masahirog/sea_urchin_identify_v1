@@ -853,3 +853,128 @@ h1 {
         break-inside: avoid;
     }
 }
+
+/* static/css/style.css に追加するフェーズナビゲーション用CSS */
+
+/* フェーズインジケーター - クリック可能スタイル */
+.clickable-phase {
+    position: relative;
+    transition: all 0.3s ease;
+    user-select: none;
+}
+
+.clickable-phase:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+.clickable-phase:active {
+    transform: translateY(-1px) scale(0.98);
+}
+
+/* クリック不可能な状態 */
+.clickable-phase[style*="pointer-events: none"] {
+    opacity: 0.6 !important;
+    cursor: not-allowed !important;
+}
+
+.clickable-phase[style*="pointer-events: none"]:hover {
+    transform: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* 進捗ドット */
+.phase-progress {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.progress-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #dee2e6;
+    transition: all 0.3s ease;
+}
+
+.progress-dot.active {
+    background-color: #28a745;
+    box-shadow: 0 0 8px rgba(40, 167, 69, 0.5);
+}
+
+.phase-indicator.current-phase .progress-dot {
+    background-color: #007bff;
+    animation: pulse-dot 2s infinite;
+}
+
+.phase-indicator.completed .progress-dot {
+    background-color: #6f42c1;
+}
+
+@keyframes pulse-dot {
+    0% { 
+        box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.7);
+    }
+    70% { 
+        box-shadow: 0 0 0 10px rgba(0, 123, 255, 0);
+    }
+    100% { 
+        box-shadow: 0 0 0 0 rgba(0, 123, 255, 0);
+    }
+}
+
+/* フェーズ切り替えアニメーション */
+.phase-section {
+    opacity: 1;
+    transform: translateX(0);
+    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.phase-section.d-none {
+    opacity: 0;
+    transform: translateX(20px);
+}
+
+/* ホバー時のツールチップ風エフェクト */
+.clickable-phase::before {
+    content: attr(title);
+    position: absolute;
+    bottom: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    z-index: 1000;
+}
+
+.clickable-phase:hover::before {
+    opacity: 1;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+    .clickable-phase {
+        margin-bottom: 20px;
+    }
+    
+    .clickable-phase::before {
+        display: none; /* モバイルではツールチップを非表示 */
+    }
+    
+    .phase-progress {
+        margin-top: 8px;
+    }
+    
+    .progress-dot {
+        width: 6px;
+        height: 6px;
+    }
+}

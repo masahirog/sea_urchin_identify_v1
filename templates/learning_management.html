@@ -18,33 +18,45 @@
                         <i class="fas fa-graduation-cap me-2"></i>統合学習システム
                     </h4>
                     
-                    <!-- フェーズステップ表示 -->
+                    <!-- フェーズステップ表示（修正版） -->
                     <div class="row text-center">
                         <div class="col-md-4">
-                            <div id="phase-preparation" class="phase-indicator active">
+                            <div id="phase-preparation" class="phase-indicator active clickable-phase">
                                 <div class="phase-icon">
                                     <i class="fas fa-database fa-2x"></i>
                                 </div>
                                 <h6 class="mt-2">データ準備</h6>
                                 <small class="text-muted">アップロード・アノテーション</small>
+                                <!-- 進捗ドット追加 -->
+                                <div class="phase-progress mt-2">
+                                    <span class="progress-dot active"></span>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div id="phase-training" class="phase-indicator">
+                            <div id="phase-training" class="phase-indicator clickable-phase">
                                 <div class="phase-icon">
                                     <i class="fas fa-brain fa-2x"></i>
                                 </div>
                                 <h6 class="mt-2">AI学習</h6>
                                 <small class="text-muted">モデル訓練・基本評価</small>
+                                <!-- 進捗ドット追加 -->
+                                <div class="phase-progress mt-2">
+                                    <span class="progress-dot"></span>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div id="phase-analysis" class="phase-indicator">
+                            <div id="phase-analysis" class="phase-indicator clickable-phase">
                                 <div class="phase-icon">
                                     <i class="fas fa-chart-line fa-2x"></i>
                                 </div>
                                 <h6 class="mt-2">結果分析</h6>
                                 <small class="text-muted">詳細評価・改善提案</small>
+                                <!-- 進捗ドット追加 -->
+                                <div class="phase-progress mt-2">
+                                    <span class="progress-dot"></span>
+                                </div>
                             </div>
                         </div>
                     </div>

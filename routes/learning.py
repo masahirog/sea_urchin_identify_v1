@@ -1338,3 +1338,137 @@ def format_timestamp_to_date(timestamp):
         return date.strftime("%Y年%m月%d日 %H:%M:%S")
     except Exception:
         return timestamp
+
+
+
+@learning_bp.route('/delete-annotation', methods=['POST'])
+def delete_annotation():
+    """
+    アノテーションを削除
+    
+    Request:
+    - image_path: 元の画像パス
+    - annotation_path: アノテーション画像パス
+    
+    Returns:
+    - JSON: 削除結果
+    """
+    try:
+        data = request.json
+        
+        if not data or 'image_path' not in data:
+            return jsonify({"error": "画像パスが指定されていません"}), 400
+        
+        image_path = data['image_path']
+        annotation_path = data.get('annotation_path')
+        
+        # アノテーションマッピングファイルの更新
+        mapping_file = os.path.join('static', 'annotation_mapping.json')
+        
+        if os.path.exists(mapping_file):
+            try:
+                with open(mapping_file, 'r') as f:
+                    mapping = json.load(f)
+                
+                # マッピングから削除
+                if image_path in mapping:
+                    annotation_file_path = mapping[image_path]
+                    
+                    # アノテーション画像ファイルを削除
+                    full_annotation_path = os.path.join('static', annotation_file_path)
+                    if os.path.exists(full_annotation_path):
+                        os.remove(full_annotation_path)
+                        current_app.logger.info(f"アノテーション画像を削除: {full_annotation_path}")
+                    
+                    # マッピングから削除
+                    del mapping[image_path]
+                    
+                    # マッピングファイルを更新
+                    with open(mapping_file, 'w') as f:
+                        json.dump(mapping, f, indent=2)
+                    
+                    current_app.logger.info(f"アノテーションを削除: {image_path}")
+                    
+                    return jsonify({
+                        "success": True,
+                        "message": "アノテーションを削除しました"
+                    })
+                else:
+                    return jsonify({"error": "指定された画像のアノテーションが見つかりません"}), 404
+                
+            except Exception as e:
+                current_app.logger.error(f"アノテーションマッピング処理エラー: {str(e)}")
+                return jsonify({"error": "アノテーションマッピングの処理に失敗しました"}), 500
+        else:
+            return jsonify({"error": "アノテーションマッピングファイルが見つかりません"}), 404
+        
+    except Exception as e:
+        current_app.logger.error(f"アノテーション削除エラー: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": f"アノテーション削除中にエラーが発生しました: {str(e)}"}), 500
+
+
+@learning_bp.route('/get-annotation-info/<path:image_path>')
+def get_annotation_info(image_path):
+    """
+    指定された画像のアノテーション情報を取得
+    
+    Parameters:
+    - image_path: 画像パス
+    
+    Returns:
+    - JSON: アノテーション情報
+    """
+    try:
+        # パス検証
+        if '..' in image_path:
+            return jsonify({"error": "不正なパスです"}), 400
+        
+        # アノテーションマッピングを確認
+        mapping_file = os.path.join('static', 'annotation_mapping.json')
+        
+        if not os.path.exists(mapping_file):
+            return jsonify({
+                "exists": False,
+                "message": "アノテーションマッピングファイルが見つかりません"
+            })
+        
+        try:
+            with open(mapping_file, 'r') as f:
+                mapping = json.load(f)
+            
+            if image_path in mapping:
+                annotation_path = mapping[image_path]
+                full_annotation_path = os.path.join('static', annotation_path)
+                
+                # アノテーション画像の存在確認
+                if os.path.exists(full_annotation_path):
+                    return jsonify({
+                        "exists": True,
+                        "annotation_path": annotation_path,
+                        "annotation_url": f"/static/{annotation_path}",
+                        "file_size": os.path.getsize(full_annotation_path),
+                        "last_modified": datetime.fromtimestamp(
+                            os.path.getmtime(full_annotation_path)
+                        ).isoformat()
+                    })
+                else:
+                    # マッピングにはあるが、ファイルが存在しない場合
+                    return jsonify({
+                        "exists": False,
+                        "error": "アノテーション画像ファイルが見つかりません",
+                        "mapped_path": annotation_path
+                    })
+            else:
+                return jsonify({
+                    "exists": False,
+                    "message": "このイメージにはアノテーションがありません"
+                })
+                
+        except Exception as e:
+            current_app.logger.error(f"アノテーション情報読み込みエラー: {str(e)}")
+            return jsonify({"error": "アノテーション情報の読み込みに失敗しました"}), 500
+        
+    except Exception as e:
+        current_app.logger.error(f"アノテーション情報取得エラー: {str(e)}")
+        return jsonify({"error": "アノテーション情報の取得に失敗しました"}), 500
