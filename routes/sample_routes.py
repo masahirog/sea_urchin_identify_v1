@@ -102,9 +102,11 @@ def analyze_sample():
         
         if not data or 'image_path' not in data:
             return jsonify({"error": "画像パスが指定されていません"}), 400
+        
         raw_image_path = data['image_path']
         normalized_path = normalize_image_path(raw_image_path)
         current_app.logger.info(f"正規化されたパス: {raw_image_path} -> {normalized_path}")
+        
         # パスの検証
         if '..' in normalized_path:
             current_app.logger.warning(f"不正なパスへのアクセス試行: {normalized_path}")
@@ -158,13 +160,14 @@ def analyze_sample():
             current_app.logger.debug(f"アノテーション画像を分析: {annotation_path}")
             shape_features = analyze_shape_features(annotation_path, app.config)
         
-        # 結果を返す
+        # ★★★ 修正: image_path変数を正しく設定 ★★★
+        # 結果を返す（image_path変数を定義）
         result = {
             'basic_stats': basic_stats,
             'detection_result': detection_result,
             'edge_features': edge_features,
             'texture_features': texture_features,
-            'image_path': image_path
+            'image_path': normalized_path  # ここでimage_pathを定義
         }
         
         if annotation_path and os.path.exists(annotation_path):
