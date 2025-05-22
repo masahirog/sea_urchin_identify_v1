@@ -17,7 +17,7 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- 改善されたナビゲーションバー -->
+    <!-- 簡素化されたナビゲーションバー -->
     <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom mb-4">
         <div class="container">
             <!-- ブランドロゴ/タイトル -->
@@ -31,24 +31,24 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             
-            <!-- 改善されたナビゲーションメニュー -->
+            <!-- 3つのメイン機能に簡素化 -->
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'main.classification_service' %}active{% endif %}" 
+                        <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}" 
                            href="{{ url_for('main.index') }}">
                             <i class="fas fa-search me-1"></i> 雌雄判定
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'video.processing_page' %}active{% endif %}" 
-                           href="/video/processing">
+                           href="{{ url_for('video.processing_page') }}">
                             <i class="fas fa-video me-1"></i> 動画処理
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint in ['sample.analyze_samples_page', 'evaluation.index'] %}active{% endif %}" 
-                           href="{{ url_for('sample.analyze_samples_page') }}">
+                        <a class="nav-link {% if request.endpoint == 'learning.management_page' %}active{% endif %}" 
+                           href="{{ url_for('learning.management_page') }}">
                             <i class="fas fa-graduation-cap me-1"></i> 学習管理
                         </a>
                     </li>

@@ -118,29 +118,29 @@ def get_dataset_info():
     })
 
 
-@main_bp.route('/train-model', methods=['POST'])
-def train_model():
-    """
-    モデル訓練を開始
+# @main_bp.route('/train-model', methods=['POST'])
+# def train_model():
+#     """
+#     モデル訓練を開始
     
-    Returns:
-    - JSON: 訓練タスクの情報
-    """
-    import uuid
-    from app import processing_queue, processing_status, app
+#     Returns:
+#     - JSON: 訓練タスクの情報
+#     """
+#     import uuid
+#     from app import processing_queue, processing_status, app
     
-    # 処理タスクの作成
-    task_id = str(uuid.uuid4())
-    task = {
-        "type": "train_model",
-        "id": task_id,
-        "dataset_dir": app.config['DATASET_FOLDER']
-    }
+#     # 処理タスクの作成
+#     task_id = str(uuid.uuid4())
+#     task = {
+#         "type": "train_model",
+#         "id": task_id,
+#         "dataset_dir": app.config['DATASET_FOLDER']
+#     }
     
-    # 処理状態の初期化
-    processing_status[task_id] = {"status": "queued", "message": "モデル訓練を待機中..."}
+#     # 処理状態の初期化
+#     processing_status[task_id] = {"status": "queued", "message": "モデル訓練を待機中..."}
     
-    # キューに追加
-    processing_queue.put(task)
+#     # キューに追加
+#     processing_queue.put(task)
     
-    return jsonify({"success": True, "task_id": task_id, "message": "モデル訓練を開始しました"})
+#     return jsonify({"success": True, "task_id": task_id, "message": "モデル訓練を開始しました"})

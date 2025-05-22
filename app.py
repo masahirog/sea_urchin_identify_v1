@@ -72,15 +72,13 @@ logger.info("処理ワーカースレッドを開始しました")
 from routes.main_routes import main_bp
 from routes.video_routes import video_bp
 from routes.image_routes import image_bp
-from routes.sample_routes import sample_bp
-from routes.evaluation_routes import evaluation_bp
+from routes.learning_routes import learning_bp  # ★追加
 from routes.api_routes import api_bp
 
 app.register_blueprint(main_bp)
 app.register_blueprint(video_bp, url_prefix='/video')
 app.register_blueprint(image_bp, url_prefix='/image')
-app.register_blueprint(sample_bp, url_prefix='/sample')
-app.register_blueprint(evaluation_bp, url_prefix='/evaluation')
+app.register_blueprint(learning_bp, url_prefix='/learning')  # ★追加
 app.register_blueprint(api_bp, url_prefix='/api')
 
 # ★統一: アップロードファイル配信（一時ファイル用）
