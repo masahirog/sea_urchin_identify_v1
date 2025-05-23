@@ -7,7 +7,8 @@ import {
     showSuccessMessage,
     showErrorMessage,
     getNestedValue,
-    getStatusAlertClass
+    getStatusAlertClass,
+    checkYoloDatasetStatus
 } from '../utilities.js';
 
 /**
@@ -21,6 +22,7 @@ export class DataManager {
      */
     constructor(parent) {
         this.parent = parent;
+        this.lastRefreshTime = 0; // データ更新の重複防止用タイムスタンプ
     }
 
     /**
@@ -37,9 +39,32 @@ export class DataManager {
             // 学習履歴読み込み
             await this.loadLearningHistory();
             
+            // YOLOデータセット状態チェック
+            await this.checkYoloDatasetStatus();
+            
         } catch (error) {
             console.error('初期データ読み込みエラー:', error);
             throw error; // 上位でエラーハンドリングするために再スロー
+        }
+    }
+
+    /**
+     * YOLOデータセットの状態チェック
+     */
+    async checkYoloDatasetStatus() {
+        try {
+            const status = await checkYoloDatasetStatus();
+            this.parent.yoloDatasetStatus = status;
+            
+            // YOLOデータセット状況表示を更新
+            if (this.parent.uiManager && typeof this.parent.uiManager.updateYoloDatasetStatus === 'function') {
+                this.parent.uiManager.updateYoloDatasetStatus(status);
+            }
+            
+            return status;
+        } catch (error) {
+            console.error('YOLOデータセットチェックエラー:', error);
+            return null;
         }
     }
 
@@ -89,8 +114,17 @@ export class DataManager {
 
     /**
      * データセット統計の更新
+     * @param {boolean} force - 強制更新するかどうか
      */
-    async refreshDatasetStats() {
+    async refreshDatasetStats(force = false) {
+        // 短時間での連続更新を防止（300ms以内）
+        const now = Date.now();
+        if (!force && now - this.lastRefreshTime < 300) {
+            return this.parent.datasetStats;
+        }
+        
+        this.lastRefreshTime = now;
+        
         try {
             const response = await fetch('/learning/dataset-stats');
             if (!response.ok) throw new Error('統計取得に失敗しました');
@@ -177,7 +211,6 @@ export class DataManager {
                 return timestampB.localeCompare(timestampA);
             });
             
-            
             // 統合された履歴を表示
             this.parent.uiManager.displayLearningHistory(sortedHistory);
             
@@ -195,7 +228,6 @@ export class DataManager {
      */
     async loadHistoricalResult(timestamp) {
         try {
-            
             if (!timestamp) {
                 this.parent.uiManager.showError('タイムスタンプが無効です');
                 return null;
@@ -208,18 +240,20 @@ export class DataManager {
             const data = await response.json();
             const history = data.history || [];
             
+            // 可能性のあるすべてのタイムスタンプ形式を生成
+            const possibleTimestamps = this.generatePossibleTimestamps(timestamp);
+            
             // 同じタイムスタンプを持つすべての履歴項目を取得
-            const relatedItems = history.filter(item => 
-                item.timestamp === timestamp || 
-                (item.details && item.details.timestamp === timestamp)
-            );
+            const relatedItems = history.filter(item => {
+                const itemTimestamp = item.timestamp || '';
+                return possibleTimestamps.some(ts => itemTimestamp === ts);
+            });
             
             if (relatedItems.length === 0) {
                 this.parent.uiManager.showError('指定された履歴が見つかりませんでした');
                 console.error('見つからないタイムスタンプ:', timestamp);
                 return null;
             }
-            
             
             // 評価とアノテーションの結果を探す
             const evaluationItem = relatedItems.find(item => item.type === 'evaluation');
@@ -312,6 +346,7 @@ export class DataManager {
 
     /**
      * データアップロード処理
+     * @returns {Promise<boolean>} 成功したかどうか
      */
     async handleDataUpload() {
         const fileInput = document.getElementById('dataFiles');
@@ -324,7 +359,6 @@ export class DataManager {
             this.parent.uiManager.showError('画像ファイルを選択してください');
             return false;
         }
-        
         
         try {
             // フォームデータ作成
@@ -364,8 +398,11 @@ export class DataManager {
             fileInput.value = '';
             
             // データ更新
-            await this.refreshDatasetStats();
+            await this.refreshDatasetStats(true);
             await this.loadLearningData();
+            
+            // YOLOデータセット状態を更新
+            await this.checkYoloDatasetStatus();
             
             return true;
         } catch (error) {
@@ -378,9 +415,9 @@ export class DataManager {
 
     /**
      * 統合学習の開始
+     * @returns {Promise<boolean>} 成功したかどうか
      */
     async startUnifiedTraining() {
-        
         try {
             // 基本的なデータ存在チェックのみ
             const stats = this.parent.datasetStats;
@@ -445,6 +482,7 @@ export class DataManager {
 
     /**
      * 統合ステータスのチェック
+     * @returns {Promise<Object|null>} ステータスオブジェクト
      */
     async checkUnifiedStatus() {
         if (!this.parent.taskId) return null;
@@ -458,6 +496,48 @@ export class DataManager {
         } catch (error) {
             console.error('ステータスチェックエラー:', error);
             return null;
+        }
+    }
+
+    /**
+     * YOLOトレーニングの開始
+     * @param {Object} params - トレーニングパラメータ
+     * @returns {Promise<Object>} レスポンスデータ
+     */
+    async startYoloTraining(params) {
+        try {
+            const response = await fetch('/yolo/training/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(params)
+            });
+            
+            if (!response.ok) throw new Error(`サーバーエラー: ${response.status}`);
+            
+            return await response.json();
+        } catch (error) {
+            console.error('YOLOトレーニング開始エラー:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * YOLOトレーニングの状態チェック
+     * @returns {Promise<Object>} ステータスオブジェクト
+     */
+    async checkYoloTrainingStatus() {
+        try {
+            const response = await fetch('/yolo/training/status');
+            if (!response.ok) throw new Error(`ステータス取得エラー: ${response.status}`);
+            
+            return await response.json();
+        } catch (error) {
+            console.error('YOLOトレーニングステータスエラー:', error);
+            return {
+                status: 'error',
+                message: error.message,
+                progress: 0
+            };
         }
     }
 

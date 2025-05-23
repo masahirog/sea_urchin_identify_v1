@@ -9,7 +9,9 @@ const videoProcessingService = {
     statusCheckInterval: null,
     extractedImages: [],
     selectedImages: [],
-    processingHistory: []
+    processingHistory: [],
+    yoloDetectionEnabled: false, // YOLO検出の有効状態
+    lastYoloConfidence: 0.25     // YOLO検出の最後に使用した信頼度閾値
 };
 
 /**
@@ -37,33 +39,109 @@ function initVideoProcessingService() {
     
     // 保存されたタスクIDの復元
     restoreCurrentTask();
+    
+    // YOLOモデル状態のチェック
+    checkYoloModelAvailability();
 }
 
-// インポートしていた関数の代替実装
+/**
+ * YOLOモデルの利用可能性をチェック
+ */
+async function checkYoloModelAvailability() {
+    try {
+        const response = await fetch('/yolo/model-status');
+        if (!response.ok) throw new Error('モデル状態の取得に失敗しました');
+        
+        const data = await response.json();
+        videoProcessingService.yoloDetectionEnabled = data.exists;
+        
+        // UI要素の更新
+        updateYoloUiElements(data.exists);
+    } catch (error) {
+        console.error('YOLOモデル状態チェックエラー:', error);
+        videoProcessingService.yoloDetectionEnabled = false;
+        updateYoloUiElements(false);
+    }
+}
+
+/**
+ * YOLOモデル状態に応じてUI要素を更新
+ * @param {boolean} available - YOLOモデルが利用可能かどうか
+ */
+function updateYoloUiElements(available) {
+    // YOLOオプションの表示/非表示
+    const yoloOptions = document.getElementById('yolo-options');
+    if (yoloOptions) {
+        yoloOptions.style.display = available ? 'block' : 'none';
+    }
+    
+    // YOLO検出ボタンの有効/無効
+    const yoloDetectBtn = document.getElementById('yolo-detect-btn');
+    if (yoloDetectBtn) {
+        yoloDetectBtn.disabled = !available;
+        yoloDetectBtn.title = available ? 
+            'YOLOモデルで生殖乳頭を検出' : 
+            'YOLOモデルが利用できません。学習ページでモデルを作成してください。';
+    }
+    
+    // YOLOステータス表示
+    const yoloStatus = document.getElementById('yolo-model-status');
+    if (yoloStatus) {
+        if (available) {
+            yoloStatus.className = 'alert alert-success';
+            yoloStatus.innerHTML = '<i class="fas fa-check-circle me-2"></i>YOLOモデルが利用可能です';
+        } else {
+            yoloStatus.className = 'alert alert-warning';
+            yoloStatus.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>YOLOモデルが見つかりません。学習ページでモデルを作成してください。';
+        }
+    }
+}
+
+// ユーティリティ関数の定義
 function showLoading() {
-    const overlay = document.getElementById('loadingOverlay');
-    if (overlay) {
-        overlay.classList.remove('d-none');
+    if (typeof window.showLoading === 'function') {
+        window.showLoading();
+    } else {
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) {
+            overlay.classList.remove('d-none');
+        }
     }
 }
 
 function hideLoading() {
-    const overlay = document.getElementById('loadingOverlay');
-    if (overlay) {
-        overlay.classList.add('d-none');
+    if (typeof window.hideLoading === 'function') {
+        window.hideLoading();
+    } else {
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) {
+            overlay.classList.add('d-none');
+        }
     }
 }
 
 function showSuccessMessage(message, duration = 3000) {
-    showUserMessage(message, 'success', duration);
+    if (typeof window.showSuccessMessage === 'function') {
+        window.showSuccessMessage(message, duration);
+    } else {
+        showUserMessage(message, 'success', duration);
+    }
 }
 
 function showErrorMessage(message, duration = 5000) {
-    showUserMessage(message, 'danger', duration);
+    if (typeof window.showErrorMessage === 'function') {
+        window.showErrorMessage(message, duration);
+    } else {
+        showUserMessage(message, 'danger', duration);
+    }
 }
 
 function showWarningMessage(message, duration = 4000) {
-    showUserMessage(message, 'warning', duration);
+    if (typeof window.showWarningMessage === 'function') {
+        window.showWarningMessage(message, duration);
+    } else {
+        showUserMessage(message, 'warning', duration);
+    }
 }
 
 function showUserMessage(message, type, duration) {
@@ -104,6 +182,31 @@ function initVideoProcessingForm() {
             e.preventDefault();
             executeVideoProcessing();
         });
+    }
+    
+    // YOLOオプション設定
+    const useYoloCheckbox = document.getElementById('use-yolo-detection');
+    if (useYoloCheckbox) {
+        useYoloCheckbox.addEventListener('change', function() {
+            const confidenceContainer = document.getElementById('yolo-confidence-container');
+            if (confidenceContainer) {
+                confidenceContainer.style.display = this.checked ? 'block' : 'none';
+            }
+        });
+        
+        // 信頼度スライダーの値表示更新
+        const confidenceSlider = document.getElementById('yolo-confidence');
+        const confidenceValue = document.getElementById('confidence-value');
+        if (confidenceSlider && confidenceValue) {
+            confidenceSlider.addEventListener('input', function() {
+                confidenceValue.textContent = this.value;
+                videoProcessingService.lastYoloConfidence = parseFloat(this.value);
+            });
+            
+            // 初期値を設定
+            confidenceSlider.value = videoProcessingService.lastYoloConfidence;
+            confidenceValue.textContent = confidenceSlider.value;
+        }
     }
 }
 
@@ -150,6 +253,34 @@ function initActionButtons() {
             loadExtractedImages();
         });
     }
+    
+    // YOLO検出ボタン
+    const yoloDetectBtn = document.getElementById('yolo-detect-btn');
+    if (yoloDetectBtn) {
+        yoloDetectBtn.addEventListener('click', function() {
+            if (videoProcessingService.extractedImages.length === 0) {
+                showWarningMessage('検出する画像がありません。まず動画から画像を抽出してください。');
+                return;
+            }
+            
+            // YOLO検出確認ダイアログを表示
+            openYoloDetectionModal();
+        });
+    }
+    
+    // 学習データに送信ボタン
+    const sendToLearningBtn = document.getElementById('send-to-learning-btn');
+    if (sendToLearningBtn) {
+        sendToLearningBtn.addEventListener('click', function() {
+            if (videoProcessingService.extractedImages.length === 0) {
+                showWarningMessage('送信する画像がありません。まず動画から画像を抽出してください。');
+                return;
+            }
+            
+            // 学習データ送信ダイアログを表示
+            openSendToLearningModal();
+        });
+    }
 }
 
 /**
@@ -187,6 +318,22 @@ function initModals() {
             downloadSingleImage();
         });
     }
+    
+    // YOLO検出実行ボタン
+    const runYoloDetectionBtn = document.getElementById('run-yolo-detection');
+    if (runYoloDetectionBtn) {
+        runYoloDetectionBtn.addEventListener('click', function() {
+            executeYoloDetection();
+        });
+    }
+    
+    // 学習データに送信実行ボタン
+    const sendToLearningConfirmBtn = document.getElementById('send-to-learning-confirm');
+    if (sendToLearningConfirmBtn) {
+        sendToLearningConfirmBtn.addEventListener('click', function() {
+            executeSendToLearning();
+        });
+    }
 }
 
 /**
@@ -205,6 +352,23 @@ function executeVideoProcessing() {
     const formData = new FormData();
     formData.append('video', videoFile);
     formData.append('max_images', maxImages);
+    
+    // YOLOオプションの取得
+    const useYolo = document.getElementById('use-yolo-detection')?.checked || false;
+    const confidence = document.getElementById('yolo-confidence')?.value || 0.25;
+    
+    if (useYolo) {
+        if (!videoProcessingService.yoloDetectionEnabled) {
+            showWarningMessage('YOLOモデルが利用できません。学習ページでモデルを作成してください。');
+            return;
+        }
+        
+        formData.append('use_yolo', 'true');
+        formData.append('confidence', confidence);
+        
+        // 最後に使用した信頼度を保存
+        videoProcessingService.lastYoloConfidence = parseFloat(confidence);
+    }
     
     // ローディング表示
     showLoading();
@@ -268,7 +432,7 @@ function startStatusCheck() {
 function checkProcessingStatus() {
     if (!videoProcessingService.currentTaskId) return;
     
-    // 修正：APIエンドポイントを/api/task-status/から/video/status/に変更
+    // APIエンドポイントを使用
     fetch('/video/status/' + videoProcessingService.currentTaskId)
     .then(response => {
         if (!response.ok) {
@@ -333,7 +497,12 @@ function handleProcessingComplete(data) {
         // 履歴を更新
         loadProcessingHistory();
         
-        showSuccessMessage(`${imageCount}枚の生殖乳頭画像を抽出しました`);
+        // YOLO検出を使用した場合は特別なメッセージ
+        if (data.yolo_used) {
+            showSuccessMessage(`${imageCount}枚の生殖乳頭画像を抽出し、YOLOモデルで検出しました`);
+        } else {
+            showSuccessMessage(`${imageCount}枚の生殖乳頭画像を抽出しました`);
+        }
     } else {
         showProcessingStatus('処理完了しましたが、生殖乳頭が検出されませんでした', 'alert-warning', 100);
         showWarningMessage('生殖乳頭が検出されませんでした。動画の品質や設定を確認してください。');
@@ -364,6 +533,8 @@ function showProcessingStatus(message, alertClass, progress) {
         
         if (progress >= 100) {
             progressBar.classList.remove('progress-bar-animated');
+        } else {
+            progressBar.classList.add('progress-bar-animated');
         }
     }
 }
@@ -402,6 +573,12 @@ function loadExtractedImages() {
         
         displayExtractionResults();
         updateImageCounter(videoProcessingService.extractedImages.length);
+        
+        // 結果更新ボタンを表示
+        const refreshBtn = document.getElementById('refreshResultsBtn');
+        if (refreshBtn) {
+            refreshBtn.style.display = 'inline-block';
+        }
     })
     .catch(error => {
         showErrorMessage('抽出画像の読み込みに失敗しました: ' + error.message);
@@ -434,9 +611,15 @@ function displayExtractionResults() {
     // 画像カードの生成
     const imageCards = videoProcessingService.extractedImages.map((imageUrl, index) => {
         const fileName = imageUrl.split('/').pop();
+        const hasYoloDetection = imageUrl.includes('_yolo_') || imageUrl.includes('_detected_');
+        
+        // YOLO検出されたかどうかのバッジ
+        const yoloBadge = hasYoloDetection ? 
+            '<span class="badge bg-info position-absolute top-0 end-0 m-1" title="YOLO検出済み"><i class="fas fa-object-group"></i></span>' : '';
         
         return `
             <div class="image-card" data-image-url="${imageUrl}" data-image-name="${fileName}">
+                ${yoloBadge}
                 <img src="${imageUrl}" alt="抽出画像 ${index + 1}" class="image-preview" 
                      onclick="openImageDetail('${imageUrl}', '${fileName}')">
                 <div class="image-info">${fileName}</div>
@@ -501,6 +684,11 @@ function openImageSelectionModal() {
     if (container) {
         const imageCards = videoProcessingService.extractedImages.map((imageUrl, index) => {
             const fileName = imageUrl.split('/').pop();
+            const hasYoloDetection = imageUrl.includes('_yolo_') || imageUrl.includes('_detected_');
+            
+            // YOLO検出されたかどうかのバッジ
+            const yoloBadge = hasYoloDetection ? 
+                '<span class="badge bg-info" title="YOLO検出済み"><i class="fas fa-object-group"></i></span>' : '';
             
             return `
                 <div class="col-md-3 col-sm-4 col-6">
@@ -510,7 +698,7 @@ function openImageSelectionModal() {
                                 <input class="form-check-input image-checkbox" type="checkbox" 
                                        value="${fileName}" id="img_${index}">
                                 <label class="form-check-label" for="img_${index}">
-                                    選択
+                                    選択 ${yoloBadge}
                                 </label>
                             </div>
                             <img src="${imageUrl}" alt="${fileName}" class="img-fluid rounded">
@@ -527,6 +715,165 @@ function openImageSelectionModal() {
     // モーダル表示
     const modal = new bootstrap.Modal(document.getElementById('imageSelectionModal'));
     modal.show();
+}
+
+/**
+ * YOLO検出モーダルを開く
+ */
+function openYoloDetectionModal() {
+    if (!videoProcessingService.yoloDetectionEnabled) {
+        showWarningMessage('YOLOモデルが利用できません。学習ページでモデルを作成してください。');
+        return;
+    }
+    
+    // 信頼度スライダーの初期値を設定
+    const confidenceSlider = document.getElementById('yolo-detection-confidence');
+    const confidenceValue = document.getElementById('yolo-detection-confidence-value');
+    
+    if (confidenceSlider && confidenceValue) {
+        confidenceSlider.value = videoProcessingService.lastYoloConfidence;
+        confidenceValue.textContent = confidenceSlider.value;
+        
+        // スライダー変更イベント
+        confidenceSlider.addEventListener('input', function() {
+            confidenceValue.textContent = this.value;
+        });
+    }
+    
+    // 画像数の表示
+    const imageCountElement = document.getElementById('yolo-detection-image-count');
+    if (imageCountElement) {
+        imageCountElement.textContent = videoProcessingService.extractedImages.length;
+    }
+    
+    // モーダル表示
+    const modal = new bootstrap.Modal(document.getElementById('yoloDetectionModal'));
+    modal.show();
+}
+
+/**
+ * 学習データ送信モーダルを開く
+ */
+function openSendToLearningModal() {
+    // 画像数の表示
+    const imageCountElement = document.getElementById('learning-image-count');
+    if (imageCountElement) {
+        imageCountElement.textContent = videoProcessingService.extractedImages.length;
+    }
+    
+    // モーダル表示
+    const modal = new bootstrap.Modal(document.getElementById('sendToLearningModal'));
+    modal.show();
+}
+
+/**
+ * YOLO検出の実行
+ */
+async function executeYoloDetection() {
+    const confidenceSlider = document.getElementById('yolo-detection-confidence');
+    if (!confidenceSlider) {
+        showErrorMessage('信頼度設定が見つかりません');
+        return;
+    }
+    
+    const confidence = parseFloat(confidenceSlider.value);
+    videoProcessingService.lastYoloConfidence = confidence;
+    
+    try {
+        // ローディング表示
+        showLoading();
+        
+        // YOLO検出APIを呼び出す
+        const response = await fetch('/video/detect-yolo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                task_id: videoProcessingService.currentTaskId,
+                confidence: confidence
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`サーバーエラー: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // ローディング非表示
+        hideLoading();
+        
+        if (data.error) {
+            showErrorMessage('YOLO検出エラー: ' + data.error);
+            return;
+        }
+        
+        // モーダルを閉じる
+        const modal = bootstrap.Modal.getInstance(document.getElementById('yoloDetectionModal'));
+        if (modal) modal.hide();
+        
+        // 成功メッセージ
+        showSuccessMessage(`${data.detected_count || 0}個の生殖乳頭を検出しました`);
+        
+        // 画像を再読み込み
+        loadExtractedImages();
+        
+    } catch (error) {
+        hideLoading();
+        showErrorMessage('YOLO検出中にエラーが発生しました: ' + error.message);
+    }
+}
+
+/**
+ * 学習データへの送信を実行
+ */
+async function executeSendToLearning() {
+    const genderSelect = document.getElementById('learning-gender-select');
+    if (!genderSelect) {
+        showErrorMessage('性別選択が見つかりません');
+        return;
+    }
+    
+    const gender = genderSelect.value;
+    
+    try {
+        // ローディング表示
+        showLoading();
+        
+        // 学習データ送信APIを呼び出す
+        const response = await fetch('/video/send-to-learning', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                task_id: videoProcessingService.currentTaskId,
+                gender: gender
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`サーバーエラー: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // ローディング非表示
+        hideLoading();
+        
+        if (data.error) {
+            showErrorMessage('送信エラー: ' + data.error);
+            return;
+        }
+        
+        // モーダルを閉じる
+        const modal = bootstrap.Modal.getInstance(document.getElementById('sendToLearningModal'));
+        if (modal) modal.hide();
+        
+        // 成功メッセージ
+        showSuccessMessage(`${data.copied_count || 0}枚の画像を学習データに送信しました`);
+        
+    } catch (error) {
+        hideLoading();
+        showErrorMessage('学習データ送信中にエラーが発生しました: ' + error.message);
+    }
 }
 
 /**
@@ -622,16 +969,35 @@ function openImageDetail(imageUrl, fileName) {
     }
     
     if (modalInfo) {
+        const hasYoloDetection = imageUrl.includes('_yolo_') || imageUrl.includes('_detected_');
+        const yoloInfo = hasYoloDetection ? 
+            '<p><strong>YOLO検出:</strong> <span class="badge bg-info">検出済み</span></p>' : '';
+        
         modalInfo.innerHTML = `
             <h6>ファイル情報</h6>
             <p><strong>ファイル名:</strong> ${fileName}</p>
             <p><strong>URL:</strong> <code>${imageUrl}</code></p>
+            ${yoloInfo}
         `;
     }
     
     // 単一ダウンロード用にファイル名を保存
     document.getElementById('downloadSingleBtn').dataset.imageUrl = imageUrl;
     document.getElementById('downloadSingleBtn').dataset.fileName = fileName;
+    
+    // YOLOボタンの表示/非表示
+    const singleYoloBtn = document.getElementById('detectSingleYoloBtn');
+    if (singleYoloBtn) {
+        // YOLO検出が有効かつまだ検出されていない場合のみ表示
+        if (videoProcessingService.yoloDetectionEnabled && 
+            !(imageUrl.includes('_yolo_') || imageUrl.includes('_detected_'))) {
+            singleYoloBtn.style.display = 'inline-block';
+            singleYoloBtn.dataset.imageUrl = imageUrl;
+            singleYoloBtn.dataset.fileName = fileName;
+        } else {
+            singleYoloBtn.style.display = 'none';
+        }
+    }
     
     // モーダル表示
     const modal = new bootstrap.Modal(document.getElementById('imageDetailModal'));
@@ -660,6 +1026,64 @@ function downloadSingleImage() {
     document.body.removeChild(a);
     
     showSuccessMessage(`${fileName} をダウンロードしました`);
+}
+
+/**
+ * 単一画像のYOLO検出
+ */
+async function detectSingleImageWithYolo() {
+    const button = document.getElementById('detectSingleYoloBtn');
+    const imageUrl = button.dataset.imageUrl;
+    const fileName = button.dataset.fileName;
+    
+    if (!imageUrl || !fileName || !videoProcessingService.yoloDetectionEnabled) {
+        alert('YOLO検出ができません');
+        return;
+    }
+    
+    try {
+        // ローディング表示
+        showLoading();
+        
+        // 単一画像YOLO検出APIを呼び出す
+        const response = await fetch('/video/detect-single-yolo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                task_id: videoProcessingService.currentTaskId,
+                image_url: imageUrl,
+                confidence: videoProcessingService.lastYoloConfidence
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`サーバーエラー: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // ローディング非表示
+        hideLoading();
+        
+        if (data.error) {
+            showErrorMessage('YOLO検出エラー: ' + data.error);
+            return;
+        }
+        
+        // モーダルを閉じる
+        const modal = bootstrap.Modal.getInstance(document.getElementById('imageDetailModal'));
+        if (modal) modal.hide();
+        
+        // 成功メッセージ
+        showSuccessMessage(`${data.detected_count || 0}個の生殖乳頭を検出しました`);
+        
+        // 画像を再読み込み
+        loadExtractedImages();
+        
+    } catch (error) {
+        hideLoading();
+        showErrorMessage('YOLO検出中にエラーが発生しました: ' + error.message);
+    }
 }
 
 /**
@@ -709,12 +1133,17 @@ function updateHistoryDisplay() {
     
     // 履歴項目の生成
     const historyHTML = videoProcessingService.processingHistory.map(item => {
+        // YOLO検出されたかどうかのバッジ
+        const yoloBadge = item.yolo_used ? 
+            '<span class="badge bg-info ms-2" title="YOLO検出使用">YOLO</span>' : '';
+        
         return `
             <div class="border-bottom py-3">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <strong>タスクID:</strong> ${item.task_id.substring(0, 8)}...
                         <span class="badge bg-primary ms-2">${item.image_count}枚</span>
+                        ${yoloBadge}
                     </div>
                     <div>
                         <small class="text-muted me-3">${item.date}</small>
@@ -773,3 +1202,4 @@ window.selectAllImages = selectAllImages;
 window.deselectAllImages = deselectAllImages;
 window.openImageDetail = openImageDetail;
 window.redownloadTask = redownloadTask;
+window.detectSingleImageWithYolo = detectSingleImageWithYolo;

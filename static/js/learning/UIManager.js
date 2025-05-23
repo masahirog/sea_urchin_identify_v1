@@ -3,7 +3,6 @@
  * UI表示に関する処理を集約
  */
 
-
 import {
     showSuccessMessage,
     showErrorMessage,
@@ -28,6 +27,18 @@ export class UIManager {
      */
     constructor(parent) {
         this.parent = parent;
+        this.isMobile = window.innerWidth < 768; // モバイル表示かどうか
+        
+        // ウィンドウリサイズ時の処理
+        window.addEventListener('resize', () => {
+            const wasMobile = this.isMobile;
+            this.isMobile = window.innerWidth < 768;
+            
+            // モバイル/デスクトップの切り替わり時のみレイアウト調整
+            if (wasMobile !== this.isMobile) {
+                this.adjustLayoutForViewport();
+            }
+        });
     }
 
     /**
@@ -42,6 +53,67 @@ export class UIManager {
         hideElement('training-section');
         hideElement('analysis-section');
         showElement('results-placeholder');
+        
+        // YOLO関連セクションの初期化
+        this.initYoloUI();
+        
+        // ビューポートに応じたレイアウト調整
+        this.adjustLayoutForViewport();
+    }
+    
+    /**
+     * YOLO関連UIの初期化
+     */
+    initYoloUI() {
+        // YOLOトレーニングセクションの初期化
+        const yoloSection = document.getElementById('yolo-training-section');
+        if (yoloSection) {
+            // トレーニング設定の初期値を設定
+            const batchSizeInput = document.getElementById('yolo-batch-size');
+            if (batchSizeInput) {
+                // モバイルデバイスの場合は小さい値を設定
+                batchSizeInput.value = this.isMobile ? '8' : '16';
+            }
+            
+            // 結果セクションを非表示にしておく
+            hideElement('yolo-results-section');
+        }
+    }
+    
+    /**
+     * ビューポートに応じたレイアウト調整
+     */
+    adjustLayoutForViewport() {
+        // モバイル用の特別なレイアウト調整
+        if (this.isMobile) {
+            // フォント・画像サイズの調整
+            document.querySelectorAll('.image-card').forEach(card => {
+                card.style.maxWidth = '100%';
+            });
+            
+            // カード内の内容調整
+            document.querySelectorAll('.card-body').forEach(body => {
+                body.classList.add('p-2');
+            });
+            
+            // 統計カードのレイアウト調整
+            document.querySelectorAll('.metric-card').forEach(card => {
+                card.style.padding = '0.5rem';
+            });
+        } else {
+            // デスクトップ用のレイアウト復元
+            document.querySelectorAll('.image-card').forEach(card => {
+                card.style.maxWidth = '';
+            });
+            
+            document.querySelectorAll('.card-body').forEach(body => {
+                body.classList.remove('p-2');
+            });
+            
+            document.querySelectorAll('.metric-card').forEach(card => {
+                card.style.padding = '1rem';
+            });
+        }
     }
 
     /**
@@ -65,6 +137,15 @@ export class UIManager {
                 // 全フェーズを常にクリック可能に設定
                 element.style.opacity = '1';
                 element.style.pointerEvents = 'auto';
+                
+                // 進捗ドットの更新
+                const progressDot = element.querySelector('.progress-dot');
+                if (progressDot) {
+                    progressDot.classList.remove('active');
+                    if (phase === this.parent.currentPhase || this.isPhaseCompleted(phase)) {
+                        progressDot.classList.add('active');
+                    }
+                }
             }
         });
         
@@ -134,6 +215,87 @@ export class UIManager {
         setElementText('dataset-male-count', stats.male_count || 0);
         setElementText('dataset-female-count', stats.female_count || 0);
         setElementText('dataset-annotated-count', stats.annotation_count || 0);
+        
+        // アノテーション率の計算と表示
+        const totalCount = (stats.male_count || 0) + (stats.female_count || 0);
+        const annotationRate = totalCount > 0 ? (stats.annotation_count || 0) / totalCount * 100 : 0;
+        setElementText('dataset-annotation-rate', annotationRate.toFixed(1) + '%');
+        
+        // YOLO関連の統計表示（存在する場合）
+        if (stats.yolo) {
+            this.updateYoloDatasetStats(stats.yolo);
+        }
+    }
+    
+    /**
+     * YOLOデータセット統計の更新
+     * @param {Object} yoloStats - YOLOデータセット統計
+     */
+    updateYoloDatasetStats(yoloStats) {
+        setElementText('yolo-train-count', yoloStats.train_count || 0);
+        setElementText('yolo-val-count', yoloStats.val_count || 0);
+        
+        // YOLOデータセット準備状況の更新
+        const yoloDatasetReady = (yoloStats.train_count > 0);
+        const yoloReadinessElement = document.getElementById('yolo-dataset-readiness');
+        if (yoloReadinessElement) {
+            if (yoloDatasetReady) {
+                yoloReadinessElement.className = 'alert alert-success';
+                yoloReadinessElement.innerHTML = `<i class="fas fa-check-circle me-2"></i>YOLOデータセットが準備されています`;
+            } else {
+                yoloReadinessElement.className = 'alert alert-warning';
+                yoloReadinessElement.innerHTML = `<i class="fas fa-exclamation-triangle me-2"></i>YOLOデータセットの準備が必要です`;
+            }
+        }
+    }
+    
+    /**
+     * YOLOデータセット状態の更新
+     * @param {Object} status - データセット状態
+     */
+    updateYoloDatasetStatus(status) {
+        // YOLOデータセット状態表示要素
+        const statusElement = document.getElementById('yolo-dataset-status');
+        if (!statusElement) return;
+        
+        if (status.error) {
+            statusElement.className = 'alert alert-danger';
+            statusElement.innerHTML = `<i class="fas fa-exclamation-circle me-2"></i>${status.message || 'データセット確認中にエラーが発生しました'}`;
+            return;
+        }
+        
+        // 画像数の取得
+        const trainCount = status.images?.train || 0;
+        const valCount = status.images?.val || 0;
+        
+        // ラベル数の取得
+        const trainLabelCount = status.labels?.train || 0;
+        
+        // 準備状況の判定
+        let alertClass = 'alert-warning';
+        let message = '';
+        let icon = 'fas fa-exclamation-triangle';
+        
+        if (trainCount > 0 && trainLabelCount > 0) {
+            alertClass = 'alert-success';
+            icon = 'fas fa-check-circle';
+            message = `YOLOデータセットが準備完了（訓練: ${trainCount}枚, 検証: ${valCount}枚）`;
+        } else if (trainCount > 0 && trainLabelCount === 0) {
+            alertClass = 'alert-warning';
+            message = `画像はありますが、アノテーションが必要です（${trainCount}枚）`;
+        } else {
+            alertClass = 'alert-secondary';
+            icon = 'fas fa-info-circle';
+            message = 'YOLOデータセットが準備されていません';
+        }
+        
+        statusElement.className = `alert ${alertClass}`;
+        statusElement.innerHTML = `<i class="${icon} me-2"></i>${message}`;
+        
+        // 統計表示も更新
+        setElementText('yolo-train-count', trainCount);
+        setElementText('yolo-val-count', valCount);
+        setElementText('yolo-annotation-count', trainLabelCount);
     }
 
     /**
@@ -164,6 +326,19 @@ export class UIManager {
                 startBtn.classList.add('d-none');
             }
         }
+        
+        // YOLOトレーニングボタンの表示制御
+        const startYoloBtn = document.getElementById('start-yolo-training-btn');
+        if (startYoloBtn) {
+            const annotationCount = this.parent.datasetStats.annotation_count || 0;
+            if (annotationCount > 3) {
+                startYoloBtn.disabled = false;
+                startYoloBtn.title = 'YOLOトレーニングを開始';
+            } else {
+                startYoloBtn.disabled = true;
+                startYoloBtn.title = 'トレーニングには3枚以上のアノテーション画像が必要です';
+            }
+        }
     }
 
     /**
@@ -191,9 +366,18 @@ export class UIManager {
         const imageCards = allImages.map(item => {
             const genderClass = getGenderClass(item.category);
             const genderIcon = getGenderIcon(item.category);
-            const annotationBadge = item.has_annotation ? 
-                '<span class="badge bg-success position-absolute top-0 end-0 m-1"><i class="fas fa-check"></i></span>' : 
-                '<span class="badge bg-secondary position-absolute top-0 end-0 m-1"><i class="fas fa-plus"></i></span>';
+            
+            // アノテーション状態に応じたバッジ
+            let annotationBadge = '';
+            if (item.has_annotation && item.has_yolo) {
+                annotationBadge = '<span class="badge bg-success position-absolute top-0 end-0 m-1" title="アノテーション済み・YOLO形式あり"><i class="fas fa-check"></i></span>';
+            } else if (item.has_annotation) {
+                annotationBadge = '<span class="badge bg-success position-absolute top-0 end-0 m-1" title="アノテーション済み"><i class="fas fa-check"></i></span>';
+            } else if (item.has_yolo) {
+                annotationBadge = '<span class="badge bg-info position-absolute top-0 end-0 m-1" title="YOLO形式あり"><i class="fas fa-object-group"></i></span>';
+            } else {
+                annotationBadge = '<span class="badge bg-secondary position-absolute top-0 end-0 m-1" title="未アノテーション"><i class="fas fa-plus"></i></span>';
+            }
             
             return `
                 <div class="image-card sample-card ${genderClass}" 
@@ -204,7 +388,7 @@ export class UIManager {
                     <img src="${item.url}" alt="${item.filename}" class="image-preview">
                     <div class="image-info">
                         <i class="${genderIcon} me-1"></i>
-                        ${truncateFilename(item.filename, 20)}
+                        ${truncateFilename(item.filename, this.isMobile ? 15 : 20)}
                         <div class="small text-muted mt-1">
                             ${item.has_annotation ? 'アノテーション済み' : '未アノテーション'}
                         </div>
@@ -218,14 +402,12 @@ export class UIManager {
         }).join('');
         
         container.innerHTML = imageCards;
-        
     }
 
     /**
      * サマリーメトリクス更新
      */
     updateSummaryMetrics() {
-        
         // サマリー情報の取得
         const result = this.parent.learningResults || {};
         
@@ -281,7 +463,18 @@ export class UIManager {
         // アノテーション情報の表示更新
         setElementText('male-annotation-count', maleAnnotated);
         setElementText('female-annotation-count', femaleAnnotated);
-
+        
+        // YOLOメトリクスの更新（存在する場合）
+        if (result.yolo_results && result.yolo_results.metrics) {
+            const yoloMetrics = result.yolo_results.metrics;
+            
+            setElementText('yolo-map50', (yoloMetrics.mAP50 * 100).toFixed(1) + '%');
+            setElementText('yolo-precision', (yoloMetrics.precision * 100).toFixed(1) + '%');
+            setElementText('yolo-recall', (yoloMetrics.recall * 100).toFixed(1) + '%');
+            
+            // YOLOセクションを表示
+            showElement('yolo-results-section');
+        }
     }
 
     /**
@@ -330,7 +523,6 @@ export class UIManager {
      * @param {Array} history - 履歴データ
      */
     displayLearningHistory(history) {
-        
         const container = document.getElementById('unified-learning-history');
         if (!container) {
             console.error('履歴表示コンテナが見つかりません');
@@ -380,12 +572,20 @@ export class UIManager {
             // 表示用のアイテム情報を準備
             const date = item.date || '日時不明';
             const typeLabels = Object.keys(accuracies).map(type => {
-                const label = type === 'evaluation' ? '学習評価' : 'アノテーション分析';
+                const label = type === 'evaluation' ? '学習評価' : 
+                             type === 'annotation' ? 'アノテーション分析' : 
+                             type === 'yolo' ? 'YOLO検出' : type;
                 const accuracy = (accuracies[type] * 100).toFixed(1);
                 return `<strong>${label}:</strong> ${accuracy}%`;
             }).join(' / ');
             
-            const typeIcon = relatedItems.some(i => i.type === 'evaluation') ? 'fa-chart-line' : 'fa-tags';
+            // アイコン選択
+            const typeIcon = relatedItems.some(i => i.type === 'yolo') ? 'fa-object-ungroup' :
+                            relatedItems.some(i => i.type === 'evaluation') ? 'fa-chart-line' : 'fa-tags';
+            
+            // YOLOバッジの追加
+            const yoloBadge = relatedItems.some(i => i.type === 'yolo') ? 
+                `<span class="badge bg-info ms-1">YOLO</span>` : '';
             
             // 履歴アイテムHTML
             historyListHTML += `
@@ -395,6 +595,7 @@ export class UIManager {
                         <span>
                             <i class="fas ${typeIcon} me-2"></i>
                             ${typeLabels}
+                            ${yoloBadge}
                         </span>
                         <small class="text-muted">${date}</small>
                     </div>
@@ -433,7 +634,9 @@ export class UIManager {
             'feature_extraction': 'step-feature-extraction',
             'model_training': 'step-model-training', 
             'basic_evaluation': 'step-basic-evaluation',
-            'detailed_analysis': 'step-detailed-analysis'
+            'detailed_analysis': 'step-detailed-analysis',
+            'yolo_preparation': 'step-yolo-preparation',
+            'yolo_training': 'step-yolo-training'
         };
         
         Object.entries(stepMap).forEach(([phase, stepId]) => {
@@ -442,13 +645,15 @@ export class UIManager {
                 const icon = element.querySelector('i');
                 if (completedPhases.includes(phase)) {
                     element.classList.add('active');
-                    icon.className = 'fas fa-check-circle text-success me-2';
+                    element.classList.remove('current');
+                    if (icon) icon.className = 'fas fa-check-circle text-success me-2';
                 } else if (phase === currentPhase) {
+                    element.classList.remove('active');
                     element.classList.add('current');
-                    icon.className = 'fas fa-spinner fa-spin text-warning me-2';
+                    if (icon) icon.className = 'fas fa-spinner fa-spin text-warning me-2';
                 } else {
                     element.classList.remove('active', 'current');
-                    icon.className = 'fas fa-circle-notch text-muted me-2';
+                    if (icon) icon.className = 'fas fa-circle-notch text-muted me-2';
                 }
             }
         });
@@ -466,8 +671,177 @@ export class UIManager {
         if (bar) {
             bar.style.width = `${progress}%`;
             bar.textContent = `${Math.round(progress)}%`;
+            
+            // 進捗完了時にアニメーションを停止
+            if (progress >= 100) {
+                bar.classList.remove('progress-bar-animated');
+            } else {
+                bar.classList.add('progress-bar-animated');
+            }
         }
+        
         if (text) text.textContent = message;
+    }
+    
+    /**
+     * YOLOトレーニング進捗の更新
+     * @param {Object} status - ステータスデータ
+     */
+    updateYoloTrainingProgress(status) {
+        const bar = document.getElementById('yolo-progress-bar');
+        const text = document.getElementById('yolo-status-text');
+        const container = document.getElementById('yolo-progress-container');
+        
+        if (!bar || !text || !container) return;
+        
+        // 進捗表示
+        if (status.status === 'not_started') {
+            container.style.display = 'none';
+            return;
+        }
+        
+        container.style.display = 'block';
+        
+        // 進捗バーの更新
+        bar.style.width = `${status.progress || 0}%`;
+        bar.textContent = `${Math.round(status.progress || 0)}%`;
+        
+        // 進捗完了時にアニメーションを停止
+        if ((status.progress || 0) >= 100 || status.status === 'completed') {
+            bar.classList.remove('progress-bar-animated');
+        } else {
+            bar.classList.add('progress-bar-animated');
+        }
+        
+        // ステータステキストの更新
+        text.textContent = status.message || '';
+        
+        // メトリクスの更新
+        if (status.metrics) {
+            this.updateYoloMetrics(status.metrics);
+        }
+        
+        // トレーニング詳細の更新
+        this.updateYoloTrainingDetails(status);
+        
+        // 結果画像の更新
+        if (status.result_images) {
+            this.updateYoloResultImages(status.result_images);
+        }
+    }
+    
+    /**
+     * YOLOメトリクスの更新
+     * @param {Object} metrics - メトリクスデータ
+     */
+    updateYoloMetrics(metrics) {
+        // Box Loss
+        if (metrics.box_loss && metrics.box_loss.length > 0) {
+            setElementText('yolo-box-loss', metrics.box_loss[metrics.box_loss.length - 1].toFixed(4));
+        }
+        
+        // Object Loss
+        if (metrics.obj_loss && metrics.obj_loss.length > 0) {
+            setElementText('yolo-obj-loss', metrics.obj_loss[metrics.obj_loss.length - 1].toFixed(4));
+        }
+        
+        // mAP50
+        if (metrics.mAP50 && metrics.mAP50.length > 0) {
+            setElementText('yolo-map50', metrics.mAP50[metrics.mAP50.length - 1].toFixed(4));
+        }
+    }
+    
+    /**
+     * YOLOトレーニング詳細の更新
+     * @param {Object} status - ステータスデータ
+     */
+    updateYoloTrainingDetails(status) {
+        setElementText('yolo-elapsed-time', status.elapsed_time || '-');
+        setElementText('yolo-current-epoch', status.current_epoch || '-');
+        setElementText('yolo-total-epochs', status.total_epochs || '-');
+        
+        // ステータステキストの更新
+        const statusElement = document.getElementById('yolo-training-status');
+        if (statusElement) {
+            let alertClass = 'alert-secondary';
+            
+            switch (status.status) {
+                case 'running':
+                    alertClass = 'alert-primary';
+                    break;
+                case 'completed':
+                    alertClass = 'alert-success';
+                    break;
+                case 'stopped':
+                    alertClass = 'alert-warning';
+                    break;
+                case 'failed':
+                case 'error':
+                    alertClass = 'alert-danger';
+                    break;
+            }
+            
+            statusElement.className = `alert ${alertClass}`;
+            statusElement.textContent = status.message || '状態不明';
+        }
+    }
+    
+    /**
+     * YOLO結果画像の更新
+     * @param {Object} images - 画像データ
+     */
+    updateYoloResultImages(images) {
+        const container = document.getElementById('yolo-training-images');
+        if (!container) return;
+        
+        if (Object.keys(images).length === 0) {
+            container.innerHTML = '<p class="text-muted text-center">トレーニング画像はまだありません</p>';
+            return;
+        }
+        
+        let html = '';
+        
+        // バッチ画像
+        if (images.train_batch) {
+            html += `
+                <div class="mb-3">
+                    <h6>トレーニングバッチ:</h6>
+                    <img src="${images.train_batch}" alt="トレーニングバッチ" class="img-fluid rounded">
+                </div>
+            `;
+        }
+        
+        // ラベル分布
+        if (images.labels) {
+            html += `
+                <div class="mb-3">
+                    <h6>ラベル分布:</h6>
+                    <img src="${images.labels}" alt="ラベル分布" class="img-fluid rounded">
+                </div>
+            `;
+        }
+        
+        // 結果プロット
+        if (images.results) {
+            html += `
+                <div class="mb-3">
+                    <h6>学習曲線:</h6>
+                    <img src="${images.results}" alt="学習結果" class="img-fluid rounded">
+                </div>
+            `;
+        }
+        
+        // 混同行列
+        if (images.confusion_matrix) {
+            html += `
+                <div class="mb-3">
+                    <h6>混同行列:</h6>
+                    <img src="${images.confusion_matrix}" alt="混同行列" class="img-fluid rounded">
+                </div>
+            `;
+        }
+        
+        container.innerHTML = html;
     }
 
     /**
@@ -493,6 +867,13 @@ export class UIManager {
             progressContainer.classList.remove('d-none');
             progressBar.style.width = `${progress}%`;
             progressBar.textContent = `${Math.round(progress)}%`;
+            
+            // 進捗完了時にアニメーションを停止
+            if (progress >= 100) {
+                progressBar.classList.remove('progress-bar-animated');
+            } else {
+                progressBar.classList.add('progress-bar-animated');
+            }
         }
     }
 
@@ -506,6 +887,13 @@ export class UIManager {
         if (container && bar) {
             container.classList.remove('d-none');
             bar.style.width = `${progress}%`;
+            
+            // 進捗が100%の場合はアニメーションを停止
+            if (progress >= 100) {
+                bar.classList.remove('progress-bar-animated');
+            } else {
+                bar.classList.add('progress-bar-animated');
+            }
         }
     }
 
@@ -525,6 +913,11 @@ export class UIManager {
         setElementText('training-male-count', stats.male_count || 0);
         setElementText('training-female-count', stats.female_count || 0);
         setElementText('training-annotated-count', stats.annotation_count || 0);
+        
+        // アノテーション率の計算と表示
+        const totalCount = (stats.male_count || 0) + (stats.female_count || 0);
+        const annotationRate = totalCount > 0 ? (stats.annotation_count || 0) / totalCount * 100 : 0;
+        setElementText('training-annotation-rate', annotationRate.toFixed(1) + '%');
     }
 
     /**
@@ -560,5 +953,18 @@ export class UIManager {
     showError(message) {
         console.error('エラー:', message);
         showErrorMessage(message);
+    }
+    
+    /**
+     * YOLOフォームのパラメータを取得
+     * @returns {Object} パラメータオブジェクト
+     */
+    getYoloTrainingParams() {
+        return {
+            weights: document.getElementById('yolo-weights')?.value || 'yolov5s.pt',
+            batch_size: parseInt(document.getElementById('yolo-batch-size')?.value || '16'),
+            epochs: parseInt(document.getElementById('yolo-epochs')?.value || '100'),
+            img_size: parseInt(document.getElementById('yolo-img-size')?.value || '640')
+        };
     }
 }
