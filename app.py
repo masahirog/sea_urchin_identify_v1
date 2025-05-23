@@ -6,6 +6,8 @@ import threading
 import queue
 from utils.file_cleanup import cleanup_temp_files, schedule_cleanup
 from config import * 
+from routes.yolo import yolo_bp
+
 
 # ロギング設定
 logging.basicConfig(
@@ -159,6 +161,16 @@ def internal_error(error):
 @app.errorhandler(413)
 def too_large(error):
     return jsonify({'error': 'ファイルサイズが大きすぎます'}), 413
+
+# Blueprintの登録
+app.register_blueprint(yolo_bp)
+
+
+# 静的ファイルの設定
+@app.route('/static/runs/<path:filename>')
+def serve_runs(filename):
+    """YOLOの結果ディレクトリを提供するルート"""
+    return send_from_directory('yolov5/runs', filename)
 
 # アプリケーション起動
 if __name__ == '__main__':

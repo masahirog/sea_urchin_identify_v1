@@ -58,6 +58,17 @@ DEBUG = True
 ALLOWED_VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv'}
 ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif'}
 
+# YOLOv5関連の設定
+YOLO_DIR = 'yolov5'
+YOLO_DATASET_DIR = 'data/yolo_dataset'
+YOLO_IMAGES_DIR = os.path.join(YOLO_DATASET_DIR, 'images')
+YOLO_LABELS_DIR = os.path.join(YOLO_DATASET_DIR, 'labels')
+YOLO_TRAIN_IMAGES_DIR = os.path.join(YOLO_IMAGES_DIR, 'train')
+YOLO_TRAIN_LABELS_DIR = os.path.join(YOLO_LABELS_DIR, 'train')
+YOLO_VAL_IMAGES_DIR = os.path.join(YOLO_IMAGES_DIR, 'val')
+YOLO_VAL_LABELS_DIR = os.path.join(YOLO_LABELS_DIR, 'val')
+
+
 def ensure_directories():
     """必要なディレクトリを作成"""
     directories = [

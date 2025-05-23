@@ -1,9 +1,17 @@
 # ==================== データディレクトリ（非公開） ====================
 # 一時ファイル、学習データ、モデルなど - 全て除外
 /data/
+# 例外：data.yamlは保持
+!/data/yolo_dataset/data.yaml
+!/data/yolo_dataset/.gitkeep
+!/data/yolo_dataset/images/train/.gitkeep
+!/data/yolo_dataset/images/val/.gitkeep
+!/data/yolo_dataset/labels/train/.gitkeep
+!/data/yolo_dataset/labels/val/.gitkeep
 
 # ==================== Python関連 ====================
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *.so
 *.egg
@@ -51,25 +59,45 @@ Desktop.ini
 /uploads/
 /static/uploads/
 
+# ==================== YOLOv5関連 ====================
+# YOLOv5のモデル重みファイル（大容量）
+/yolov5/runs/
+# ただし、実験ディレクトリ構造は維持
+!/yolov5/runs/train/.gitkeep
+# モデルファイル
+*.pt
+# 学習キャッシュ
+*.cache
+# テスト結果
+/test_results/
+
 # ==================== 特定ファイルの除外 ====================
 # 画像ファイル全般（ユーザー生成・自動生成・サンプル含む）
 /static/images/samples/*
 /static/images/detection_results/*
 /static/images/annotations/*
 /static/images/evaluations/*
+/static/annotations/yolo/*
 
 # ただし、.gitkeepファイルは保持（ディレクトリ構造維持）
 !/static/images/samples/.gitkeep
+!/static/images/samples/papillae/.gitkeep
 !/static/images/samples/papillae/male/.gitkeep
 !/static/images/samples/papillae/female/.gitkeep
 !/static/images/detection_results/.gitkeep
 !/static/images/annotations/.gitkeep
 !/static/images/evaluations/.gitkeep
+!/static/annotations/.gitkeep
+!/static/annotations/yolo/.gitkeep
 
 # フォントファイル（必要に応じて）
 /static/fonts/*
 
-
 # ==================== 保持するもの ====================
 # 設定ファイルのみ追跡
 # static/annotation_mapping.json は除外しない（つまり追跡する）
+
+# ==================== 必要なディレクトリ構造 ====================
+# 空のディレクトリを保持するための.gitkeepファイル
+!/logs/.gitkeep
+!/models/.gitkeep
