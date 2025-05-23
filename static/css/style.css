@@ -1051,3 +1051,348 @@ css/* ==================== グラフカード ==================== */
     max-height: 300px;
     overflow-y: auto;
 }
+
+
+/* ==================== YOLO関連スタイル ==================== */
+
+/* YOLO検出カード */
+.detection-card {
+    transition: all 0.3s ease;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.detection-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.detection-card .card-img-top {
+    height: 200px;
+    object-fit: cover;
+    border-bottom: 1px solid #eee;
+}
+
+.detection-info {
+    padding: 12px;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.7));
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    color: white;
+    font-size: 14px;
+}
+
+/* YOLO検出結果テーブル */
+.detection-table {
+    font-size: 0.85rem;
+}
+
+.detection-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+.detection-confidence {
+    width: 100px;
+    height: 6px;
+    background-color: #e9ecef;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 5px;
+}
+
+.confidence-bar {
+    height: 100%;
+    background: linear-gradient(to right, #dc3545, #fd7e14, #ffc107, #28a745);
+    border-radius: 3px;
+}
+
+/* アノテーションキャンバス関連 */
+.annotation-area {
+    position: relative;
+    margin: 0 auto;
+    max-width: 100%;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+    background-color: #f8f9fa;
+}
+
+.annotation-canvas {
+    display: block;
+    max-width: 100%;
+    cursor: crosshair;
+}
+
+.annotation-toolbar {
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.annotation-tool-btn {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    background-color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.annotation-tool-btn:hover {
+    background-color: #e9ecef;
+}
+
+.annotation-tool-btn.active {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+/* YOLOトレーニング関連 */
+.training-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.metric-box {
+    flex: 1;
+    min-width: 120px;
+    padding: 10px;
+    border-radius: 8px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    text-align: center;
+}
+
+.metric-value {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+.metric-label {
+    font-size: 0.8rem;
+    color: #6c757d;
+    text-transform: uppercase;
+}
+
+/* 結果グラフ表示 */
+.results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.result-item {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.result-item:hover {
+    transform: scale(1.02);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.result-item img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.result-caption {
+    padding: 10px;
+    background-color: #f8f9fa;
+    font-size: 0.9rem;
+    text-align: center;
+    border-top: 1px solid #dee2e6;
+}
+
+/* バウンディングボックス */
+.bounding-box {
+    position: absolute;
+    border: 2px solid rgba(255, 87, 34, 0.8);
+    background-color: rgba(255, 87, 34, 0.2);
+    cursor: move;
+}
+
+.bounding-box .box-label {
+    position: absolute;
+    top: -24px;
+    left: 0;
+    background-color: rgba(255, 87, 34, 0.9);
+    color: white;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.bounding-box .resize-handle {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background-color: white;
+    border: 1px solid rgba(255, 87, 34, 0.8);
+}
+
+.bounding-box .handle-nw {
+    top: -4px;
+    left: -4px;
+    cursor: nw-resize;
+}
+
+.bounding-box .handle-ne {
+    top: -4px;
+    right: -4px;
+    cursor: ne-resize;
+}
+
+.bounding-box .handle-sw {
+    bottom: -4px;
+    left: -4px;
+    cursor: sw-resize;
+}
+
+.bounding-box .handle-se {
+    bottom: -4px;
+    right: -4px;
+    cursor: se-resize;
+}
+
+/* 強調表示ボックス */
+.highlight-box {
+    position: absolute;
+    border: 2px dashed rgba(33, 150, 243, 0.8);
+    background-color: rgba(33, 150, 243, 0.1);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.5); }
+    70% { box-shadow: 0 0 0 6px rgba(33, 150, 243, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0); }
+}
+
+/* YOLO画像選択 */
+.yolo-image-selector {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.yolo-image-item {
+    width: 100px;
+    height: 100px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 2px solid #dee2e6;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.yolo-image-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.yolo-image-item:hover {
+    border-color: #007bff;
+    transform: scale(1.05);
+}
+
+.yolo-image-item.selected {
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5);
+}
+
+/* アノテーション履歴リスト */
+.annotation-history {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+}
+
+.annotation-history-item {
+    padding: 10px;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background-color 0.2s ease;
+}
+
+.annotation-history-item:last-child {
+    border-bottom: none;
+}
+
+.annotation-history-item:hover {
+    background-color: #f8f9fa;
+}
+
+.annotation-history-item .item-info {
+    display: flex;
+    align-items: center;
+}
+
+.annotation-history-item .item-thumbnail {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    margin-right: 10px;
+    object-fit: cover;
+}
+
+.annotation-history-item .item-text {
+    flex: 1;
+}
+
+.annotation-history-item .item-actions {
+    display: flex;
+    gap: 5px;
+}
+
+/* レスポンシブ調整 */
+@media (max-width: 768px) {
+    .results-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .metric-box {
+        min-width: 100px;
+    }
+    
+    .annotation-toolbar {
+        padding: 5px;
+    }
+    
+    .annotation-tool-btn {
+        width: 35px;
+        height: 35px;
+    }
+    
+    .yolo-image-item {
+        width: 80px;
+        height: 80px;
+    }
+}

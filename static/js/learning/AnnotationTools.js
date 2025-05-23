@@ -1,5 +1,5 @@
 /**
- * ウニ生殖乳頭分析システム - アノテーションツール
+ * ウニ生殖乳頭分析システム - アノテーションツール（改善版）
  * 画像アノテーションのための機能を提供
  */
 
@@ -22,6 +22,8 @@ const annotationTools = {
     lastY: 0,
     currentTool: 'pen',
     toolSize: 5,
+    history: [], // 操作履歴（Undo用）
+    historyIndex: -1, // 現在の履歴インデックス
 };
 
 /**
@@ -70,17 +72,58 @@ async function checkExistingAnnotation(imagePath) {
         const annotationPath = mapping[imagePath];
         
         if (annotationPath) {
+            // YOLOアノテーション情報も確認
+            const yoloInfo = await checkYoloAnnotation(imagePath);
+            
             return {
                 exists: true,
                 path: annotationPath,
-                url: `/static/${annotationPath}`
+                url: `/static/${annotationPath}`,
+                yolo: yoloInfo
+            };
+        }
+        
+        // YOLOアノテーションのみを確認
+        const yoloInfo = await checkYoloAnnotation(imagePath);
+        if (yoloInfo && yoloInfo.exists) {
+            return {
+                exists: false,
+                yolo: yoloInfo
             };
         }
         
         return { exists: false };
         
     } catch (error) {
+        console.error('アノテーション情報確認エラー:', error);
         return null;
+    }
+}
+
+/**
+ * YOLOアノテーション情報を確認
+ * @param {string} imagePath - 画像パス
+ * @returns {Promise} YOLOアノテーション情報
+ */
+async function checkYoloAnnotation(imagePath) {
+    try {
+        const filename = imagePath.split('/').pop();
+        const basename = filename.split('.')[0];
+        
+        // YOLOラベルファイルのパスを作成
+        const labelPath = `data/yolo_dataset/labels/train/${basename}.txt`;
+        
+        // ファイルの存在を確認（APIを作成する必要あり）
+        const response = await fetch(`/api/check-file?path=${encodeURIComponent(labelPath)}`);
+        const data = await response.json();
+        
+        return {
+            exists: data.exists,
+            path: labelPath
+        };
+    } catch (error) {
+        console.error('YOLOアノテーション確認エラー:', error);
+        return { exists: false };
     }
 }
 
@@ -97,6 +140,7 @@ function createImageDetailModal(imagePath, annotationInfo) {
     }
     
     const hasAnnotation = annotationInfo && annotationInfo.exists;
+    const hasYoloAnnotation = annotationInfo && annotationInfo.yolo && annotationInfo.yolo.exists;
     const displayImageUrl = hasAnnotation ? annotationInfo.url : `/sample/${imagePath}`;
     const filename = imagePath.split('/').pop();
     
@@ -108,7 +152,12 @@ function createImageDetailModal(imagePath, annotationInfo) {
                     <h5 class="modal-title" id="imageDetailModalLabel">
                         <i class="fas fa-image me-2"></i>
                         ${filename}
-                        ${hasAnnotation ? '<span class="badge bg-success ms-2">アノテーション済み</span>' : '<span class="badge bg-secondary ms-2">未アノテーション</span>'}
+                        ${hasAnnotation ? 
+                          '<span class="badge bg-success ms-2">アノテーション済み</span>' : 
+                          '<span class="badge bg-secondary ms-2">未アノテーション</span>'}
+                        ${hasYoloAnnotation ? 
+                          '<span class="badge bg-info ms-2">YOLO形式あり</span>' : 
+                          ''}
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
                 </div>
@@ -134,6 +183,10 @@ function createImageDetailModal(imagePath, annotationInfo) {
                                     <p class="text-muted"><i class="fas fa-circle me-1"></i> 未アノテーション</p>
                                     <p class="small">アノテーションを追加すると学習精度が向上します</p>
                                 `}
+                                ${hasYoloAnnotation ? `
+                                    <p class="text-info"><i class="fas fa-check-circle me-1"></i> YOLO形式あり</p>
+                                    <p><strong>YOLOラベル:</strong><br><code>${annotationInfo.yolo.path}</code></p>
+                                ` : ''}
                             </div>
                         </div>
                     </div>
@@ -147,6 +200,11 @@ function createImageDetailModal(imagePath, annotationInfo) {
                             <button type="button" class="btn btn-outline-danger" id="deleteAnnotationBtn">
                                 <i class="fas fa-trash me-1"></i> アノテーション削除
                             </button>
+                            ${!hasYoloAnnotation ? `
+                                <button type="button" class="btn btn-outline-info" id="convertToYoloBtn">
+                                    <i class="fas fa-exchange-alt me-1"></i> YOLO変換
+                                </button>
+                            ` : ''}
                         ` : `
                             <button type="button" class="btn btn-success" id="createAnnotationBtn">
                                 <i class="fas fa-plus me-1"></i> アノテーション作成
@@ -191,6 +249,7 @@ function createImageDetailModal(imagePath, annotationInfo) {
  */
 function setupImageDetailModalEvents(imagePath, annotationInfo) {
     const hasAnnotation = annotationInfo && annotationInfo.exists;
+    const hasYoloAnnotation = annotationInfo && annotationInfo.yolo && annotationInfo.yolo.exists;
     
     // アノテーション作成ボタン
     const createBtn = document.getElementById('createAnnotationBtn');
@@ -222,6 +281,14 @@ function setupImageDetailModalEvents(imagePath, annotationInfo) {
         });
     }
     
+    // YOLO変換ボタン
+    const convertToYoloBtn = document.getElementById('convertToYoloBtn');
+    if (convertToYoloBtn) {
+        convertToYoloBtn.addEventListener('click', function() {
+            convertToYoloFormat(imagePath, annotationInfo);
+        });
+    }
+    
     // データセット移動ボタン
     const moveBtn = document.getElementById('moveToDatasetBtn');
     if (moveBtn) {
@@ -236,6 +303,56 @@ function setupImageDetailModalEvents(imagePath, annotationInfo) {
         deleteImageBtn.addEventListener('click', function() {
             deleteImage(imagePath);
         });
+    }
+}
+
+/**
+ * アノテーションをYOLO形式に変換
+ * @param {string} imagePath - 画像パス
+ * @param {Object} annotationInfo - アノテーション情報
+ */
+async function convertToYoloFormat(imagePath, annotationInfo) {
+    if (!annotationInfo || !annotationInfo.exists) {
+        showErrorMessage('変換元のアノテーションが見つかりません');
+        return;
+    }
+    
+    try {
+        showLoading();
+        
+        // 変換APIを呼び出す
+        const response = await fetch('/learning/convert-to-yolo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                image_path: imagePath,
+                annotation_path: annotationInfo.path
+            })
+        });
+        
+        if (!response.ok) throw new Error('変換リクエストに失敗しました');
+        
+        const data = await response.json();
+        hideLoading();
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        // 成功メッセージ
+        showSuccessMessage('YOLO形式に変換しました');
+        
+        // モーダルを閉じる
+        bootstrap.Modal.getInstance(document.getElementById('imageDetailModal')).hide();
+        
+        // 必要に応じてデータを更新
+        if (typeof window.onAnnotationSaved === 'function') {
+            window.onAnnotationSaved();
+        }
+        
+    } catch (error) {
+        hideLoading();
+        showErrorMessage('YOLO形式への変換に失敗しました: ' + error.message);
     }
 }
 
@@ -260,6 +377,8 @@ async function deleteAnnotation(imagePath, annotationInfo) {
     }
     
     try {
+        showLoading();
+        
         const response = await fetch('/learning/delete-annotation', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -272,14 +391,15 @@ async function deleteAnnotation(imagePath, annotationInfo) {
         if (!response.ok) throw new Error('削除リクエストに失敗しました');
         
         const data = await response.json();
-        if (data.error) throw new Error(data.error);
+        
+        hideLoading();
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
         
         // 成功メッセージ
-        if (window.unifiedLearningSystem) {
-            showSuccessMessage('アノテーションを削除しました');
-        } else {
-            alert('アノテーションを削除しました');
-        }
+        showSuccessMessage('アノテーションを削除しました');
         
         // モーダルを閉じる
         bootstrap.Modal.getInstance(document.getElementById('imageDetailModal')).hide();
@@ -290,11 +410,8 @@ async function deleteAnnotation(imagePath, annotationInfo) {
         }
         
     } catch (error) {
-        if (window.unifiedLearningSystem) {
-            showErrorMessage('アノテーション削除に失敗しました: ' + error.message);
-        } else {
-            alert('アノテーション削除に失敗しました: ' + error.message);
-        }
+        hideLoading();
+        showErrorMessage('アノテーション削除に失敗しました: ' + error.message);
     }
 }
 
@@ -304,22 +421,107 @@ async function deleteAnnotation(imagePath, annotationInfo) {
  */
 function moveImageToDataset(imagePath) {
     // 性別選択ダイアログを表示
-    const gender = prompt('移動先を選択してください:\n1: オス (male)\n2: メス (female)\n\n番号を入力してください:');
+    const genderOptions = `
+    <div class="form-check mb-2">
+        <input class="form-check-input" type="radio" name="genderOption" id="genderMale" value="male" checked>
+        <label class="form-check-label" for="genderMale">
+            <i class="fas fa-mars text-primary"></i> オス
+        </label>
+    </div>
+    <div class="form-check">
+        <input class="form-check-input" type="radio" name="genderOption" id="genderFemale" value="female">
+        <label class="form-check-label" for="genderFemale">
+            <i class="fas fa-venus text-danger"></i> メス
+        </label>
+    </div>
+    `;
     
-    let targetGender;
-    if (gender === '1') targetGender = 'male';
-    else if (gender === '2') targetGender = 'female';
-    else {
-        alert('キャンセルされました');
-        return;
-    }
+    // 確認ダイアログを表示
+    const modal = document.createElement('div');
+    modal.innerHTML = `
+    <div class="modal fade" id="moveToDatasetModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">データセットに移動</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>移動先カテゴリを選択してください:</p>
+                    ${genderOptions}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="button" class="btn btn-primary" id="confirmMoveBtn">移動する</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
     
-    // 移動処理の実装（実際のAPIコールが必要）
-    if (window.unifiedLearningSystem) {
-        showSuccessMessage(`画像を${targetGender}カテゴリに移動しました`);
-    } else {
-        alert(`画像を${targetGender}カテゴリに移動しました`);
-    }
+    document.body.appendChild(modal);
+    
+    // モーダルを表示
+    const moveModal = new bootstrap.Modal(document.getElementById('moveToDatasetModal'));
+    moveModal.show();
+    
+    // 移動確認ボタンのイベント
+    document.getElementById('confirmMoveBtn').addEventListener('click', async function() {
+        const genderElements = document.getElementsByName('genderOption');
+        let targetGender = 'unknown';
+        
+        for (const element of genderElements) {
+            if (element.checked) {
+                targetGender = element.value;
+                break;
+            }
+        }
+        
+        try {
+            showLoading();
+            
+            // 移動APIを呼び出す
+            const response = await fetch('/learning/save-to-dataset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    image_path: imagePath,
+                    gender: targetGender
+                })
+            });
+            
+            if (!response.ok) throw new Error('移動リクエストに失敗しました');
+            
+            const data = await response.json();
+            
+            hideLoading();
+            moveModal.hide();
+            
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            // 詳細モーダルも閉じる
+            bootstrap.Modal.getInstance(document.getElementById('imageDetailModal')).hide();
+            
+            // 成功メッセージ
+            showSuccessMessage(`画像を${targetGender === 'male' ? 'オス' : 'メス'}カテゴリに移動しました`);
+            
+            // データを更新
+            if (typeof window.onAnnotationSaved === 'function') {
+                window.onAnnotationSaved();
+            }
+            
+        } catch (error) {
+            hideLoading();
+            showErrorMessage('データセットへの移動に失敗しました: ' + error.message);
+        }
+    });
+    
+    // モーダルが閉じられたときの処理
+    document.getElementById('moveToDatasetModal').addEventListener('hidden.bs.modal', function() {
+        this.remove();
+    });
 }
 
 /**
@@ -351,21 +553,20 @@ export async function deleteImage(imagePath) {
         if (!response.ok) throw new Error('削除に失敗しました');
         
         const data = await response.json();
-        if (data.error) throw new Error(data.error);
         
         hideLoading();
         
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
         // 成功メッセージ表示
+        showSuccessMessage(data.message);
+        
+        // データ更新
         if (window.unifiedLearningSystem) {
-            showSuccessMessage(data.message);
-            
-            // データ更新
-            await window.unifiedLearningSystem.refreshDatasetStats();
-            await window.unifiedLearningSystem.loadLearningData();
-        } else {
-            alert(data.message);
-            // フォールバック: ページリロード
-            window.location.reload();
+            await window.unifiedLearningSystem.dataManager.refreshDatasetStats();
+            await window.unifiedLearningSystem.dataManager.loadLearningData();
         }
         
         // モーダルが開いている場合は閉じる
@@ -376,12 +577,7 @@ export async function deleteImage(imagePath) {
         
     } catch (error) {
         hideLoading();
-        
-        if (window.unifiedLearningSystem) {
-            showErrorMessage('削除中にエラーが発生しました: ' + error.message);
-        } else {
-            alert('削除中にエラーが発生しました: ' + error.message);
-        }
+        showErrorMessage('削除中にエラーが発生しました: ' + error.message);
     }
 }
 
@@ -404,6 +600,10 @@ export function openAnnotationModal(paramImagePath, isEdit = false, existingAnno
         }
     };
     
+    // 履歴をクリア
+    annotationTools.history = [];
+    annotationTools.historyIndex = -1;
+    
     // モーダルを作成
     createAnnotationModal(isEdit, existingAnnotation);
     
@@ -422,6 +622,8 @@ export function openAnnotationModal(paramImagePath, isEdit = false, existingAnno
 
 /**
  * アノテーションモーダルのHTMLを作成
+ * @param {boolean} isEdit - 編集モードかどうか
+ * @param {Object} existingAnnotation - 既存のアノテーション情報
  */
 function createAnnotationModal(isEdit = false, existingAnnotation = null) {
     const modalTitle = isEdit ? '生殖乳頭アノテーション編集' : '生殖乳頭アノテーション';
@@ -445,18 +647,21 @@ function createAnnotationModal(isEdit = false, existingAnnotation = null) {
                     </div>
                     <div class="d-flex justify-content-center mb-3">
                         <div class="btn-group" role="group">
-                            <button type="button" class="btn btn-outline-primary" id="penTool">
+                            <button type="button" class="btn btn-outline-primary" id="penTool" title="自由に描画">
                                 <i class="fas fa-pen"></i> ペン
                             </button>
-                            <button type="button" class="btn btn-outline-danger" id="eraserTool">
+                            <button type="button" class="btn btn-outline-danger" id="eraserTool" title="描画を消去">
                                 <i class="fas fa-eraser"></i> 消しゴム
                             </button>
-                            <button type="button" class="btn btn-outline-success" id="circleTool">
+                            <button type="button" class="btn btn-outline-success" id="circleTool" title="円形を描画">
                                 <i class="fas fa-circle"></i> 円形
                             </button>
+                            <button type="button" class="btn btn-outline-secondary" id="undoTool" title="操作を戻す">
+                                <i class="fas fa-undo"></i> 戻す
+                            </button>
                             ${isEdit ? `
-                            <button type="button" class="btn btn-outline-warning" id="clearTool">
-                                <i class="fas fa-undo"></i> リセット
+                            <button type="button" class="btn btn-outline-warning" id="clearTool" title="全て消去">
+                                <i class="fas fa-trash-alt"></i> リセット
                             </button>
                             ` : ''}
                         </div>
@@ -464,6 +669,12 @@ function createAnnotationModal(isEdit = false, existingAnnotation = null) {
                     <div class="form-group mb-3">
                         <label for="toolSize" class="form-label">ツールサイズ: <span id="toolSizeValue">5</span>px</label>
                         <input type="range" class="form-range" id="toolSize" min="1" max="20" value="5">
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="autoYoloConvert" checked>
+                        <label class="form-check-label" for="autoYoloConvert">
+                            YOLO形式にも自動変換する
+                        </label>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -502,6 +713,9 @@ function setupAnnotationCanvas(selectedCard, isEdit = false, existingAnnotation 
         // 画像を描画
         annotationTools.context.drawImage(img, 0, 0);
         
+        // 履歴に初期状態を保存
+        saveToHistory();
+        
         // 編集モードの場合、既存のアノテーションを読み込み
         if (isEdit && existingAnnotation) {
             loadExistingAnnotation(existingAnnotation);
@@ -521,11 +735,55 @@ function setupAnnotationCanvas(selectedCard, isEdit = false, existingAnnotation 
     // パスの先頭に/sampleを追加（必要に応じて）
     if (!imagePath.startsWith('/')) {
         imagePath = '/sample/' + imagePath;
-    } else {
-        imagePath = '/sample' + imagePath;
     }
     
     img.src = imagePath;
+}
+
+/**
+ * 履歴に現在の状態を保存
+ */
+function saveToHistory() {
+    // 現在のキャンバス状態を取得
+    const imageData = annotationTools.context.getImageData(0, 0, annotationTools.canvas.width, annotationTools.canvas.height);
+    
+    // 履歴に追加（現在位置より後のものは削除）
+    if (annotationTools.historyIndex < annotationTools.history.length - 1) {
+        annotationTools.history = annotationTools.history.slice(0, annotationTools.historyIndex + 1);
+    }
+    
+    annotationTools.history.push(imageData);
+    annotationTools.historyIndex = annotationTools.history.length - 1;
+    
+    // 戻すボタンの状態を更新
+    updateUndoButtonState();
+}
+
+/**
+ * 履歴から状態を復元
+ */
+function restoreFromHistory() {
+    if (annotationTools.historyIndex < 0 || annotationTools.historyIndex >= annotationTools.history.length) {
+        return;
+    }
+    
+    // 指定インデックスの状態を復元
+    const imageData = annotationTools.history[annotationTools.historyIndex];
+    annotationTools.context.putImageData(imageData, 0, 0);
+    
+    // 戻すボタンの状態を更新
+    updateUndoButtonState();
+}
+
+/**
+ * 戻すボタンの状態を更新
+ */
+function updateUndoButtonState() {
+    const undoButton = document.getElementById('undoTool');
+    if (undoButton) {
+        // 履歴がある場合のみ有効化
+        undoButton.disabled = annotationTools.historyIndex <= 0;
+    }
 }
 
 /**
@@ -541,12 +799,16 @@ function loadExistingAnnotation(existingAnnotation) {
         // 既存のアノテーションを合成
         annotationTools.context.globalCompositeOperation = 'source-over';
         annotationTools.context.drawImage(annotationImg, 0, 0);
+        
+        // 履歴に保存
+        saveToHistory();
     };
     annotationImg.src = existingAnnotation.url;
 }
 
 /**
  * アノテーションツールのボタン初期化
+ * @param {boolean} isEdit - 編集モードかどうか
  */
 function initAnnotationToolButtons(isEdit = false) {
     // ツール選択
@@ -565,17 +827,28 @@ function initAnnotationToolButtons(isEdit = false) {
         updateToolButtons();
     });
     
+    // 戻すボタン
+    document.getElementById('undoTool').addEventListener('click', function() {
+        if (annotationTools.historyIndex > 0) {
+            annotationTools.historyIndex--;
+            restoreFromHistory();
+        }
+    });
+    
     // リセットボタン（編集モードのみ）
     if (isEdit) {
         const clearBtn = document.getElementById('clearTool');
         if (clearBtn) {
             clearBtn.addEventListener('click', function() {
-                // キャンバスをクリア
-                annotationTools.context.clearRect(0, 0, annotationTools.canvas.width, annotationTools.canvas.height);
-                // 元の画像を再描画
-                const selectedCard = annotationTools.selectedCard;
-                if (selectedCard) {
-                    setupAnnotationCanvas(selectedCard, false, null);
+                if (confirm('すべてのアノテーションをクリアしますか？')) {
+                    // キャンバスをクリア
+                    annotationTools.context.clearRect(0, 0, annotationTools.canvas.width, annotationTools.canvas.height);
+                    
+                    // 元の画像を再描画
+                    const selectedCard = annotationTools.selectedCard;
+                    if (selectedCard) {
+                        setupAnnotationCanvas(selectedCard, false, null);
+                    }
                 }
             });
         }
@@ -676,20 +949,28 @@ function initAnnotationEvents() {
     });
     
     // 描画終了
-    canvas.addEventListener('mouseup', stopDrawing);
-    canvas.addEventListener('mouseout', stopDrawing);
+    canvas.addEventListener('mouseup', function() {
+        if (annotationTools.isDrawing) {
+            annotationTools.isDrawing = false;
+            // 元の描画モードに戻す
+            annotationTools.context.globalCompositeOperation = 'source-over';
+            // 履歴に保存
+            saveToHistory();
+        }
+    });
+    
+    canvas.addEventListener('mouseout', function() {
+        if (annotationTools.isDrawing) {
+            annotationTools.isDrawing = false;
+            // 元の描画モードに戻す
+            annotationTools.context.globalCompositeOperation = 'source-over';
+            // 履歴に保存
+            saveToHistory();
+        }
+    });
     
     // タッチデバイス対応
     enableTouchSupport(canvas);
-}
-
-/**
- * 描画停止処理
- */
-function stopDrawing() {
-    annotationTools.isDrawing = false;
-    // 元の描画モードに戻す
-    annotationTools.context.globalCompositeOperation = 'source-over';
 }
 
 /**
@@ -728,6 +1009,9 @@ function saveAnnotationData() {
 
         const selectedCard = annotationTools.selectedCard;
 
+        // YOLO形式への自動変換フラグを取得
+        const autoYoloConvert = document.getElementById('autoYoloConvert').checked;
+
         // 画像データをサーバーに送信
         fetch('/learning/save-annotation', {
             method: 'POST',
@@ -736,7 +1020,8 @@ function saveAnnotationData() {
             },
             body: JSON.stringify({
                 image_data: annotationData,
-                original_path: selectedCard.dataset.path
+                original_path: selectedCard.dataset.path,
+                convert_to_yolo: autoYoloConvert
             })
         })
         .then(response => {
@@ -749,27 +1034,31 @@ function saveAnnotationData() {
             hideLoading();
             
             if (data.error) {
-                alert('エラー: ' + data.error);
-            } else {
-                alert('アノテーションを保存しました');
-                saveToSession('annotationSaved', true);
+                showErrorMessage('エラー: ' + data.error);
+                return;
+            }
+            
+            showSuccessMessage(autoYoloConvert ? 
+                'アノテーションを保存し、YOLO形式に変換しました' : 
+                'アノテーションを保存しました');
                 
-                // モーダルを閉じる
-                bootstrap.Modal.getInstance(document.getElementById('annotationModal')).hide();
-                
-                // 学習管理画面のデータ更新コールバック
-                if (typeof window.onAnnotationSaved === 'function') {
-                    window.onAnnotationSaved();
-                }
+            saveToSession('annotationSaved', true);
+            
+            // モーダルを閉じる
+            bootstrap.Modal.getInstance(document.getElementById('annotationModal')).hide();
+            
+            // 学習管理画面のデータ更新コールバック
+            if (typeof window.onAnnotationSaved === 'function') {
+                window.onAnnotationSaved();
             }
         })
         .catch(error => {
             hideLoading();
-            alert('保存中にエラーが発生しました: ' + error);
+            showErrorMessage('保存中にエラーが発生しました: ' + error.message);
         });
     } catch (e) {
         hideLoading();
-        alert('アノテーションの保存中にエラーが発生しました: ' + e);
+        showErrorMessage('アノテーションの保存中にエラーが発生しました: ' + e.message);
     }
 }
 
@@ -781,6 +1070,8 @@ function cleanupAnnotationModal() {
     annotationTools.canvas = null;
     annotationTools.context = null;
     annotationTools.isDrawing = false;
+    annotationTools.history = [];
+    annotationTools.historyIndex = -1;
     
     // モーダル要素の削除
     const modal = document.getElementById('annotationModal');
