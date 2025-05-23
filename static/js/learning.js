@@ -788,6 +788,8 @@ class UnifiedLearningSystem {
      * 統合結果の表示
      */
     displayUnifiedResults() {
+        console.log('詳細データ構造:', JSON.stringify(this.learningResults, null, 2));
+
         if (!this.learningResults) return;
         
         console.log('統合結果表示:', this.learningResults);
@@ -808,22 +810,125 @@ class UnifiedLearningSystem {
     /**
      * サマリーメトリクス更新
      */
+    /**
+     * サマリーメトリクス更新（改良版）
+     */
+    /**
+     * サマリーメトリクス更新（データ構造最適化版）
+     */
+    /**
+     * サマリーメトリクス更新（アノテーション枚数表示版）
+     */
     updateSummaryMetrics() {
-        const summary = this.learningResults.summary || {};
+        console.log('サマリーメトリクス更新開始:', this.learningResults);
         
-        this.setElementText('final-accuracy', ((summary.overall_accuracy || 0) * 100).toFixed(1) + '%');
-        this.setElementText('final-precision', ((summary.precision || 0) * 100).toFixed(1) + '%');
-        this.setElementText('final-recall', ((summary.recall || 0) * 100).toFixed(1) + '%');
+        // サマリー情報の取得
+        const result = this.learningResults || {};
         
-        // アノテーション率の表示を修正
-        const annotationRate = summary.annotation_rate || 0;
-        this.setElementText('annotation-effect', (annotationRate * 100).toFixed(1) + '%');
+        // 基本値を設定
+        let accuracy = 0;
+        let precision = 0;
+        let recall = 0;
+        
+        // アノテーション枚数情報
+        let maleAnnotated = 0;
+        let femaleAnnotated = 0;
+        let totalAnnotated = 0;
+        let totalImages = 0;
+        
+        // evaluation → details からの抽出
+        if (result.evaluation && result.evaluation.details) {
+            const details = result.evaluation.details;
+            
+            // CV平均（精度）
+            if (details.cv_mean !== undefined) {
+                accuracy = Number(details.cv_mean);
+            } else if (result.evaluation.accuracy !== undefined) {
+                accuracy = Number(result.evaluation.accuracy);
+            }
+            
+            // 分類レポートから適合率と再現率を抽出
+            if (details.classification_report && details.classification_report['weighted avg']) {
+                const report = details.classification_report['weighted avg'];
+                precision = Number(report.precision || 0);
+                recall = Number(report.recall || 0);
+            }
+        } else if (result.evaluation) {
+            // evaluation直接からの抽出（フォールバック）
+            accuracy = Number(result.evaluation.accuracy || 0);
+        }
+
+        totalAnnotated = this.datasetStats.annotation_count;
+        femaleAnnotated = this.datasetStats.female_count;
+        maleAnnotated = this.datasetStats.male_count;
+
+
+        // summary直接参照（優先）- ただし0以外の値の場合のみ
+        if (result.summary) {
+            if (result.summary.overall_accuracy > 0) 
+                accuracy = Number(result.summary.overall_accuracy);
+            if (result.summary.precision > 0) 
+                precision = Number(result.summary.precision);
+            if (result.summary.recall > 0) 
+                recall = Number(result.summary.recall);
+        }
+        
+        // 精度と適合率、再現率の表示更新
+        this.setElementText('final-accuracy', (accuracy * 100).toFixed(1) + '%');
+        this.setElementText('final-precision', (precision * 100).toFixed(1) + '%');
+        this.setElementText('final-recall', (recall * 100).toFixed(1) + '%');
+        
+
+        // アノテーション情報の表示更新（シンプル版）
+        this.setElementText('male-annotation-count', maleAnnotated);
+        this.setElementText('female-annotation-count', femaleAnnotated);
+        
+        console.log('メトリクス更新完了:', {
+            accuracy: accuracy * 100,
+            precision: precision * 100,
+            recall: recall * 100,
+            annotations: {
+                male: maleAnnotated,
+                female: femaleAnnotated,
+                total: totalAnnotated,
+                totalImages: totalImages
+            }
+        });
     }
 
+    /**
+     * メトリクス値の取得（複数の可能性から最初の有効な値を返す）
+     * @param {Array} values - 候補となる値の配列
+     * @returns {number} - 最初の有効な値、または0
+     */
+    getMetricValue(values) {
+        for (const val of values) {
+            if (val !== undefined && val !== null && !isNaN(Number(val))) {
+                return Number(val);
+            }
+        }
+        return 0;
+    }
 
     /**
-     * 詳細結果表示
+     * ネストされたオブジェクトから安全に値を取得するヘルパー関数
+     * @param {Object} obj - 対象オブジェクト
+     * @param {string} path - ドット区切りのパス（例: 'a.b.c'）
+     * @returns {*} - 取得した値、存在しない場合はundefined
      */
+    getNestedValue(obj, path) {
+        if (!obj || !path) return undefined;
+        
+        const parts = path.split('.');
+        let current = obj;
+        
+        for (const part of parts) {
+            if (current === undefined || current === null) return undefined;
+            current = current[part];
+        }
+        
+        return current;
+    }
     
 
     // 最新の評価ファイルを探す関数を追加
@@ -932,6 +1037,14 @@ class UnifiedLearningSystem {
                     overlay.style.opacity = '0';
                 });
             }
+        });
+        // 情報アイコンのイベントリスナーを追加
+        document.querySelectorAll('.graph-info-icon').forEach(icon => {
+            icon.addEventListener('click', (e) => {
+                e.stopPropagation(); // カードのクリックイベントが発火しないようにする
+                const graphType = icon.dataset.graphType;
+                this.showGraphExplanation(graphType);
+            });
         });
     }
 
@@ -1053,60 +1166,61 @@ class UnifiedLearningSystem {
     }
 
     // クリーンなグラフカードを生成
-    createCleanGraphCard(graphType, url, exists, description) {
-        if (!description) {
-            console.error(`グラフ説明データがありません: ${graphType}`);
-            return `
-                <div class="col-md-6 mb-3">
-                    <div class="card">
-                        <div class="card-body text-center text-muted">
-                            <i class="fas fa-exclamation-circle fa-2x mb-2"></i>
-                            <p>グラフデータエラー: ${graphType}</p>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        // エラー時のフォールバックメッセージを定義
-        const errorMessage = graphType === 'annotation_impact' 
-            ? 'アノテーションデータがありません。データにアノテーションを追加すると表示されます。'
-            : 'グラフが利用できません。学習を実行して評価グラフを生成してください。';
-        
-        // 画像が存在する場合と存在しない場合で異なるHTMLを生成
-        const contentHTML = exists
-            ? `<img src="${url}" class="img-fluid rounded graph-image" alt="${description.title}" data-graph-type="${graphType}">
-               <div class="graph-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" 
-                    style="background: rgba(0,0,0,0.7); opacity: 0; transition: opacity 0.3s; pointer-events: none;">
-                 <i class="fas fa-search-plus text-white fa-2x"></i>
-               </div>`
-            : `<div class="alert alert-warning">
-                 <i class="fas fa-exclamation-triangle me-2"></i>${errorMessage}
-               </div>`;
-        
-        const clickHandlerAttr = exists 
-            ? `onclick="unifiedLearningSystem.showGraphZoom('${url}', '${encodeURIComponent(JSON.stringify(description))}')"` 
-            : '';
-        
-        const cursorStyle = exists ? 'cursor: zoom-in;' : '';
-        
+    createCleanGraphCard(type, url, exists, description) {
         return `
-            <div class="col-md-6 mb-3">
-                <div class="graph-card position-relative" data-graph-type="${graphType}">
-                    <h6 class="d-flex align-items-center">
-                        ${description.title}
-                        <i class="fas fa-info-circle ms-2 text-muted graph-info-icon" 
-                           data-bs-toggle="tooltip" 
-                           data-bs-placement="top"
-                           data-bs-html="true"
-                           title="${description.description}"></i>
-                    </h6>
-                    <div class="graph-container position-relative" style="${cursorStyle}" ${clickHandlerAttr}>
-                        ${contentHTML}
+            <div class="col-md-6 mb-4">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h6 class="mb-0 d-flex align-items-center">
+                            ${description.title}
+                        </h6>
+                    </div>
+                    <div class="card-body text-center">
+                        ${exists ? 
+                            `<img src="${url}" alt="${description.title}" class="img-fluid graph-image" data-graph-type="${type}" style="cursor: zoom-in;"
+                                 onclick="unifiedLearningSystem.showGraphZoom('${url}', '${encodeURIComponent(JSON.stringify(description))}')">` : 
+                            `<div class="graph-placeholder">
+                                <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                                <p>グラフデータがありません</p>
+                            </div>`
+                        }
+                    </div>
+                    <div class="card-footer">
+                        <small class="text-muted">${description.description}</small>
                     </div>
                 </div>
             </div>
         `;
+    }
+    // 説明モーダルを表示する関数
+    showGraphExplanation(graphType) {
+        const modal = document.getElementById('graphExplanationModal');
+        const modalTitle = document.getElementById('graphExplanationTitle');
+        const modalContent = document.getElementById('graphExplanationContent');
+        
+        // HTML内の説明コンテンツを取得
+        const explanationElement = document.querySelector(`#graph-explanations [data-graph-type="${graphType}"]`);
+        
+        if (!explanationElement) {
+            console.error(`グラフタイプ ${graphType} の説明が見つかりません`);
+            return;
+        }
+        
+        // グラフタイプに応じたタイトルを設定
+        const titles = {
+            'learning_curve': '学習曲線の見方',
+            'confusion_matrix': '混同行列の見方',
+            'roc_curve': 'ROCカーブの見方',
+            'annotation_impact': 'アノテーション効果の見方'
+        };
+        
+        // モーダル内容を設定
+        modalTitle.textContent = titles[graphType] || 'グラフ詳細';
+        modalContent.innerHTML = explanationElement.innerHTML;
+        
+        // モーダルを表示
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
     }
 
     // 最適なタイムスタンプ形式を特定する新しいメソッド
@@ -1799,19 +1913,22 @@ class UnifiedLearningSystem {
                         <i class="fas fa-exclamation-triangle me-2"></i>
                         <p>画像を読み込めませんでした。</p>
                     </div>
-                    ${this.createInsightsHTML(description)}
+                    ${createInsightsHTML(description)}
                 `;
             };
             
-            // 説明文を設定
+            // 説明文を設定（ここに詳細な説明を追加）
             let descriptionHTML = `
-                <div class="alert alert-info">
+                <div class="alert alert-info mb-3">
                     <p><strong>${description.title}について:</strong> ${description.description}</p>
                 </div>
             `;
             
             // インサイト情報があれば追加
             descriptionHTML += this.createInsightsHTML(description);
+            
+            // 詳細な説明を追加
+            descriptionHTML += this.getDetailedExplanation(description.title);
             
             modalDescription.innerHTML = descriptionHTML;
             
@@ -1822,6 +1939,119 @@ class UnifiedLearningSystem {
         } catch (error) {
             console.error('グラフモーダル表示エラー:', error);
         }
+    }
+
+    // 詳細な説明を取得するメソッドを追加
+    getDetailedExplanation(graphTitle) {
+        const explanations = {
+            '学習曲線': `
+                <div class="card mt-3">
+                    <div class="card-header">詳細な説明</div>
+                    <div class="card-body">
+                        <h5>学習曲線とは</h5>
+                        <p>学習曲線は、モデルの訓練過程における精度の変化を示すグラフです。横軸は学習サンプル数、縦軸は精度を表します。</p>
+                        
+                        <h5>グラフの読み方</h5>
+                        <ul>
+                            <li><strong>青線（学習データ）</strong>: 訓練に使用したデータでの精度を示します。</li>
+                            <li><strong>緑線（検証データ）</strong>: モデルが見たことのないデータでの精度を示します。</li>
+                        </ul>
+                        
+                        <h5>理想的なパターン</h5>
+                        <p>両方の線が高い値（1.0に近い）で安定している場合、モデルの性能が良いことを示します。</p>
+                        
+                        <h5>問題のあるパターン</h5>
+                        <ul>
+                            <li><strong>過学習</strong>: 青線（学習データ）は高いが、緑線（検証データ）が低い場合、モデルが訓練データを「暗記」してしまい、新しいデータに対応できていません。</li>
+                            <li><strong>適合不足</strong>: 両方の線が低い値の場合、モデルの複雑さが足りないか、特徴が不十分である可能性があります。</li>
+                        </ul>
+                        
+                        <h5>改善方法</h5>
+                        <ul>
+                            <li>過学習の場合: より多くの訓練データを追加するか、モデルを単純化する</li>
+                            <li>適合不足の場合: より複雑なモデルを使用するか、特徴を追加する</li>
+                        </ul>
+                    </div>
+                </div>
+            `,
+            '混同行列': `
+                <div class="card mt-3">
+                    <div class="card-header">詳細な説明</div>
+                    <div class="card-body">
+                        <h5>混同行列とは</h5>
+                        <p>混同行列は、分類モデルの性能を評価するための表です。モデルが予測した結果と実際の正解の関係を示します。</p>
+                        
+                        <h5>グラフの読み方</h5>
+                        <ul>
+                            <li><strong>行（縦軸）</strong>: 実際のクラス（正解）</li>
+                            <li><strong>列（横軸）</strong>: 予測されたクラス（モデルの出力）</li>
+                            <li><strong>セル内の数値</strong>: その組み合わせのサンプル数</li>
+                        </ul>
+                        
+                        <h5>主要な指標</h5>
+                        <ul>
+                            <li><strong>正解率（Accuracy）</strong>: 全体の予測のうち、正しく予測された割合</li>
+                            <li><strong>適合率（Precision）</strong>: 特定のクラスと予測したもののうち、実際にそのクラスだった割合</li>
+                            <li><strong>再現率（Recall）</strong>: 実際の特定のクラスのうち、正しく予測された割合</li>
+                        </ul>
+                        
+                        <h5>解釈のポイント</h5>
+                        <p>対角線上の値が高いほど、モデルの予測精度が高いことを示します。非対角の値が高い場合、モデルがそれらのクラス間で混乱していることを示します。</p>
+                    </div>
+                </div>
+            `,
+            'ROCカーブ': `
+                <div class="card mt-3">
+                    <div class="card-header">詳細な説明</div>
+                    <div class="card-body">
+                        <h5>ROCカーブとは</h5>
+                        <p>ROCカーブ（Receiver Operating Characteristic curve）は、様々な閾値における真陽性率（TPR）と偽陽性率（FPR）をプロットしたグラフです。</p>
+                        
+                        <h5>グラフの読み方</h5>
+                        <ul>
+                            <li><strong>横軸（偽陽性率）</strong>: 実際は陰性なのに陽性と予測した割合</li>
+                            <li><strong>縦軸（真陽性率）</strong>: 実際に陽性のものを正しく陽性と予測した割合</li>
+                            <li><strong>AUC（Area Under Curve）</strong>: カーブの下の面積。1に近いほど良いモデル</li>
+                        </ul>
+                        
+                        <h5>AUCの解釈</h5>
+                        <ul>
+                            <li><strong>1.0</strong>: 完璧な分類</li>
+                            <li><strong>0.9-0.99</strong>: 非常に優れたモデル</li>
+                            <li><strong>0.8-0.89</strong>: 良いモデル</li>
+                            <li><strong>0.7-0.79</strong>: まずまずのモデル</li>
+                            <li><strong>0.6-0.69</strong>: あまり良くないモデル</li>
+                            <li><strong>0.5</strong>: ランダム予測と同等（無意味なモデル）</li>
+                        </ul>
+                    </div>
+                </div>
+            `,
+            'アノテーション効果': `
+                <div class="card mt-3">
+                    <div class="card-header">詳細な説明</div>
+                    <div class="card-body">
+                        <h5>アノテーション効果とは</h5>
+                        <p>アノテーション効果は、手動でアノテーション（データへの追加情報の付与）を行った画像の数と、モデルの性能向上の関係を示します。</p>
+                        
+                        <h5>グラフの読み方</h5>
+                        <ul>
+                            <li><strong>横軸</strong>: 雄（オス）、雌（メス）、および合計のカテゴリ</li>
+                            <li><strong>縦軸</strong>: アノテーション済み画像の数</li>
+                            <li><strong>青色のバー</strong>: アノテーション済みの画像数</li>
+                            <li><strong>オレンジ色のバー</strong>: アノテーションされていない画像数</li>
+                        </ul>
+                        
+                        <h5>重要なポイント</h5>
+                        <ol>
+                            <li><strong>高アノテーション率</strong>: アノテーション率が高いほど、モデルの精度向上が期待できます</li>
+                            <li><strong>バランス</strong>: オスとメスのアノテーション数のバランスも重要です</li>
+                        </ol>
+                    </div>
+                </div>
+            `
+        };
+        
+        return explanations[graphTitle] || '';
     }
 
     /**

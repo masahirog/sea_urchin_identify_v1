@@ -1022,3 +1022,32 @@ css/* ==================== グラフカード ==================== */
 .history-item:hover .text-primary {
     text-decoration: underline;
 }
+
+/* モーダル内の見出しスタイル */
+#modalGraphDescription h5 {
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    color: #343a40;
+}
+
+/* モーダル内のリスト */
+#modalGraphDescription ul, #modalGraphDescription ol {
+    padding-left: 1.5rem;
+}
+
+/* モーダル内の強調テキスト */
+#modalGraphDescription strong {
+    color: #0d6efd;
+}
+
+/* モーダル本体のサイズ調整 */
+#graphZoomModal .modal-dialog {
+    max-width: 90%;
+    width: auto;
+}
+
+/* モーダル内スクロール設定 */
+#modalGraphDescription {
+    max-height: 300px;
+    overflow-y: auto;
+}
