@@ -1,6 +1,7 @@
 {
+  "papillae/male/2025-05-23_18.49.01.png": "images/annotations/2025-05-23_18.49.01_annotation.png",
   "papillae/male/2__1.png": "images/annotations/2__1_annotation.png",
-  "papillae/female/6__1.png": "images/annotations/6__1_annotation.png",
   "papillae/male/5__1.png": "images/annotations/5__1_annotation.png",
-  "papillae/female/papillae_20250522_174859_frame990.jpg": "images/annotations/papillae_20250522_174859_frame990_annotation_2ef335e3.jpg"
+  "papillae/female/6__1.png": "images/annotations/6__1_annotation.png",
+  "papillae/female/papillae_20250522_174859_frame990.jpg": "images/annotations/papillae_20250522_174859_frame990_annotation.jpg"
 }

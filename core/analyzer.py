@@ -1,5 +1,6 @@
 """
 ウニ生殖乳頭分析システム - 統合分析エンジン
+機械学習を用いた生殖乳頭検出機能を実装した改良版
 """
 
 import cv2
@@ -13,6 +14,8 @@ import traceback
 from datetime import datetime
 from skimage.metrics import structural_similarity as ssim
 
+# PapillaeDetector（YOLOv5ベース）のインポート
+from .PapillaeDetector import PapillaeDetector
 
 class UnifiedAnalyzer:
     """統合ウニ生殖乳頭分析エンジン"""
@@ -30,6 +33,15 @@ class UnifiedAnalyzer:
         self.rf_model = None
         self.scaler = None
         self.load_models()
+        
+        # YOLOv5ベースの生殖乳頭検出器を初期化
+        try:
+            self.papillae_detector = PapillaeDetector(conf_threshold=0.4)
+            print("YOLOv5ベースの生殖乳頭検出器を初期化しました")
+        except Exception as e:
+            print(f"生殖乳頭検出器の初期化エラー: {e}")
+            # 検出器の初期化に失敗しても処理は続行（従来手法にフォールバック）
+            self.papillae_detector = None
 
     # ================================
     # メイン機能: 雌雄判定
@@ -91,7 +103,6 @@ class UnifiedAnalyzer:
     # メイン機能: 動画処理
     # ================================
     
-    # core/analyzer.py の process_video メソッドの修正
     def process_video(self, video_path, output_dir, task_id, max_images=10):
         """
         動画から生殖乳頭画像を抽出
@@ -193,7 +204,7 @@ class UnifiedAnalyzer:
                 
             # フレーム間隔チェック
             if frame_idx % self.frame_interval == 0:
-                # 生殖乳頭検出
+                # 生殖乳頭検出 - YOLOv5ベースの検出器を使用
                 papillae_contours, processed_frame = self._detect_papillae_improved(frame)
                 
                 if len(papillae_contours) > 0:
@@ -250,7 +261,7 @@ class UnifiedAnalyzer:
     
     def train_model(self, dataset_dir, task_id):
         """
-        データセットからモデルを学習（修正版）
+        データセットからモデルを学習
         
         Args:
             dataset_dir: データセットディレクトリ
@@ -347,6 +358,23 @@ class UnifiedAnalyzer:
     def _extract_features_from_image(self, image):
         """画像から特徴量を抽出"""
         try:
+            # YOLOv5検出器を使用して生殖乳頭を検出
+            if self.papillae_detector is not None:
+                try:
+                    # 検出実行
+                    detections, _ = self.papillae_detector.detect_papillae(image)
+                    
+                    # 特徴量抽出
+                    if detections:
+                        features = self.papillae_detector.extract_papillae_features(image, detections)
+                        if features and len(features) > 0:
+                            # 特徴量の平均を取る（複数の生殖乳頭が検出された場合）
+                            return np.mean(features, axis=0).tolist()
+                except Exception as e:
+                    print(f"YOLOv5検出エラー: {str(e)}")
+                    # エラー時は従来の手法にフォールバック
+            
+            # 従来の特徴量抽出手法（フォールバック）
             # グレースケール変換
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
             
@@ -387,7 +415,38 @@ class UnifiedAnalyzer:
     # ================================
     
     def _detect_papillae_improved(self, frame, min_area=500, max_area=5000, circularity_threshold=0.3):
-        """改良された生殖乳頭検出"""
+        """
+        改良された生殖乳頭検出（YOLOv5ベース）
+        """
+        # YOLOv5検出器を使用
+        if self.papillae_detector is not None:
+            try:
+                # 検出実行
+                detections, processed_frame = self.papillae_detector.detect_papillae(frame)
+                
+                # 検出結果から輪郭情報を生成
+                papillae_contours = []
+                for det in detections:
+                    bbox = det['bbox']
+                    x1, y1, x2, y2 = bbox
+                    
+                    # 矩形から輪郭を作成
+                    contour = np.array([
+                        [[x1, y1]],
+                        [[x2, y1]],
+                        [[x2, y2]],
+                        [[x1, y2]]
+                    ], dtype=np.int32)
+                    
+                    papillae_contours.append(contour)
+                
+                return papillae_contours, processed_frame
+                
+            except Exception as e:
+                print(f"YOLOv5検出エラー: {str(e)}")
+                # エラー時は従来の手法にフォールバック
+        
+        # 従来の生殖乳頭検出手法（フォールバック）
         # 画像前処理
         processed = self._enhance_sea_urchin_image(frame)
         
