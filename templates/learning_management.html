@@ -189,8 +189,53 @@
             </div>
         </div>
 
+        <!-- アノテーション管理 -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h6><i class="fas fa-object-group me-2"></i>アノテーション管理</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>アノテーションについて:</strong>
+                            <p class="mb-0">画像内の生殖乳頭を囲むアノテーション（バウンディングボックス）は学習精度を向上させます。</p>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-pen-square fa-3x mb-3 text-primary"></i>
+                                        <h5>手動アノテーション</h5>
+                                        <p class="small">画像一覧から個別に生殖乳頭を囲み、アノテーションを作成します。</p>
+                                        <a href="/yolo/annotate" class="btn btn-primary" target="_blank">
+                                            <i class="fas fa-external-link-alt me-1"></i> アノテーションツールを開く
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-magic fa-3x mb-3 text-success"></i>
+                                        <h5>データセット準備</h5>
+                                        <p class="small">アノテーション済み画像をYOLO用のデータセットに変換します。</p>
+                                        <button id="prepare-dataset-btn" class="btn btn-success">
+                                            <i class="fas fa-cogs me-1"></i> データセット準備
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- データ準備完了時のアクション -->
-        <div class="row">
+        <div class="row mt-4">
             <div class="col-12 text-center">
                 <button id="start-unified-training-btn" class="btn btn-success btn-lg d-none">
                     <i class="fas fa-play me-2"></i>統合学習を開始
@@ -251,6 +296,110 @@
                                 <i class="fas fa-circle-notch text-muted me-2"></i>
                                 <span>詳細分析</span>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- YOLOトレーニングセクション -->
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-cog me-2"></i>YOLOトレーニング設定</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="yolo-training-form">
+                            <div class="mb-3">
+                                <label for="yolo-weights" class="form-label">初期重み</label>
+                                <select class="form-select" id="yolo-weights" name="weights">
+                                    <option value="yolov5s.pt" selected>YOLOv5s (小)</option>
+                                    <option value="yolov5m.pt">YOLOv5m (中)</option>
+                                    <option value="yolov5l.pt">YOLOv5l (大)</option>
+                                    <option value="yolov5n.pt">YOLOv5n (極小)</option>
+                                </select>
+                                <div class="form-text">モデルサイズと精度のバランスを選択します。</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="yolo-batch-size" class="form-label">バッチサイズ</label>
+                                <input type="number" class="form-control" id="yolo-batch-size" name="batch_size" value="16" min="1" max="64">
+                                <div class="form-text">大きいほど学習が速くなりますが、メモリ消費が増えます。</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="yolo-epochs" class="form-label">エポック数</label>
+                                <input type="number" class="form-control" id="yolo-epochs" name="epochs" value="100" min="1" max="1000">
+                                <div class="form-text">多いほど精度が向上しますが、時間がかかります。</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="yolo-img-size" class="form-label">画像サイズ</label>
+                                <select class="form-select" id="yolo-img-size" name="img_size">
+                                    <option value="416">416x416</option>
+                                    <option value="512">512x512</option>
+                                    <option value="640" selected>640x640</option>
+                                    <option value="1280">1280x1280</option>
+                                </select>
+                                <div class="form-text">大きいほど精度が向上しますが、学習に時間がかかります。</div>
+                            </div>
+                            
+                            <div class="d-grid">
+                                <button type="button" id="start-yolo-training-btn" class="btn btn-primary">
+                                    <i class="fas fa-play me-1"></i> YOLOトレーニング開始
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5><i class="fas fa-chart-line me-2"></i>トレーニング進捗</h5>
+                        <button type="button" id="stop-yolo-training-btn" class="btn btn-sm btn-danger">
+                            <i class="fas fa-stop me-1"></i> 停止
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="yolo-training-status" class="alert alert-secondary">
+                            トレーニングはまだ開始されていません
+                        </div>
+                        
+                        <div id="yolo-progress-container" class="mb-3" style="display: none;">
+                            <div class="progress mb-2">
+                                <div id="yolo-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                    role="progressbar" style="width: 0%">0%</div>
+                            </div>
+                            <small id="yolo-status-text" class="text-muted">準備中...</small>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="mb-1">
+                                    <strong>経過時間:</strong> <span id="yolo-elapsed-time">-</span>
+                                </div>
+                                <div class="mb-1">
+                                    <strong>現在のエポック:</strong> <span id="yolo-current-epoch">-</span> / <span id="yolo-total-epochs">-</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-1">
+                                    <strong>Box Loss:</strong> <span id="yolo-box-loss">-</span>
+                                </div>
+                                <div class="mb-1">
+                                    <strong>Obj Loss:</strong> <span id="yolo-obj-loss">-</span>
+                                </div>
+                                <div class="mb-1">
+                                    <strong>mAP50:</strong> <span id="yolo-map50">-</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="yolo-training-images" class="mt-3">
+                            <!-- トレーニング画像がここに表示されます -->
                         </div>
                     </div>
                 </div>

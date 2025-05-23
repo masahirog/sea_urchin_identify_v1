@@ -73,6 +73,9 @@ export class UnifiedLearningSystem {
             // アノテーションコールバック設定
             this.setupAnnotationCallback();
             
+            // YOLOトレーニング機能の初期化
+            this.initYoloTraining();
+            
         } catch (error) {
             this.uiManager.showError('システムの初期化に失敗しました: ' + error.message);
         }
@@ -421,6 +424,313 @@ export class UnifiedLearningSystem {
      */
     displayUnifiedResults() {
         this.evaluationManager.displayUnifiedResults();
+    }
+
+    /**
+     * YOLOトレーニング機能の初期化
+     */
+    initYoloTraining() {
+        // データセット準備ボタン
+        const prepareDatasetBtn = document.getElementById('prepare-dataset-btn');
+        if (prepareDatasetBtn) {
+            prepareDatasetBtn.addEventListener('click', () => {
+                this.prepareYoloDataset();
+            });
+        }
+        
+        // トレーニング開始ボタン
+        const startTrainingBtn = document.getElementById('start-yolo-training-btn');
+        if (startTrainingBtn) {
+            startTrainingBtn.addEventListener('click', () => {
+                this.startYoloTraining();
+            });
+        }
+        
+        // トレーニング停止ボタン
+        const stopTrainingBtn = document.getElementById('stop-yolo-training-btn');
+        if (stopTrainingBtn) {
+            stopTrainingBtn.addEventListener('click', () => {
+                this.stopYoloTraining();
+            });
+        }
+        
+        // 初期状態の取得
+        this.updateYoloTrainingStatus();
+        
+        // 定期的に状態を更新
+        setInterval(() => {
+            this.updateYoloTrainingStatus();
+        }, 3000);
+    }
+
+    /**
+     * YOLOデータセットの準備
+     */
+    async prepareYoloDataset() {
+        try {
+            this.uiManager.showLoading();
+            
+            const response = await fetch('/yolo/prepare-dataset', {
+                method: 'POST'
+            });
+            
+            if (!response.ok) {
+                throw new Error(`サーバーエラー: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            this.uiManager.hideLoading();
+            
+            if (data.status === 'success') {
+                showSuccessMessage(`データセットを準備しました (訓練: ${data.train_count}枚, 検証: ${data.val_count}枚)`);
+            } else {
+                showErrorMessage(`データセット準備エラー: ${data.message}`);
+            }
+        } catch (error) {
+            this.uiManager.hideLoading();
+            showErrorMessage(`データセット準備中にエラーが発生しました: ${error.message}`);
+        }
+    }
+
+    /**
+     * YOLOトレーニングの開始
+     */
+    async startYoloTraining() {
+        try {
+            // フォームデータの取得
+            const weights = document.getElementById('yolo-weights').value;
+            const batchSize = parseInt(document.getElementById('yolo-batch-size').value);
+            const epochs = parseInt(document.getElementById('yolo-epochs').value);
+            const imgSize = parseInt(document.getElementById('yolo-img-size').value);
+            
+            // バリデーション
+            if (isNaN(batchSize) || batchSize < 1) {
+                showErrorMessage('バッチサイズは1以上の数値を入力してください');
+                return;
+            }
+            
+            if (isNaN(epochs) || epochs < 1) {
+                showErrorMessage('エポック数は1以上の数値を入力してください');
+                return;
+            }
+            
+            this.uiManager.showLoading();
+            
+            const response = await fetch('/yolo/training/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    weights,
+                    batch_size: batchSize,
+                    epochs,
+                    img_size: imgSize
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`サーバーエラー: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            this.uiManager.hideLoading();
+            
+            if (data.status === 'success') {
+                showSuccessMessage(data.message);
+                
+                // 進捗表示を有効化
+                const progressContainer = document.getElementById('yolo-progress-container');
+                if (progressContainer) {
+                    progressContainer.style.display = 'block';
+                }
+                
+                // 定期的な状態更新を開始
+                this.updateYoloTrainingStatus();
+            } else {
+                showErrorMessage(`トレーニング開始エラー: ${data.message}`);
+            }
+        } catch (error) {
+            this.uiManager.hideLoading();
+            showErrorMessage(`トレーニング開始中にエラーが発生しました: ${error.message}`);
+        }
+    }
+
+    /**
+     * YOLOトレーニングの停止
+     */
+    async stopYoloTraining() {
+        if (!confirm('トレーニングを停止しますか？再開はできません。')) {
+            return;
+        }
+        
+        try {
+            this.uiManager.showLoading();
+            
+            const response = await fetch('/yolo/training/stop', {
+                method: 'POST'
+            });
+            
+            if (!response.ok) {
+                throw new Error(`サーバーエラー: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            this.uiManager.hideLoading();
+            
+            if (data.status === 'success') {
+                showSuccessMessage(data.message);
+            } else {
+                showErrorMessage(`トレーニング停止エラー: ${data.message}`);
+            }
+        } catch (error) {
+            this.uiManager.hideLoading();
+            showErrorMessage(`トレーニング停止中にエラーが発生しました: ${error.message}`);
+        }
+    }
+
+    /**
+     * YOLOトレーニングの状態更新
+     */
+    async updateYoloTrainingStatus() {
+        try {
+            const response = await fetch('/yolo/training/status');
+            
+            if (!response.ok) {
+                throw new Error(`サーバーエラー: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            // ステータステキストの更新
+            const statusElement = document.getElementById('yolo-training-status');
+            if (statusElement) {
+                let alertClass = 'alert-secondary';
+                
+                switch (data.status) {
+                    case 'running':
+                        alertClass = 'alert-primary';
+                        break;
+                    case 'completed':
+                        alertClass = 'alert-success';
+                        break;
+                    case 'stopped':
+                        alertClass = 'alert-warning';
+                        break;
+                    case 'failed':
+                    case 'error':
+                        alertClass = 'alert-danger';
+                        break;
+                }
+                
+                statusElement.className = `alert ${alertClass}`;
+                statusElement.textContent = data.message || '状態不明';
+            }
+            
+            // プログレスバーの更新
+            const progressBar = document.getElementById('yolo-progress-bar');
+            const progressContainer = document.getElementById('yolo-progress-container');
+            const statusText = document.getElementById('yolo-status-text');
+            
+            if (progressBar && progressContainer) {
+                if (data.status !== 'not_started') {
+                    progressContainer.style.display = 'block';
+                    progressBar.style.width = `${data.progress}%`;
+                    progressBar.textContent = `${data.progress}%`;
+                    
+                    if (statusText) {
+                        statusText.textContent = data.message || '';
+                    }
+                } else {
+                    progressContainer.style.display = 'none';
+                }
+            }
+            
+            // トレーニング情報の更新
+            document.getElementById('yolo-elapsed-time').textContent = data.elapsed_time || '-';
+            document.getElementById('yolo-current-epoch').textContent = data.current_epoch || '-';
+            document.getElementById('yolo-total-epochs').textContent = data.total_epochs || '-';
+            
+            // メトリクスの更新
+            const metrics = data.metrics || {};
+            
+            if (metrics.box_loss && metrics.box_loss.length > 0) {
+                document.getElementById('yolo-box-loss').textContent = metrics.box_loss[metrics.box_loss.length - 1].toFixed(4);
+            }
+            
+            if (metrics.obj_loss && metrics.obj_loss.length > 0) {
+                document.getElementById('yolo-obj-loss').textContent = metrics.obj_loss[metrics.obj_loss.length - 1].toFixed(4);
+            }
+            
+            if (metrics.mAP50 && metrics.mAP50.length > 0) {
+                document.getElementById('yolo-map50').textContent = metrics.mAP50[metrics.mAP50.length - 1].toFixed(4);
+            }
+            
+            // 結果画像の表示
+            this.updateTrainingImages(data.result_images || {});
+        } catch (error) {
+            console.error('トレーニング状態取得エラー:', error);
+        }
+    }
+
+    /**
+     * トレーニング画像の更新
+     */
+    updateTrainingImages(images) {
+        const container = document.getElementById('yolo-training-images');
+        if (!container) return;
+        
+        if (Object.keys(images).length === 0) {
+            container.innerHTML = '<p class="text-muted text-center">トレーニング画像はまだありません</p>';
+            return;
+        }
+        
+        let html = '';
+        
+        // バッチ画像
+        if (images.train_batch) {
+            html += `
+                <div class="mb-3">
+                    <h6>トレーニングバッチ:</h6>
+                    <img src="${images.train_batch}" alt="トレーニングバッチ" class="img-fluid rounded">
+                </div>
+            `;
+        }
+        
+        // ラベル分布
+        if (images.labels) {
+            html += `
+                <div class="mb-3">
+                    <h6>ラベル分布:</h6>
+                    <img src="${images.labels}" alt="ラベル分布" class="img-fluid rounded">
+                </div>
+            `;
+        }
+        
+        // 結果プロット
+        if (images.results) {
+            html += `
+                <div class="mb-3">
+                    <h6>学習曲線:</h6>
+                    <img src="${images.results}" alt="学習結果" class="img-fluid rounded">
+                </div>
+            `;
+        }
+        
+        // 混同行列
+        if (images.confusion_matrix) {
+            html += `
+                <div class="mb-3">
+                    <h6>混同行列:</h6>
+                    <img src="${images.confusion_matrix}" alt="混同行列" class="img-fluid rounded">
+                </div>
+            `;
+        }
+        
+        container.innerHTML = html;
     }
 }
 
