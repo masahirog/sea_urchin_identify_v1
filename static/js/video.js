@@ -3,14 +3,6 @@
  * 動画からの生殖乳頭画像抽出に特化したモジュール
  */
 
-import {
-    showLoading,
-    hideLoading,
-    showSuccessMessage,
-    showErrorMessage,
-    showWarningMessage
-} from './utilities.js';
-
 // 動画処理サービスの状態管理
 const videoProcessingService = {
     currentTaskId: null,
@@ -45,6 +37,61 @@ function initVideoProcessingService() {
     
     // 保存されたタスクIDの復元
     restoreCurrentTask();
+}
+
+// インポートしていた関数の代替実装
+function showLoading() {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+        overlay.classList.remove('d-none');
+    }
+}
+
+function hideLoading() {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+        overlay.classList.add('d-none');
+    }
+}
+
+function showSuccessMessage(message, duration = 3000) {
+    showUserMessage(message, 'success', duration);
+}
+
+function showErrorMessage(message, duration = 5000) {
+    showUserMessage(message, 'danger', duration);
+}
+
+function showWarningMessage(message, duration = 4000) {
+    showUserMessage(message, 'warning', duration);
+}
+
+function showUserMessage(message, type, duration) {
+    const alertElement = document.createElement('div');
+    alertElement.className = `alert alert-${type} alert-dismissible fade show`;
+    
+    // タイプに応じたアイコンを選択
+    const icon = type === 'success' ? 'check-circle' : 
+                type === 'danger' ? 'exclamation-circle' : 
+                type === 'warning' ? 'exclamation-triangle' : 'info-circle';
+    
+    alertElement.innerHTML = `
+        <i class="fas fa-${icon} me-2"></i> ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    const container = document.querySelector('.container');
+    if (container) {
+        container.insertBefore(alertElement, container.firstChild);
+        
+        if (duration > 0) {
+            setTimeout(() => {
+                if (alertElement.parentNode) {
+                    alertElement.remove();
+                }
+            }, duration);
+        }
+    }
 }
 
 /**
@@ -221,7 +268,8 @@ function startStatusCheck() {
 function checkProcessingStatus() {
     if (!videoProcessingService.currentTaskId) return;
     
-    fetch('/api/task-status/' + videoProcessingService.currentTaskId)
+    // 修正：APIエンドポイントを/api/task-status/から/video/status/に変更
+    fetch('/video/status/' + videoProcessingService.currentTaskId)
     .then(response => {
         if (!response.ok) {
             throw new Error('状態取得に失敗しました');

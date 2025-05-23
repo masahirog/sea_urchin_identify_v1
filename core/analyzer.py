@@ -1,11 +1,5 @@
 """
 ウニ生殖乳頭分析システム - 統合分析エンジン
-
-統合対象:
-- models/analyzer.py (500行)
-- utils/image_analysis.py (350行) 
-- utils/image_processing.py (400行)
-→ 約650行に統合（約48%削減）
 """
 
 import cv2
@@ -114,28 +108,36 @@ class UnifiedAnalyzer:
         try:
             from app import processing_status, processing_results
             global_status = True
+            print(f"グローバル状態管理取得成功: {task_id}")
         except ImportError:
             global_status = False
+            print(f"グローバル状態管理取得失敗: {task_id}")
         
         # 出力ディレクトリ作成
         task_output_dir = os.path.join(output_dir, task_id)
         os.makedirs(task_output_dir, exist_ok=True)
+        print(f"出力ディレクトリ作成: {task_output_dir}")
         
         # 状態初期化
         if global_status:
             processing_status[task_id] = {
                 "status": "processing", 
-                "progress": 0, 
+                "progress": 20,  # 開始進捗を20%に変更
                 "message": "動画解析を開始しました"
             }
+            print(f"状態更新: 動画解析開始 - 進捗20%")
         
         # 動画キャプチャ
+        print(f"動画ファイルを開く: {video_path}")
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
+            error_msg = f"動画を開けませんでした: {video_path}"
+            print(error_msg)
             if global_status:
                 processing_status[task_id] = {
                     "status": "error", 
-                    "message": f"動画を開けませんでした: {video_path}"
+                    "message": error_msg,
+                    "progress": 100
                 }
             return []
 
@@ -145,28 +147,47 @@ class UnifiedAnalyzer:
         duration = frame_count / fps if fps > 0 else 0
         print(f"動画情報: {frame_count}フレーム, {fps}FPS, 長さ: {duration:.2f}秒")
         
+        # 状態更新
+        if global_status:
+            processing_status[task_id] = {
+                "status": "processing", 
+                "progress": 30,
+                "message": f"動画解析中: {frame_count}フレーム, {duration:.2f}秒"
+            }
+            print(f"状態更新: 動画情報取得完了 - 進捗30%")
+        
         # 抽出処理
         extracted_images = []
         previous_frames = []
         frame_idx = 0
         start_time = time.time()
         
+        # デバッグ用にフレーム処理の間隔を出力
+        last_debug_time = time.time()
+        
         while cap.isOpened() and len(extracted_images) < max_images:
             ret, frame = cap.read()
             if not ret:
+                print(f"動画の読み込みが終了または失敗: frame_idx={frame_idx}")
                 break
                 
+            # 定期的なデバッグ出力
+            current_time = time.time()
+            if current_time - last_debug_time > 5.0:  # 5秒ごとにデバッグ出力
+                print(f"フレーム処理中: {frame_idx}/{frame_count} (経過時間: {current_time - start_time:.1f}秒)")
+                last_debug_time = current_time
+                
             # 進捗更新
-            progress = (frame_idx / max(frame_count, 1)) * 100
+            progress = min(30 + (frame_idx / max(frame_count, 1)) * 60, 90)  # 30%～90%の範囲で進捗
             if global_status and frame_idx % 30 == 0:  # 30フレームごとに更新
                 elapsed = time.time() - start_time
                 remaining = (frame_count - frame_idx) / max(frame_idx / elapsed, 0.001) if frame_idx > 0 else 0
                 processing_status[task_id] = {
                     "status": "processing",
-                    "progress": progress,
+                    "progress": int(progress),
                     "message": f"解析中: {frame_idx}/{frame_count} (残り{remaining:.1f}秒)"
                 }
-            
+                
             # フレーム間隔チェック
             if frame_idx % self.frame_interval == 0:
                 # 生殖乳頭検出
@@ -192,10 +213,21 @@ class UnifiedAnalyzer:
                             previous_frames.append(frame.copy())
                             self.last_capture_frame = frame_idx
                             print(f"画像保存: {len(extracted_images)}/{max_images}")
+                            
+                            # 画像保存時の進捗更新
+                            if global_status:
+                                # 画像保存ごとに進捗を更新（30%～90%を画像枚数に応じて分割）
+                                img_progress = 30 + (len(extracted_images) / max(max_images, 1)) * 60
+                                processing_status[task_id] = {
+                                    "status": "processing",
+                                    "progress": int(img_progress),
+                                    "message": f"画像抽出中: {len(extracted_images)}/{max_images}枚"
+                                }
             
             frame_idx += 1
         
         cap.release()
+        print(f"動画処理完了: 全{frame_idx}フレーム中{len(extracted_images)}枚の画像を抽出")
         
         # 結果保存
         if global_status:
@@ -203,10 +235,11 @@ class UnifiedAnalyzer:
             processing_status[task_id] = {
                 "status": "completed",
                 "message": f"抽出完了: {len(extracted_images)}枚",
-                "image_count": len(extracted_images)
+                "image_count": len(extracted_images),
+                "progress": 100  # 重要: 100%に設定
             }
+            print(f"状態更新: 処理完了 - 進捗100%")
         
-        print(f"動画処理完了: {len(extracted_images)}枚の画像を抽出")
         return extracted_images
 
     # ================================
