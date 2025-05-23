@@ -929,11 +929,12 @@ class UnifiedLearningSystem {
      * グラフカードの作成
      */
     createGraphCard(graphType, timestamp, description) {
-        // アノテーション画像のパスを修正
+        // アノテーション画像のパスを正しく構築
         let imagePath;
         if (graphType === 'annotation_impact') {
-            // アノテーション画像は別のパスパターンを使用
-            imagePath = `/evaluation/images/annotation_analysis_${timestamp}.png`;
+            // 注意: アノテーション画像は専用のタイムスタンプを使用
+            let annotationTimestamp = this.learningResults.annotation_analysis?.annotation_timestamp || timestamp;
+            imagePath = `/evaluation/images/annotation_impact_${annotationTimestamp}.png`;
         } else {
             imagePath = `/evaluation/images/${graphType}_${timestamp}.png`;
         }
@@ -949,14 +950,13 @@ class UnifiedLearningSystem {
                            data-bs-html="true"
                            title="${description.description}"></i>
                     </h6>
-                    <div class="graph-container position-relative" style="cursor: zoom-in;">
+                    <div class="graph-container position-relative" style="cursor: zoom-in;" onclick="unifiedLearningSystem.showGraphZoom('${imagePath}', ${JSON.stringify(description).replace(/"/g, '&quot;')})">
                         <img src="${imagePath}" 
                              class="img-fluid rounded graph-image" 
                              alt="${description.title}"
                              data-graph-type="${graphType}"
-                             data-description='${JSON.stringify(description)}'
                              onerror="this.parentElement.innerHTML='<p class=text-muted>グラフが利用できません</p>'">
-                        <div class="graph-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background: rgba(0,0,0,0.7); opacity: 0; transition: opacity 0.3s;">
+                        <div class="graph-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background: rgba(0,0,0,0.7); opacity: 0; transition: opacity 0.3s; pointer-events: none;">
                             <i class="fas fa-search-plus text-white fa-2x"></i>
                         </div>
                     </div>
@@ -987,25 +987,6 @@ class UnifiedLearningSystem {
                 });
             }
         });
-        
-        // グラフクリックで拡大表示
-        const self = this;
-        document.querySelectorAll('.graph-image').forEach(img => {
-            img.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                try {
-                    const descriptionStr = this.getAttribute('data-description');
-                    if (descriptionStr) {
-                        const description = JSON.parse(descriptionStr);
-                        self.showGraphZoom(this.src, description);
-                    }
-                } catch (error) {
-                    console.error('グラフクリックエラー:', error);
-                }
-            });
-        });
     }
 
     /**
@@ -1013,32 +994,146 @@ class UnifiedLearningSystem {
      */
     showGraphZoom(imageSrc, description) {
         try {
-            // 既存のモーダルインスタンスを破棄
-            const existingModal = bootstrap.Modal.getInstance(document.getElementById('graphZoomModal'));
+            // 1. 既存のモーダルがあれば削除する（完全に再作成する方法）
+            const existingModal = document.getElementById('graphZoomModal');
             if (existingModal) {
-                existingModal.dispose();
+                // モーダルインスタンスを破棄
+                const bsModal = bootstrap.Modal.getInstance(existingModal);
+                if (bsModal) bsModal.dispose();
+                
+                // DOM要素も削除
+                existingModal.remove();
             }
             
+            // 2. モーダルHTMLを作成
+            const safeTitle = (description.title || '').replace(/"/g, '&quot;');
+            const safeDescription = (description.description || '').replace(/"/g, '&quot;');
+            
+            const modalHTML = `
+                <div class="modal fade" id="graphZoomModal" tabindex="-1" aria-labelledby="graphZoomModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="graphZoomModalLabel">${safeTitle}</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body text-center">
+                                <img src="${imageSrc}" alt="${safeTitle}" class="img-fluid">
+                                <div class="mt-3">
+                                    <div class="alert alert-info">
+                                        <p>${safeDescription}</p>
+                                    </div>
+                                    ${this.createInsightsHTML(description)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 3. DOMに追加
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            
+            // 4. モーダル要素を取得
             const modalElement = document.getElementById('graphZoomModal');
-            const modal = new bootstrap.Modal(modalElement, {
-                backdrop: true,
-                keyboard: true,
-                focus: true
-            });
             
-            document.getElementById('graphZoomTitle').textContent = description.title;
-            document.getElementById('graphZoomImage').src = imageSrc;
-            
-            // 詳細説明を生成（既存のコード）
-            let detailsHTML = `...`;  // 既存のコード
-            
-            document.getElementById('graphZoomDescription').innerHTML = detailsHTML;
-            
-            // モーダル表示
-            modal.show();
-            
+            // 5. モーダルを初期化して表示（安全な方法）
+            if (modalElement) {
+                // スクリプト実行を遅らせる（DOM更新後に実行するため）
+                setTimeout(() => {
+                    try {
+                        const modal = new bootstrap.Modal(modalElement);
+                        modal.show();
+                    } catch (modalError) {
+                        console.error('モーダル表示エラー:', modalError);
+                    }
+                }, 50);
+            }
         } catch (error) {
-            console.error('グラフ拡大表示エラー:', error);
+            console.error('グラフモーダル作成エラー:', error);
+        }
+    }
+
+    /**
+     * インサイト情報のHTML生成（ヘルパーメソッド）
+     */
+    createInsightsHTML(description) {
+        if (!description.insights) return '';
+        
+        let html = '<div class="card mt-3"><div class="card-header">解釈のポイント</div><div class="card-body">';
+        
+        // インサイトの追加
+        Object.entries(description.insights).forEach(([key, insight]) => {
+            const insightTitle = this.getInsightTitle ? this.getInsightTitle(key) : key;
+            const safeInsightTitle = insightTitle.replace(/"/g, '&quot;');
+            const safeInsight = insight.replace(/"/g, '&quot;');
+            
+            html += `<p><strong>${safeInsightTitle}:</strong> ${safeInsight}</p>`;
+        });
+        
+        html += '</div></div>';
+        return html;
+    }
+
+
+    /**
+     * モーダルの内容を更新する（新規追加）
+     */
+    updateModalContent(imageSrc, description) {
+        // 各要素を取得して内容を設定
+        const titleElement = document.getElementById('graphZoomTitle');
+        const imageElement = document.getElementById('graphZoomImage');
+        const descriptionElement = document.getElementById('graphZoomDescription');
+        
+        // 要素が存在するか確認してから内容を設定
+        if (titleElement) titleElement.textContent = description.title || '';
+        if (imageElement) imageElement.src = imageSrc;
+        
+        // 説明部分の設定
+        if (descriptionElement) {
+            let detailsHTML = '';
+            
+            // 基本説明
+            detailsHTML += `
+                <div class="alert alert-info">
+                    <p><strong>${description.title || ''}について:</strong> ${description.description || ''}</p>
+                </div>
+            `;
+            
+            // インサイトの追加（存在する場合のみ）
+            if (description.insights) {
+                detailsHTML += `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">解釈のポイント</div>
+                                <div class="card-body">
+                `;
+                
+                Object.entries(description.insights).forEach(([key, insight]) => {
+                    const insightTitle = this.getInsightTitle ? this.getInsightTitle(key) : key;
+                    detailsHTML += `<p><strong>${insightTitle}:</strong> ${insight}</p>`;
+                });
+                
+                detailsHTML += `
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // グラフ解釈（存在する場合のみ）
+                if (this.getGraphInterpretation) {
+                    detailsHTML += `
+                        <div class="col-md-6">
+                            ${this.getGraphInterpretation(description.title)}
+                        </div>
+                    `;
+                }
+                
+                detailsHTML += `</div>`;
+            }
+            
+            descriptionElement.innerHTML = detailsHTML;
         }
     }
 
@@ -1423,13 +1518,35 @@ class UnifiedLearningSystem {
 
     async loadLearningHistory() {
         try {
+            console.log('学習履歴読み込み開始');
             const response = await fetch('/learning/learning-history');
-            if (response.ok) {
-                const data = await response.json();
-                this.displayLearningHistory(data.history || []);
+            if (!response.ok) {
+                throw new Error(`履歴データの取得に失敗しました: ${response.status}`);
             }
+            
+            const data = await response.json();
+            console.log('取得した履歴データ:', data);
+            
+            // 履歴データが空でないことを確認
+            if (!data.history || data.history.length === 0) {
+                console.log('履歴データが空です');
+                this.displayEmptyHistory();
+                return;
+            }
+            
+            // 日付でソート（新しい順）- 念のため再ソート
+            const sortedHistory = [...data.history].sort((a, b) => {
+                // タイムスタンプがない場合は日付で比較
+                const timestampA = a.timestamp || '';
+                const timestampB = b.timestamp || '';
+                return timestampB.localeCompare(timestampA);
+            });
+            
+            console.log('ソート後の履歴データ:', sortedHistory);
+            this.displayLearningHistory(sortedHistory);
         } catch (error) {
             console.error('履歴読み込みエラー:', error);
+            this.displayEmptyHistory();
         }
     }
 
@@ -1437,24 +1554,64 @@ class UnifiedLearningSystem {
      * 学習履歴の表示（拡張版）
      */
     displayLearningHistory(history) {
-        const container = document.getElementById('unified-learning-history');
-        if (!container || history.length === 0) return;
+        console.log('履歴表示処理開始:', history.length, '件');
         
-        const historyHTML = history.slice(0, 5).map(item => {
-            const accuracy = (item.accuracy * 100).toFixed(1);
-            // タイプラベルを正しく設定
-            const typeLabel = item.type === 'evaluation' ? '学習評価' : 'アノテーション分析';
-            const typeIcon = item.type === 'evaluation' ? 'fa-chart-line' : 'fa-tags';
+        const container = document.getElementById('unified-learning-history');
+        if (!container) {
+            console.error('履歴表示コンテナが見つかりません');
+            return;
+        }
+        
+        if (!history || history.length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-muted py-3">
+                    <i class="fas fa-history fa-2x mb-2"></i>
+                    <p>学習履歴がありません</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // 最大5件の履歴を表示
+        const recentHistory = history.slice(0, 5);
+        
+        const historyHTML = recentHistory.map((item, index) => {
+            // デバッグ用ログ出力
+            console.log(`履歴項目 ${index}:`, item);
+            
+            // 適切な精度値を取得
+            let accuracy;
+            if (item.accuracy !== undefined) {
+                accuracy = item.accuracy;
+            } else if (item.details && item.details.cv_mean !== undefined) {
+                accuracy = item.details.cv_mean;
+            } else if (item.details && item.details.accuracy !== undefined) {
+                accuracy = item.details.accuracy;
+            } else {
+                accuracy = 0;
+            }
+            
+            // 精度の表示形式を統一
+            const accuracyDisplay = typeof accuracy === 'number' ? 
+                (accuracy * 100).toFixed(1) : '0.0';
+            
+            // タイプの判定
+            const type = item.type || 
+                (item.details && item.details.type) || 
+                (item.id && item.id.includes('annotation') ? 'annotation' : 'evaluation');
+            
+            const typeLabel = type.includes('annotation') ? 'アノテーション分析' : '学習評価';
+            const typeIcon = type.includes('annotation') ? 'fa-tags' : 'fa-chart-line';
             
             return `
                 <div class="border-bottom py-2 history-item" style="cursor: pointer;" 
-                     onclick="window.unifiedLearningSystem.loadHistoricalResult('${item.timestamp}', '${item.type}')">
+                     onclick="window.unifiedLearningSystem.loadHistoricalResult('${item.timestamp || ''}', '${type}')">
                     <div class="d-flex justify-content-between align-items-center">
                         <span>
                             <i class="fas ${typeIcon} me-2"></i>
-                            <strong>${typeLabel}:</strong> ${accuracy}%
+                            <strong>${typeLabel}:</strong> ${accuracyDisplay}%
                         </span>
-                        <small class="text-muted">${item.date}</small>
+                        <small class="text-muted">${item.date || '日時不明'}</small>
                     </div>
                     <div class="text-end">
                         <small class="text-primary">クリックして詳細を表示</small>
@@ -1464,7 +1621,25 @@ class UnifiedLearningSystem {
         }).join('');
         
         container.innerHTML = historyHTML;
+        console.log('履歴表示処理完了');
     }
+
+    /**
+     * 空の履歴表示
+     */
+    displayEmptyHistory() {
+        const container = document.getElementById('unified-learning-history');
+        if (container) {
+            container.innerHTML = `
+                <div class="text-center text-muted py-3">
+                    <i class="fas fa-history fa-2x mb-2"></i>
+                    <p>学習履歴がありません</p>
+                </div>
+            `;
+        }
+    }
+
+
     /**
      * 履歴結果の読み込みと表示
      */
@@ -1472,45 +1647,84 @@ class UnifiedLearningSystem {
         try {
             console.log('履歴結果を読み込み:', timestamp, type);
             
+            if (!timestamp) {
+                this.showError('タイムスタンプが無効です');
+                return;
+            }
+            
             // 履歴から該当する結果を探す
             const response = await fetch('/learning/learning-history');
-            if (!response.ok) return;
+            if (!response.ok) throw new Error('履歴データの取得に失敗しました');
             
             const data = await response.json();
             const history = data.history || [];
-            const result = history.find(item => item.timestamp === timestamp);
             
-            if (result) {
-                // 結果を設定
-                this.learningResults = {
-                    summary: {
-                        overall_accuracy: result.cv_mean || 0,
-                        precision: result.classification_report?.weighted_avg?.precision || 0,
-                        recall: result.classification_report?.weighted_avg?.recall || 0,
-                        annotation_rate: result.dataset?.annotation_rate || 0
-                    },
-                    evaluation: result,
-                    metadata: {
-                        timestamp: result.timestamp,
-                        isHistorical: true
-                    },
-                    annotation_analysis: {
-                        dataset: result.dataset || {},
-                        annotation_timestamp: result.timestamp
-                    }
-                };
-                
-                // 結果を表示
-                this.displayUnifiedResults();
-                
-                // 履歴表示であることを通知
-                this.showSuccessMessage(`${result.date} の結果を表示しています`);
+            // タイムスタンプが一致する履歴を検索
+            const result = history.find(item => item.timestamp === timestamp || 
+                                              (item.details && item.details.timestamp === timestamp));
+            
+            if (!result) {
+                this.showError('指定された履歴が見つかりませんでした');
+                console.error('見つからないタイムスタンプ:', timestamp);
+                console.log('利用可能な履歴:', history.map(h => h.timestamp));
+                return;
             }
+            
+            console.log('見つかった履歴結果:', result);
+            
+            // 結果データの取得（detailsまたは直接のプロパティ）
+            const resultData = result.details || result;
+            
+            // 結果を設定
+            this.learningResults = {
+                summary: {
+                    overall_accuracy: resultData.cv_mean || resultData.accuracy || 0,
+                    precision: this.getNestedValue(resultData, 'classification_report.weighted_avg.precision') || 0,
+                    recall: this.getNestedValue(resultData, 'classification_report.weighted_avg.recall') || 0,
+                    annotation_rate: this.getNestedValue(resultData, 'dataset.annotation_rate') || 0
+                },
+                evaluation: resultData,
+                metadata: {
+                    timestamp: resultData.timestamp || timestamp,
+                    isHistorical: true
+                },
+                annotation_analysis: {
+                    dataset: resultData.dataset || {},
+                    annotation_timestamp: resultData.annotation_timestamp || resultData.timestamp || timestamp
+                }
+            };
+            
+            // 分析フェーズに移動
+            this.currentPhase = 'analysis';
+            this.updatePhaseDisplay();
+            this.showAnalysisPhase();
+            
+            // 結果を表示
+            this.displayUnifiedResults();
+            
+            // 履歴表示であることを通知
+            this.showSuccessMessage(`${result.date || '過去の結果'} を表示しています`);
             
         } catch (error) {
             console.error('履歴結果読み込みエラー:', error);
-            this.showError('履歴結果の読み込みに失敗しました');
+            this.showError('履歴結果の読み込みに失敗しました: ' + error.message);
         }
+    }
+    /**
+     * ネストされたオブジェクトから安全に値を取得するヘルパー関数
+     */
+    getNestedValue(obj, path) {
+        if (!obj || !path) return undefined;
+        
+        const parts = path.split('.');
+        let current = obj;
+        
+        for (const part of parts) {
+            if (current === undefined || current === null) return undefined;
+            current = current[part];
+        }
+        
+        return current;
     }
 }
 
@@ -2309,122 +2523,6 @@ function cleanupAnnotationModal() {
     }
 }
 
-// ===========================================
-// 評価システム（簡易版）
-// ===========================================
-
-// グローバル変数でChart.jsインスタンスを管理
-let annotationChart = null;
-
-/**
- * アノテーション分析結果の表示
- * @param {Object} data - 分析結果データ
- */
-function displayAnnotationAnalysis(data) {
-    console.log('アノテーション分析結果の表示開始:', data);
-    
-    // 重複実行を防ぐためのフラグチェック
-    if (window.annotationAnalysisDisplayed) {
-        console.log('アノテーション分析結果は既に表示済みです');
-        return;
-    }
-    
-    // 表示フラグを設定
-    window.annotationAnalysisDisplayed = true;
-    
-    try {
-        // データセット情報を表示
-        updateAnnotationDatasetInfo(data);
-       
-        // アノテーション影響の画像
-        updateAnnotationImpactImage(data);
-       
-        // アノテーションのインサイト
-        updateAnnotationInsight(data);
-    } catch (error) {
-        console.error('アノテーション分析表示エラー:', error);
-    }
-    
-    // 一定時間後にフラグをリセット
-    setTimeout(() => {
-        window.annotationAnalysisDisplayed = false;
-    }, 5000);
-}
-
-/**
- * アノテーションデータセット情報の更新
- * @param {Object} data - 分析データ
- */
-function updateAnnotationDatasetInfo(data) {
-    const dataset = data.dataset || {};
-   
-    // アノテーション率
-    const annotationRate = dataset.annotation_rate || 0;
-    console.log('アノテーション率更新:', (annotationRate * 100).toFixed(1) + '%');
-}
-
-/**
- * アノテーション影響画像の更新
- * @param {Object} data - 分析データ
- */
-function updateAnnotationImpactImage(data) {
-    // 新しい画像配信ルートを使用
-    if (data.images && data.images.annotation_impact) {
-        const imgSrc = '/evaluation/images/' + data.images.annotation_impact;
-        console.log('アノテーション影響画像:', imgSrc);
-    } else {
-        // 画像がない場合はデータからグラフを生成
-        renderAnnotationChart(data.dataset || {});
-    }
-}
-
-/**
- * アノテーションのインサイト更新
- * @param {Object} data - 分析データ
- */
-function updateAnnotationInsight(data) {
-    const dataset = data.dataset || {};
-    const annotationRate = dataset.annotation_rate || 0;
-    let insightMessage = '';
-   
-    if (annotationRate < 0.3) {
-        insightMessage = 'アノテーション率が低いため、モデルの性能が十分に発揮されていない可能性があります。';
-    } else if (annotationRate < 0.7) {
-        insightMessage = 'アノテーションの割合は中程度です。より多くのアノテーションを追加することで、モデルの性能向上が期待できます。';
-    } else {
-        insightMessage = 'アノテーション率が高く、モデルの学習に十分なデータが提供されています。';
-    }
-   
-    console.log('アノテーションインサイト:', insightMessage);
-}
-
-/**
- * データセット情報からグラフを描画（Chart.jsを使用）
- * @param {Object} dataset - データセット情報
- */
-function renderAnnotationChart(dataset) {
-    try {
-        console.log('グラフ描画開始:', dataset);
-        
-        // 既存のChart.jsインスタンスがあれば完全に破棄
-        if (annotationChart) {
-            console.log('既存のChart.jsインスタンスを破棄中...');
-            annotationChart.destroy();
-            annotationChart = null;
-        }
-        
-        // Chart.jsが読み込まれているか確認
-        if (typeof Chart !== 'undefined') {
-            console.log('Chart.jsが利用可能です');
-            // ここでグラフを作成する処理を実装
-        } else {
-            console.log('Chart.js未読み込み - 代替表示を作成');
-        }
-        
-    } catch (error) {
-        console.error('アノテーショングラフ描画エラー:', error);
-    }
-}
 
 // ===========================================
 // グローバル初期化とエクスポート
@@ -2445,4 +2543,3 @@ window.openAnnotationEditModal = openAnnotationEditModal;
 window.openAnnotationModal = openAnnotationModal;
 window.showQuickDeleteConfirm = showQuickDeleteConfirm;
 window.deleteImage = deleteImage;
-window.displayAnnotationAnalysis = displayAnnotationAnalysis;

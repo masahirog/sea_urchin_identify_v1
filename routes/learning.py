@@ -904,7 +904,7 @@ def get_unified_status(task_id):
 @learning_bp.route('/learning-history')
 def get_learning_history():
     """
-    学習・評価履歴を取得
+    学習・評価履歴を取得（修正版）
     
     Returns:
     - JSON: 学習・評価履歴
@@ -912,26 +912,69 @@ def get_learning_history():
     try:
         from core.evaluator import UnifiedEvaluator
         
+        # デバッグログ追加
+        current_app.logger.info("履歴データ取得開始")
+        
         # 評価履歴を取得
         evaluator = UnifiedEvaluator()
         evaluation_history = evaluator.get_evaluation_history()
+        
+        # デバッグ出力
+        current_app.logger.info(f"取得した履歴数: {len(evaluation_history)}")
+        if evaluation_history:
+            for i, item in enumerate(evaluation_history[:3]):  # 最初の3件だけログ出力
+                current_app.logger.info(f"履歴{i}: タイプ={item.get('type', '不明')}, タイムスタンプ={item.get('timestamp', 'なし')}")
         
         # 学習履歴も含める（将来の拡張用）
         combined_history = []
         
         # 評価履歴を追加
         for item in evaluation_history:
+            # 日付フォーマットの標準化（ISOフォーマットをYYYYMMDD_HHMMSSに変換）
+            timestamp = item.get("timestamp", "")
+            normalized_timestamp = timestamp
+            
+            # ISO形式の場合は変換
+            if timestamp and 'T' in timestamp:
+                try:
+                    dt = datetime.fromisoformat(timestamp.split('.')[0])
+                    normalized_timestamp = dt.strftime("%Y%m%d_%H%M%S")
+                except:
+                    pass
+            
+            # タイプを明示的に設定
+            if 'type' not in item:
+                if 'annotation' in str(item).lower():
+                    item_type = 'annotation'
+                else:
+                    item_type = 'evaluation'
+            else:
+                item_type = item.get('type', 'evaluation')
+            
+            # 精度値の取得（cv_mean優先、なければaccuracy）
+            if 'cv_mean' in item:
+                accuracy = item['cv_mean']
+            elif 'accuracy' in item:
+                accuracy = item['accuracy']
+            else:
+                accuracy = 0
+                
             combined_history.append({
-                "id": item.get("timestamp"),
-                "type": item.get("type", "evaluation"),
-                "timestamp": item.get("timestamp"),
-                "date": format_timestamp_to_date(item.get("timestamp")),
-                "accuracy": item.get("cv_mean", 0),
+                "id": normalized_timestamp,
+                "type": item_type,
+                "timestamp": normalized_timestamp,
+                "date": format_timestamp_to_date(timestamp),
+                "accuracy": accuracy,
                 "details": item
             })
         
         # 日付でソート（新しい順）
         combined_history.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        
+        current_app.logger.info(f"返却する履歴データ: {len(combined_history)}件")
+        if combined_history:
+            for i, item in enumerate(combined_history[:3]):  # 最初の3件だけログ出力
+                current_app.logger.info(f"結果{i}: タイプ={item.get('type')}, タイムスタンプ={item.get('timestamp')}")
         
         return jsonify({
             "history": combined_history,
@@ -1389,30 +1432,41 @@ def calculate_completion_percentage(status):
 
 def format_timestamp_to_date(timestamp):
     """
-    タイムスタンプを読みやすい日付形式に変換
+    タイムスタンプを読みやすい日付形式に変換（修正版）
     
     Parameters:
-    - timestamp: YYYYMMdd_HHmmss形式のタイムスタンプ
+    - timestamp: タイムスタンプ文字列（複数形式対応）
     
     Returns:
     - str: フォーマットされた日付文字列
     """
-    if not timestamp or len(timestamp) < 15:
-        return 'Invalid date'
+    if not timestamp:
+        return '日時不明'
     
     try:
-        year = timestamp[0:4]
-        month = timestamp[4:6]
-        day = timestamp[6:8]
-        hour = timestamp[9:11]
-        minute = timestamp[11:13]
-        second = timestamp[13:15]
+        # ISO形式（2025-05-23T09:18:35.558600）の場合
+        if 'T' in timestamp:
+            dt = datetime.fromisoformat(timestamp.split('.')[0])
+            return dt.strftime("%Y年%m月%d日 %H:%M:%S")
         
-        date = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
-        return date.strftime("%Y年%m月%d日 %H:%M:%S")
-    except Exception:
+        # YYYYMMdd_HHMMSS形式の場合
+        elif '_' in timestamp and len(timestamp) >= 15:
+            year = timestamp[0:4]
+            month = timestamp[4:6]
+            day = timestamp[6:8]
+            hour = timestamp[9:11]
+            minute = timestamp[11:13]
+            second = timestamp[13:15]
+            
+            date = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
+            return date.strftime("%Y年%m月%d日 %H:%M:%S")
+        
+        # その他の形式
+        else:
+            return timestamp
+    except Exception as e:
+        current_app.logger.error(f"日付変換エラー: {timestamp} - {str(e)}")
         return timestamp
-
 
 
 @learning_bp.route('/delete-annotation', methods=['POST'])
