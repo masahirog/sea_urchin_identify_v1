@@ -334,16 +334,20 @@
         </div>
         
         <!-- 学習履歴 -->
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h6><i class="fas fa-history me-2"></i>学習履歴</h6>
-                    </div>
-                    <div class="card-body">
-                        <div id="unified-learning-history">
-                            <!-- 履歴がここに動的に挿入される -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-history me-2"></i>学習履歴
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div id="unified-learning-history">
+                    <!-- ここに統合された履歴が表示されます -->
+                    <div class="text-center p-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">読み込み中...</span>
                         </div>
+                        <p class="mt-2">履歴を読み込んでいます...</p>
                     </div>
                 </div>
             </div>

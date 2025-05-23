@@ -181,3 +181,47 @@ function addSafeEventListener(elementId, eventType, handler) {
     }
     return false;
 }
+
+
+// 画像読み込みエラー処理関数（より堅牢な版）
+function handleImageError(imgElement) {
+    // 現在のインデックスを取得
+    let currentIndex = 0;
+    // フォールバック画像パスを収集
+    const fallbackPaths = [];
+    
+    // data-fallback-X属性から全てのフォールバックパスを取得
+    for (let i = 0; i < 10; i++) { // 最大10個のフォールバックを試す
+        const attr = imgElement.getAttribute(`data-fallback-${i}`);
+        if (attr) {
+            fallbackPaths.push(attr);
+            imgElement.removeAttribute(`data-fallback-${i}`);
+        }
+    }
+    
+    if (fallbackPaths.length > 0) {
+        // 次のフォールバックを試す
+        imgElement.src = fallbackPaths[0];
+        
+        // 残りのフォールバックを再設定
+        fallbackPaths.slice(1).forEach((path, idx) => {
+            imgElement.setAttribute(`data-fallback-${idx}`, path);
+        });
+    } else {
+        // 全てのフォールバックが失敗した場合
+        const graphType = imgElement.getAttribute('data-graph-type');
+        let message = 'グラフが利用できません。学習を実行して評価グラフを生成してください。';
+        
+        // アノテーション効果グラフの場合は特別なメッセージ
+        if (graphType === 'annotation_impact') {
+            message = 'アノテーションデータがありません。データにアノテーションを追加すると表示されます。';
+        }
+        
+        imgElement.parentElement.innerHTML = `
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                ${message}
+            </div>
+        `;
+    }
+}
