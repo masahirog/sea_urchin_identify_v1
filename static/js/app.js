@@ -8,7 +8,15 @@ import {
     showLoading,
     hideLoading,
     showSuccessMessage,
-    showErrorMessage
+    showErrorMessage,
+    showWarningMessage,
+    apiRequest,
+    apiRequestFormData,
+    setElementText,
+    showElement,
+    hideElement,
+    getGenderClass,
+    getGenderIcon
 } from './utilities.js';
 
 // ===========================================
@@ -53,15 +61,8 @@ function initMainApplication() {
     // 既存のタスクIDを復元
     restoreTaskState();
     
-    // タブ切り替え時の処理
-    initTabHandlers();
-    
     // 各機能の初期化
-    initVideoProcessor();
-    initImageClassifier();
-    initModelTrainer();
     initTaskManager();
-    initMarkingTools();
     
     // 初期表示データの読み込み
     loadDatasetInfo();
@@ -81,21 +82,14 @@ function restoreTaskState() {
     const savedTaskId = getTaskId();
     if (savedTaskId) {
         currentTaskId = savedTaskId;
-        // タスク状態を確認し、処理結果を表示
-        checkTaskStatus();
-        // 抽出画像を読み込む
-        loadExtractedImages();
     }
 }
 
 /**
- * タブ切り替え時の処理を初期化
+ * タスク管理の初期化
  */
-function initTabHandlers() {
-    // 履歴タブが選択されたときに履歴を読み込む
-    document.getElementById('history-tab')?.addEventListener('click', function() {
-        loadTaskHistory();
-    });
+function initTaskManager() {
+    // 必要に応じて実装
 }
 
 /**
@@ -150,39 +144,28 @@ function initClassificationForm() {
  * フィードバックボタンの初期化
  */
 function initFeedbackButtons() {
-    // 正解フィードバック
-    const feedbackCorrect = document.getElementById('feedbackCorrect');
-    if (feedbackCorrect) {
-        feedbackCorrect.addEventListener('click', function() {
-            submitFeedback('correct');
-        });
-    }
-    
-    // 間違い（オス）フィードバック
-    const feedbackWrongMale = document.getElementById('feedbackWrongMale');
-    if (feedbackWrongMale) {
-        feedbackWrongMale.addEventListener('click', function() {
-            submitFeedback('wrong', 'male');
-        });
-    }
-    
-    // 間違い（メス）フィードバック
-    const feedbackWrongFemale = document.getElementById('feedbackWrongFemale');
-    if (feedbackWrongFemale) {
-        feedbackWrongFemale.addEventListener('click', function() {
-            submitFeedback('wrong', 'female');
-        });
-    }
+    const feedbackButtons = {
+        'feedbackCorrect': () => submitFeedback('correct'),
+        'feedbackWrongMale': () => submitFeedback('wrong', 'male'),
+        'feedbackWrongFemale': () => submitFeedback('wrong', 'female')
+    };
+
+    Object.entries(feedbackButtons).forEach(([id, handler]) => {
+        const button = document.getElementById(id);
+        if (button) {
+            button.addEventListener('click', handler);
+        }
+    });
 }
 
 /**
  * 雌雄判定の実行
  */
-function executeClassification() {
+async function executeClassification() {
     const imageFile = document.getElementById('imageFile').files[0];
     
     if (!imageFile) {
-        alert('画像ファイルを選択してください');
+        showWarningMessage('画像ファイルを選択してください');
         return;
     }
     
@@ -193,18 +176,9 @@ function executeClassification() {
     // ローディング表示
     showLoading();
     
-    // AJAX送信
-    fetch('/image/upload', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`サーバーエラー: ${response.status}`);
-        }
-        return response.json();
-    })
-    .then(data => {
+    try {
+        const data = await apiRequestFormData('/image/upload', formData);
+        
         hideLoading();
         
         if (data.error) {
@@ -220,11 +194,11 @@ function executeClassification() {
         
         // 統計更新
         updateStatistics();
-    })
-    .catch(error => {
+        
+    } catch (error) {
         hideLoading();
         showErrorMessage('判定中にエラーが発生しました: ' + error.message);
-    });
+    }
 }
 
 /**
@@ -240,16 +214,10 @@ function displayClassificationResult(data) {
     };
     
     // プレースホルダーを非表示
-    const placeholder = document.getElementById('classificationPlaceholder');
-    if (placeholder) {
-        placeholder.classList.add('d-none');
-    }
+    hideElement('classificationPlaceholder');
     
     // 結果エリアを表示
-    const resultArea = document.getElementById('classificationResult');
-    if (resultArea) {
-        resultArea.classList.remove('d-none');
-    }
+    showElement('classificationResult');
     
     // 画像表示
     const resultImage = document.getElementById('resultImage');
@@ -316,13 +284,13 @@ function displayFeatureImportance(featureImportance) {
  * @param {string} type - フィードバックタイプ ('correct' or 'wrong')
  * @param {string} correctGender - 正しい性別 (wrongの場合のみ)
  */
-function submitFeedback(type, correctGender = null) {
+async function submitFeedback(type, correctGender = null) {
     if (!classificationService.currentResult) {
         return;
     }
     
     if (classificationService.currentResult.feedbackGiven) {
-        alert('このデータには既にフィードバックが送信されています');
+        showWarningMessage('このデータには既にフィードバックが送信されています');
         return;
     }
     
@@ -335,28 +303,36 @@ function submitFeedback(type, correctGender = null) {
         timestamp: new Date().toISOString()
     };
     
-    // TODO: 実際のフィードバック送信API実装
-    // fetch('/api/feedback', { method: 'POST', body: JSON.stringify(feedbackData) })
-    
-    // 暫定処理: ローカル統計更新
-    classificationService.currentResult.feedbackGiven = true;
-    
-    if (type === 'correct') {
-        classificationService.statistics.correctFeedbacks++;
-        showSuccessMessage('フィードバックありがとうございます！正解として記録しました。');
-    } else {
-        classificationService.statistics.incorrectFeedbacks++;
-        showSuccessMessage(`フィードバックありがとうございます！正解は「${correctGender === 'male' ? 'オス' : 'メス'}」として記録しました。`);
+    try {
+        // TODO: 実際のフィードバック送信API実装
+        // const response = await apiRequest('/api/feedback', {
+        //     method: 'POST',
+        //     body: JSON.stringify(feedbackData)
+        // });
+        
+        // 暫定処理: ローカル統計更新
+        classificationService.currentResult.feedbackGiven = true;
+        
+        if (type === 'correct') {
+            classificationService.statistics.correctFeedbacks++;
+            showSuccessMessage('フィードバックありがとうございます！正解として記録しました。');
+        } else {
+            classificationService.statistics.incorrectFeedbacks++;
+            showSuccessMessage(`フィードバックありがとうございます！正解は「${correctGender === 'male' ? 'オス' : 'メス'}」として記録しました。`);
+        }
+        
+        // フィードバックボタンを無効化
+        disableFeedbackButtons();
+        
+        // 統計更新
+        updateStatisticsDisplay();
+        
+        // 履歴更新
+        updateHistoryWithFeedback(feedbackData);
+        
+    } catch (error) {
+        showErrorMessage('フィードバック送信中にエラーが発生しました: ' + error.message);
     }
-    
-    // フィードバックボタンを無効化
-    disableFeedbackButtons();
-    
-    // 統計更新
-    updateStatisticsDisplay();
-    
-    // 履歴更新
-    updateHistoryWithFeedback(feedbackData);
 }
 
 /**
@@ -431,21 +407,14 @@ function loadStatistics() {
  * 統計表示の更新
  */
 function updateStatisticsDisplay() {
-    const totalElement = document.getElementById('totalJudgments');
-    const accuracyElement = document.getElementById('accuracyRate');
+    setElementText('totalJudgments', classificationService.statistics.totalJudgments);
     
-    if (totalElement) {
-        totalElement.textContent = classificationService.statistics.totalJudgments;
-    }
-    
-    if (accuracyElement) {
-        const total = classificationService.statistics.correctFeedbacks + classificationService.statistics.incorrectFeedbacks;
-        if (total > 0) {
-            const accuracy = (classificationService.statistics.correctFeedbacks / total * 100).toFixed(1);
-            accuracyElement.textContent = accuracy + '%';
-        } else {
-            accuracyElement.textContent = '-';
-        }
+    const total = classificationService.statistics.correctFeedbacks + classificationService.statistics.incorrectFeedbacks;
+    if (total > 0) {
+        const accuracy = (classificationService.statistics.correctFeedbacks / total * 100).toFixed(1);
+        setElementText('accuracyRate', accuracy + '%');
+    } else {
+        setElementText('accuracyRate', '-');
     }
 }
 
@@ -555,69 +524,9 @@ function updateHistoryWithFeedback(feedbackData) {
     }
 }
 
-// ===========================================
-// プレースホルダー関数（他モジュールとの互換性用）
-// ===========================================
-
 /**
- * 動画プロセッサーの初期化（プレースホルダー）
+ * データセット情報の読み込み
  */
-function initVideoProcessor() {
-    // 動画処理ページでのみ動作する機能はvideo.jsに移行
-}
-
-/**
- * 画像分類器の初期化（プレースホルダー）
- */
-function initImageClassifier() {
-    // 雌雄判定機能は上記で実装済み
-}
-
-/**
- * モデル訓練の初期化（プレースホルダー）
- */
-function initModelTrainer() {
-    // 学習機能はlearning.jsに移行
-}
-
-/**
- * タスクマネージャーの初期化（プレースホルダー）
- */
-function initTaskManager() {
-    // 必要に応じて実装
-}
-
-/**
- * マーキングツールの初期化（プレースホルダー）
- */
-function initMarkingTools() {
-    // アノテーション機能はlearning.jsに移行
-}
-
-/**
- * データセット情報の読み込み（プレースホルダー）
- */
-function loadDatasetInfo() {
-    // 必要に応じて実装
-}
-
-/**
- * タスク状態のチェック（プレースホルダー）
- */
-function checkTaskStatus() {
-    // 必要に応じて実装
-}
-
-/**
- * 抽出画像の読み込み（プレースホルダー）
- */
-function loadExtractedImages() {
-    // 動画処理関連はvideo.jsに移行
-}
-
-/**
- * タスク履歴の読み込み（プレースホルダー）
- */
-function loadTaskHistory() {
+async function loadDatasetInfo() {
     // 必要に応じて実装
 }

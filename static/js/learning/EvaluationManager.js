@@ -6,7 +6,8 @@
 import {
     showSuccessMessage,
     showElement,
-    hideElement
+    hideElement,
+    setElementText
 } from '../utilities.js';
 
 /**
@@ -81,19 +82,11 @@ export class EvaluationManager {
     displayUnifiedResults() {
         if (!this.parent.learningResults) return;
         
-        // プレースホルダー非表示
         hideElement('results-placeholder');
         
-        // サマリーメトリクス更新
         this.parent.uiManager.updateSummaryMetrics();
-        
-        // 詳細結果表示
         this.displayDetailedResults();
-        
-        // 改善提案表示
         this.displayImprovementSuggestions();
-        
-        // YOLOモデル結果の表示（存在する場合）
         this.displayYoloResults();
     }
 
@@ -101,17 +94,14 @@ export class EvaluationManager {
      * YOLO検出モデルの結果表示
      */
     displayYoloResults() {
-        // YOLOモデル結果が存在するか確認
         const yoloResults = this.parent.learningResults?.yolo_results;
         if (!yoloResults) return;
         
         const container = document.getElementById('yolo-results-content');
         if (!container) return;
         
-        // 結果表示領域を表示
         showElement('yolo-results-section');
         
-        // 基本的なメトリクスを表示
         const metrics = yoloResults.metrics || {};
         const basicMetricsHTML = `
             <div class="card mb-4">
@@ -149,13 +139,9 @@ export class EvaluationManager {
             </div>
         `;
         
-        // 結果グラフ表示（存在する場合）
         const graphsHTML = this.getYoloResultGraphsHTML(yoloResults);
-        
-        // 検出サンプル（存在する場合）
         const samplesHTML = this.getDetectionSamplesHTML(yoloResults.samples);
         
-        // 全体を構成
         container.innerHTML = basicMetricsHTML + graphsHTML + samplesHTML;
     }
     
@@ -170,7 +156,6 @@ export class EvaluationManager {
         
         let html = '<div class="row">';
         
-        // 結果グラフがある場合
         if (graphs.results) {
             html += `
                 <div class="col-md-6 mb-4">
@@ -186,7 +171,6 @@ export class EvaluationManager {
             `;
         }
         
-        // 混同行列がある場合
         if (graphs.confusion_matrix) {
             html += `
                 <div class="col-md-6 mb-4">
@@ -204,11 +188,9 @@ export class EvaluationManager {
         
         html += '</div>';
         
-        // 2行目のグラフ（あれば）
         if (graphs.precision_recall || graphs.labels) {
             html += '<div class="row">';
             
-            // 精度-再現率曲線
             if (graphs.precision_recall) {
                 html += `
                     <div class="col-md-6 mb-4">
@@ -224,7 +206,6 @@ export class EvaluationManager {
                 `;
             }
             
-            // ラベル分布
             if (graphs.labels) {
                 html += `
                     <div class="col-md-6 mb-4">
@@ -233,7 +214,7 @@ export class EvaluationManager {
                                 <h6 class="mb-0">ラベル分布</h6>
                             </div>
                             <div class="card-body text-center">
-                                <img src="${graphs.labels}" alt="ラベル分布" class="img-fluid graph-image">
+                                <img src="${graphs.labels}" alt="ラベル分布" class="img-fluid rounded">
                             </div>
                         </div>
                     </div>
@@ -294,7 +275,6 @@ export class EvaluationManager {
         const container = document.getElementById('unified-results-content');
         if (!container) return;
         
-        // ローディング表示
         container.innerHTML = `
             <div class="text-center my-3">
                 <div class="spinner-border text-primary" role="status">
@@ -304,7 +284,6 @@ export class EvaluationManager {
             </div>
         `;
         
-        // タイムスタンプを取得（メタデータまたは評価から）
         const timestamp = this.parent.learningResults?.metadata?.timestamp ||
                          this.parent.learningResults?.evaluation?.timestamp ||
                          '';
@@ -320,19 +299,14 @@ export class EvaluationManager {
             return;
         }
         
-        // グラフタイプの配列
         const graphTypes = ['learning_curve', 'confusion_matrix', 'roc_curve', 'annotation_impact'];
         
-        // グラフURLのパターンを生成
         const graphUrls = {};
-        
-        // 各グラフタイプについて、可能性のあるURLを生成
         graphTypes.forEach(type => {
             const paths = this.generateGraphPaths(type, timestamp);
             graphUrls[type] = paths;
         });
         
-        // 各グラフの読み込み状態を確認する関数
         const checkImageExists = (url) => {
             return new Promise((resolve) => {
                 const img = new Image();
@@ -342,9 +316,7 @@ export class EvaluationManager {
             });
         };
 
-        // 各グラフタイプの最初に見つかった有効なURLを探す
         Promise.all(graphTypes.map(async (type) => {
-            // このグラフタイプの全てのURLパターンをチェック
             for (const url of graphUrls[type]) {
                 const exists = await checkImageExists(url);
                 if (exists) {
@@ -352,15 +324,11 @@ export class EvaluationManager {
                 }
             }
             
-            // 有効なURLが見つからなかった場合
             return { type, url: graphUrls[type][0], exists: false };
         })).then(results => {
-            // グラフHTMLを生成
             let graphsHTML = '<div class="row">';
             
-            // グラフパスと説明を使用してカードを生成
             results.forEach((result, index) => {
-                // 2つ目の行に移る
                 if (index === 2) {
                     graphsHTML += '</div><div class="row">';
                 }
@@ -376,13 +344,9 @@ export class EvaluationManager {
             graphsHTML += '</div>';
             container.innerHTML = graphsHTML;
             
-            // グラフモーダル用のコードを追加
             this.addGraphModal();
-            
-            // クリックイベントを設定
             this.setupGraphInteractions();
         }).catch(error => {
-            // エラー時の表示
             container.innerHTML = `
                 <div class="alert alert-warning">
                     <i class="fas fa-exclamation-triangle me-2"></i>
@@ -433,7 +397,6 @@ export class EvaluationManager {
      * グラフモーダルを追加
      */
     addGraphModal() {
-        // すでにモーダルが存在する場合は何もしない
         if (document.getElementById('graphZoomModal')) return;
         
         const modalHTML = `
@@ -460,7 +423,6 @@ export class EvaluationManager {
      * グラフのインタラクション設定
      */
     setupGraphInteractions() {
-        // ツールチップ初期化
         if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
             const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
             tooltipTriggerList.map(function (tooltipTriggerEl) {
@@ -468,7 +430,6 @@ export class EvaluationManager {
             });
         }
         
-        // グラフホバー効果
         document.querySelectorAll('.graph-container').forEach(container => {
             const overlay = container.querySelector('.graph-overlay');
             if (overlay) {
@@ -481,10 +442,9 @@ export class EvaluationManager {
             }
         });
         
-        // 情報アイコンのイベントリスナーを追加
         document.querySelectorAll('.graph-info-icon').forEach(icon => {
             icon.addEventListener('click', (e) => {
-                e.stopPropagation(); // カードのクリックイベントが発火しないようにする
+                e.stopPropagation();
                 const graphType = icon.dataset.graphType;
                 this.showGraphExplanation(graphType);
             });
@@ -498,27 +458,19 @@ export class EvaluationManager {
      */
     showGraphZoom(imageSrc, encodedDescription) {
         try {
-            // 画像がない場合は処理しない
-            if (!imageSrc) {
-                return;
-            }
+            if (!imageSrc) return;
             
             const description = JSON.parse(decodeURIComponent(encodedDescription));
             
-            // モーダル要素の取得
             const modal = document.getElementById('graphZoomModal');
             const modalImage = document.getElementById('modalGraphImage');
             const modalDescription = document.getElementById('modalGraphDescription');
             
-            if (!modal || !modalImage || !modalDescription) {
-                return;
-            }
+            if (!modal || !modalImage || !modalDescription) return;
             
-            // モーダルの内容を設定
             modalImage.src = imageSrc;
             modalImage.alt = description.title;
             
-            // エラー処理を追加
             modalImage.onerror = function() {
                 this.style.display = 'none';
                 modalDescription.innerHTML = `
@@ -530,22 +482,17 @@ export class EvaluationManager {
                 `;
             }.bind(this);
             
-            // 説明文を設定
             let descriptionHTML = `
                 <div class="alert alert-info mb-3">
                     <p><strong>${description.title}について:</strong> ${description.description}</p>
                 </div>
             `;
             
-            // インサイト情報があれば追加
             descriptionHTML += this.createInsightsHTML(description);
-            
-            // 詳細な説明を追加
             descriptionHTML += this.getDetailedExplanation(description.title);
             
             modalDescription.innerHTML = descriptionHTML;
             
-            // モーダルを表示
             if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
                 const bsModal = new bootstrap.Modal(modal);
                 bsModal.show();
@@ -566,7 +513,6 @@ export class EvaluationManager {
         
         let html = '<div class="card mt-3"><div class="card-header">解釈のポイント</div><div class="card-body">';
         
-        // インサイトの追加
         Object.entries(description.insights).forEach(([key, insight]) => {
             const insightTitle = this.getInsightTitle(key);
             const safeInsightTitle = insightTitle.replace(/"/g, '&quot;');
@@ -775,7 +721,6 @@ export class EvaluationManager {
         const suggestions = this.parent.learningResults.improvement_suggestions || [];
         
         if (suggestions.length === 0) {
-            // システムが提供する改善提案がない場合、自動生成する
             const autoSuggestions = this.generateAutoSuggestions();
             
             if (autoSuggestions.length > 0) {
@@ -796,7 +741,6 @@ export class EvaluationManager {
                 return;
             }
             
-            // 自動生成の提案もない場合
             container.innerHTML = `
                 <div class="alert alert-success">
                     <i class="fas fa-check-circle me-2"></i>
@@ -832,7 +776,6 @@ export class EvaluationManager {
         const stats = this.parent.datasetStats;
         const suggestions = [];
         
-        // 精度が低い場合の提案
         const accuracy = result.summary.overall_accuracy || 0;
         if (accuracy < 0.8) {
             suggestions.push({
@@ -842,7 +785,6 @@ export class EvaluationManager {
             });
         }
         
-        // データ不均衡の提案
         const maleCount = stats.male_count || 0;
         const femaleCount = stats.female_count || 0;
         const totalCount = maleCount + femaleCount;
@@ -859,7 +801,6 @@ export class EvaluationManager {
             }
         }
         
-        // データ量の提案
         if (totalCount < 20) {
             suggestions.push({
                 category: 'データ量',
@@ -868,7 +809,6 @@ export class EvaluationManager {
             });
         }
         
-        // アノテーション率の提案
         const annotationCount = stats.annotation_count || 0;
         const annotationRate = totalCount > 0 ? annotationCount / totalCount : 0;
         
@@ -880,7 +820,6 @@ export class EvaluationManager {
             });
         }
         
-        // YOLO関連の提案（学習結果がある場合）
         if (result.yolo_results) {
             const yoloMetrics = result.yolo_results.metrics || {};
             const mAP50 = yoloMetrics.mAP50 || 0;
@@ -893,7 +832,6 @@ export class EvaluationManager {
                 });
             }
         } else if (annotationCount > 5) {
-            // YOLOモデルがまだ無い場合
             suggestions.push({
                 category: 'YOLO検出モデル',
                 priority: 'medium',
@@ -914,13 +852,10 @@ export class EvaluationManager {
     generateGraphPaths(graphType, baseTimestamp, annotationTimestamp = null) {
         const paths = [];
         
-        // 基本パターン
         paths.push(`/evaluation/images/${graphType}_${baseTimestamp}.png`);
         
-        // ISO形式のタイムスタンプ変換を試みる
         if (baseTimestamp.includes('_')) {
             try {
-                // YYYYMMDD_HHMMSS → YYYY-MM-DDTHH:MM:SS 形式に変換
                 const year = baseTimestamp.substring(0, 4);
                 const month = baseTimestamp.substring(4, 6);
                 const day = baseTimestamp.substring(6, 8);
@@ -930,19 +865,15 @@ export class EvaluationManager {
                 
                 const isoTimestamp = `${year}-${month}-${day}T${hour}:${minute}:${second}`;
                 paths.push(`/evaluation/images/${graphType}_${isoTimestamp}.png`);
-                
-                // 完全なISO文字列も試す
                 paths.push(`/evaluation/images/${graphType}_${isoTimestamp}.558600.png`);
             } catch (e) {
                 console.warn('タイムスタンプ変換エラー:', e);
             }
         }
         
-        // 別の形式も試す
         if (baseTimestamp.includes('T')) {
             try {
-                // YYYY-MM-DDTHH:MM:SS → YYYYMMDD_HHMMSS 形式に変換
-                const cleanTimestamp = baseTimestamp.split('.')[0]; // 小数点以下を除去
+                const cleanTimestamp = baseTimestamp.split('.')[0];
                 const formattedTimestamp = cleanTimestamp
                     .replace(/[-:]/g, '')
                     .replace('T', '_');
@@ -953,68 +884,12 @@ export class EvaluationManager {
             }
         }
         
-        // アノテーション効果の場合は特別なパスも追加
         if (graphType === 'annotation_impact' && annotationTimestamp && annotationTimestamp !== baseTimestamp) {
             paths.push(`/evaluation/images/${graphType}_${annotationTimestamp}.png`);
         }
         
-        // 既知の動作確認済みパスを追加（フォールバック）
         paths.push(`/evaluation/images/${graphType}_2025-05-23T09:52:21.613416.png`);
         
         return paths;
-    }
-
-    /**
-     * 学習曲線の取得
-     * @param {string} timestamp - タイムスタンプ
-     * @returns {Promise<Array>} 学習曲線データ
-     */
-    async getLearningCurve(timestamp) {
-        try {
-            const response = await fetch(`/learning/learning-curve/${timestamp}`);
-            if (!response.ok) throw new Error('学習曲線の取得に失敗しました');
-            
-            const data = await response.json();
-            return data.curve || [];
-        } catch (error) {
-            console.error('学習曲線取得エラー:', error);
-            return [];
-        }
-    }
-
-    /**
-     * 混同行列の取得
-     * @param {string} timestamp - タイムスタンプ
-     * @returns {Promise<Object>} 混同行列データ
-     */
-    async getConfusionMatrix(timestamp) {
-        try {
-            const response = await fetch(`/learning/confusion-matrix/${timestamp}`);
-            if (!response.ok) throw new Error('混同行列の取得に失敗しました');
-            
-            const data = await response.json();
-            return data.matrix || {};
-        } catch (error) {
-            console.error('混同行列取得エラー:', error);
-            return {};
-        }
-    }
-
-    /**
-     * ROC曲線の取得
-     * @param {string} timestamp - タイムスタンプ
-     * @returns {Promise<Object>} ROC曲線データ
-     */
-    async getRocCurve(timestamp) {
-        try {
-            const response = await fetch(`/learning/roc-curve/${timestamp}`);
-            if (!response.ok) throw new Error('ROC曲線の取得に失敗しました');
-            
-            const data = await response.json();
-            return data.curve || {};
-        } catch (error) {
-            console.error('ROC曲線取得エラー:', error);
-            return {};
-        }
     }
 }
