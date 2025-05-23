@@ -1,353 +1,251 @@
-# core/YoloTrainer.py
+# core/YoloDetector.py
 import os
-import subprocess
-import threading
-import time
-import glob
-import json
-from datetime import datetime
+import torch
+import cv2
+import numpy as np
+from pathlib import Path
+import logging
 
-class YoloTrainer:
-    """YOLOv5のトレーニングを管理するクラス"""
+logger = logging.getLogger(__name__)
+
+class YoloDetector:
+    """YOLOv5を使用した生殖乳頭検出器"""
     
-    def __init__(self):
-        """初期化"""
-        self.process = None
-        self.status = {
-            'status': 'not_started',
-            'progress': 0,
-            'current_epoch': 0,
-            'total_epochs': 0,
-            'elapsed_time': '00:00:00',
-            'message': 'トレーニングはまだ開始されていません',
-            'metrics': {
-                'box_loss': [],
-                'obj_loss': [],
-                'mAP50': []
-            },
-            'result_images': {}
-        }
-        self.lock = threading.Lock()
-    
-    def start_training(self, weights='yolov5s.pt', batch_size=16, epochs=100, img_size=640, device='', workers=4, name='exp', exist_ok=False):
+    def __init__(self, model_path=None, conf_threshold=0.25, device=None):
         """
-        YOLOv5のトレーニングを開始
+        検出器の初期化
         
         Args:
-            weights: 初期重みファイル
-            batch_size: バッチサイズ
-            epochs: エポック数
-            img_size: 画像サイズ
-            device: 使用するデバイス（空文字列はCPU、'0'はGPU 0番）
-            workers: データローディングのワーカー数
-            name: 実験名
-            exist_ok: 同名の実験が存在する場合に上書きするか
-            
-        Returns:
-            bool: トレーニングが開始されたかどうか
+            model_path: YOLOv5モデルのパス（Noneの場合はyolov5sを使用）
+            conf_threshold: 検出信頼度の閾値
+            device: 実行デバイス（'cuda'/'cpu'、Noneの場合は自動選択）
         """
-        # すでにトレーニングが実行中の場合は開始しない
-        if self.process and self.process.poll() is None:
-            print("トレーニングはすでに実行中です")
-            return False
+        self.conf_threshold = conf_threshold
+        self.device = device if device else ('cuda' if torch.cuda.is_available() else 'cpu')
+        self.model = None
+        self.model_path = model_path
         
+        logger.info(f"YoloDetector: デバイス {self.device} を使用")
+        
+        # モデルのロード
+        self._load_model()
+    
+    def _load_model(self):
+        """YOLOv5モデルをロード"""
         try:
-            # トレーニングコマンドの構築
-            cmd = [
-                'python', 'train.py',
-                '--data', 'data/yolo_dataset/data.yaml',
-                '--weights', weights,
-                '--batch-size', str(batch_size),
-                '--epochs', str(epochs),
-                '--img', str(img_size),
-                '--workers', str(workers),
-                '--name', name
-            ]
+            if self.model_path and os.path.exists(self.model_path):
+                # カスタムモデルのロード
+                self.model = torch.hub.load('ultralytics/yolov5', 'custom', 
+                                          path=self.model_path, force_reload=False)
+                logger.info(f"カスタムYOLOv5モデルをロード: {self.model_path}")
+            else:
+                # 最新の訓練済みモデルを探す
+                train_dir = 'yolov5/runs/train'
+                if os.path.exists(train_dir):
+                    exp_dirs = sorted([d for d in os.listdir(train_dir) if d.startswith('exp')])
+                    if exp_dirs:
+                        latest_exp = exp_dirs[-1]
+                        best_path = os.path.join(train_dir, latest_exp, 'weights/best.pt')
+                        if os.path.exists(best_path):
+                            self.model = torch.hub.load('ultralytics/yolov5', 'custom', 
+                                                      path=best_path, force_reload=False)
+                            logger.info(f"最新の訓練済みモデルをロード: {best_path}")
+                            return
+                
+                # デフォルトモデルのロード
+                self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s', force_reload=False)
+                logger.info("デフォルトのYOLOv5sモデルをロード")
             
-            if device:
-                cmd.extend(['--device', device])
+            # デバイス設定
+            self.model.to(self.device)
             
-            if exist_ok:
-                cmd.append('--exist-ok')
+            # 推論モード設定
+            self.model.eval()
             
-            # 作業ディレクトリを指定
-            cwd = 'yolov5'
+            # 信頼度閾値設定
+            self.model.conf = self.conf_threshold
             
-            # ステータスの初期化
-            with self.lock:
-                self.status = {
-                    'status': 'starting',
-                    'progress': 0,
-                    'current_epoch': 0,
-                    'total_epochs': epochs,
-                    'elapsed_time': '00:00:00',
-                    'message': 'トレーニングを開始しています...',
-                    'metrics': {
-                        'box_loss': [],
-                        'obj_loss': [],
-                        'mAP50': []
-                    },
-                    'result_images': {}
-                }
-            
-            # プロセスの開始
-            self.process = subprocess.Popen(
-                cmd,
-                cwd=cwd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                universal_newlines=True,
-                bufsize=1
-            )
-            
-            # 出力の監視スレッドを開始
-            threading.Thread(target=self._monitor_output, daemon=True).start()
-            
-            print(f"トレーニングを開始しました: {' '.join(cmd)}")
-            return True
-        
         except Exception as e:
-            print(f"トレーニング開始エラー: {e}")
-            with self.lock:
-                self.status = {
-                    'status': 'error',
-                    'progress': 0,
-                    'current_epoch': 0,
-                    'total_epochs': 0,
-                    'elapsed_time': '00:00:00',
-                    'message': f'トレーニング開始エラー: {str(e)}',
-                    'metrics': {
-                        'box_loss': [],
-                        'obj_loss': [],
-                        'mAP50': []
-                    },
-                    'result_images': {}
-                }
-            return False
+            logger.error(f"モデルロードエラー: {e}")
+            # フォールバック: 簡易的な検出器として機能
+            self.model = None
     
-    def stop_training(self):
+    def detect(self, image_path):
         """
-        実行中のトレーニングを停止
-        
-        Returns:
-            bool: 停止が成功したかどうか
-        """
-        if not self.process or self.process.poll() is not None:
-            return False
-        
-        try:
-            # プロセスを終了
-            self.process.terminate()
-            
-            # 最大5秒待機
-            for _ in range(5):
-                if self.process.poll() is not None:
-                    break
-                time.sleep(1)
-            
-            # 終了しない場合は強制終了
-            if self.process.poll() is None:
-                self.process.kill()
-                time.sleep(1)
-            
-            with self.lock:
-                self.status['status'] = 'stopped'
-                self.status['message'] = 'トレーニングが手動で停止されました'
-            
-            return True
-        
-        except Exception as e:
-            print(f"トレーニング停止エラー: {e}")
-            return False
-    
-    def get_training_status(self):
-        """
-        現在のトレーニング状態を取得
-        
-        Returns:
-            dict: トレーニングの状態情報
-        """
-        with self.lock:
-            # プロセスの状態を確認
-            if self.process and self.process.poll() is not None:
-                # プロセスが終了している場合
-                exit_code = self.process.poll()
-                if exit_code == 0:
-                    self.status['status'] = 'completed'
-                    self.status['message'] = 'トレーニングが完了しました'
-                    self.status['progress'] = 100
-                else:
-                    self.status['status'] = 'failed'
-                    self.status['message'] = f'トレーニングが失敗しました (終了コード: {exit_code})'
-            
-            # 結果画像のパスを更新
-            self._update_result_images()
-            
-            return self.status.copy()
-    
-    def _monitor_output(self):
-        """トレーニングプロセスの出力を監視"""
-        for line in self.process.stdout:
-            self._parse_output_line(line)
-    
-    def _parse_output_line(self, line):
-        """
-        トレーニング出力行を解析
+        画像から生殖乳頭を検出
         
         Args:
-            line: 出力行
-        """
-        try:
-            # エポック情報の抽出
-            if 'Epoch:' in line and '/' in line:
-                parts = line.split()
-                for i, part in enumerate(parts):
-                    if part == 'Epoch:':
-                        epoch_info = parts[i+1]
-                        if '/' in epoch_info:
-                            current_epoch, total_epochs = map(int, epoch_info.split('/'))
-                            
-                            with self.lock:
-                                self.status['current_epoch'] = current_epoch
-                                self.status['total_epochs'] = total_epochs
-                                self.status['progress'] = round((current_epoch / total_epochs) * 100)
-                                self.status['status'] = 'running'
-                                self.status['message'] = f'エポック {current_epoch}/{total_epochs} を実行中...'
-                            break
+            image_path: 画像ファイルのパス
             
-            # 経過時間の抽出
-            if 'time:' in line:
-                parts = line.split()
-                for i, part in enumerate(parts):
-                    if part == 'time:':
-                        elapsed_time = parts[i+1]
-                        with self.lock:
-                            self.status['elapsed_time'] = elapsed_time
-                        break
-            
-            # ロスとメトリクスの抽出
-            if 'box_loss:' in line and 'obj_loss:' in line:
-                parts = line.split()
-                box_loss = None
-                obj_loss = None
-                
-                for i, part in enumerate(parts):
-                    if part == 'box_loss:':
-                        box_loss = float(parts[i+1])
-                    elif part == 'obj_loss:':
-                        obj_loss = float(parts[i+1])
-                
-                with self.lock:
-                    if box_loss is not None:
-                        self.status['metrics']['box_loss'].append(box_loss)
-                    if obj_loss is not None:
-                        self.status['metrics']['obj_loss'].append(obj_loss)
-            
-            # mAP値の抽出
-            if 'mAP@0.5' in line:
-                parts = line.split()
-                for i, part in enumerate(parts):
-                    if part.startswith('mAP@0.5'):
-                        # カンマや括弧などを除去
-                        value_str = parts[i+1].strip(',():')
-                        try:
-                            map50 = float(value_str)
-                            with self.lock:
-                                self.status['metrics']['mAP50'].append(map50)
-                        except ValueError:
-                            pass
-                        break
-        
-        except Exception as e:
-            print(f"出力解析エラー: {e}")
-    
-    def _update_result_images(self):
-        """結果画像のパスを更新"""
-        try:
-            # 最新のexpディレクトリを検索
-            exp_dirs = sorted([d for d in os.listdir('yolov5/runs/train') if d.startswith('exp')])
-            if not exp_dirs:
-                return
-            
-            latest_exp = exp_dirs[-1]
-            exp_dir = os.path.join('yolov5/runs/train', latest_exp)
-            
-            # 結果画像のパスを収集
-            result_images = {}
-            
-            # トレーニングバッチ画像
-            batch_files = glob.glob(os.path.join(exp_dir, 'train_batch*.jpg'))
-            if batch_files:
-                result_images['train_batch'] = f"/static/runs/train/{latest_exp}/{os.path.basename(batch_files[0])}"
-            
-            # ラベル画像
-            label_path = os.path.join(exp_dir, 'labels.jpg')
-            if os.path.exists(label_path):
-                result_images['labels'] = f"/static/runs/train/{latest_exp}/labels.jpg"
-            
-            # 結果画像
-            results_path = os.path.join(exp_dir, 'results.png')
-            if os.path.exists(results_path):
-                result_images['results'] = f"/static/runs/train/{latest_exp}/results.png"
-            
-            # 混同行列
-            confusion_path = os.path.join(exp_dir, 'confusion_matrix.png')
-            if os.path.exists(confusion_path):
-                result_images['confusion_matrix'] = f"/static/runs/train/{latest_exp}/confusion_matrix.png"
-            
-            with self.lock:
-                self.status['result_images'] = result_images
-        
-        except Exception as e:
-            print(f"結果画像更新エラー: {e}")
-    
-    def save_training_results(self):
-        """
-        トレーニング結果を保存
-        
         Returns:
-            dict: 保存結果
+            dict: 検出結果
+                - detections: 検出結果のリスト
+                - annotated_image: 検出結果を描画した画像
+                - count: 検出数
         """
         try:
-            # 最新のexpディレクトリを検索
-            exp_dirs = sorted([d for d in os.listdir('yolov5/runs/train') if d.startswith('exp')])
-            if not exp_dirs:
-                return {'status': 'error', 'message': '学習結果が見つかりません'}
+            # 画像読み込み
+            if isinstance(image_path, str):
+                image = cv2.imread(image_path)
+                if image is None:
+                    raise ValueError(f"画像の読み込みに失敗: {image_path}")
+            else:
+                image = image_path
             
-            latest_exp = exp_dirs[-1]
-            exp_dir = os.path.join('yolov5/runs/train', latest_exp)
+            if self.model is None:
+                # モデルが読み込めない場合は従来の手法にフォールバック
+                return self._fallback_detect(image)
             
-            # 結果ディレクトリ
-            results_dir = 'data/evaluations'
-            os.makedirs(results_dir, exist_ok=True)
+            # BGR -> RGB変換
+            rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             
-            # タイムスタンプ
-            timestamp = datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f')
+            # 推論実行
+            results = self.model(rgb_image)
             
-            # メトリクスとステータスを取得
-            status = self.get_training_status()
+            # 検出結果の抽出
+            detections = []
+            for det in results.xyxy[0]:  # バッチの最初の画像の結果
+                x1, y1, x2, y2, conf, cls = det.cpu().numpy()
+                
+                if conf >= self.conf_threshold:
+                    detections.append({
+                        'bbox': [int(x1), int(y1), int(x2), int(y2)],
+                        'confidence': float(conf),
+                        'class_id': int(cls),
+                        'class_name': 'papillae'
+                    })
             
-            # 結果データを構築
-            results = {
-                'timestamp': timestamp,
-                'exp_dir': latest_exp,
-                'epochs': status['total_epochs'],
-                'metrics': status['metrics'],
-                'result_images': status['result_images']
-            }
-            
-            # 結果をJSONファイルに保存
-            results_file = os.path.join(results_dir, f'training_results_{timestamp}.json')
-            with open(results_file, 'w') as f:
-                json.dump(results, f, indent=2)
+            # 結果の描画
+            annotated_image = image.copy()
+            for det in detections:
+                bbox = det['bbox']
+                conf = det['confidence']
+                
+                # 境界ボックスの描画
+                cv2.rectangle(annotated_image, 
+                            (bbox[0], bbox[1]), 
+                            (bbox[2], bbox[3]), 
+                            (0, 255, 0), 2)
+                
+                # 信頼度の表示
+                label = f"Papillae: {conf:.2f}"
+                cv2.putText(annotated_image, label, 
+                          (bbox[0], bbox[1] - 10), 
+                          cv2.FONT_HERSHEY_SIMPLEX, 
+                          0.5, (0, 255, 0), 2)
             
             return {
-                'status': 'success',
-                'message': '学習結果を保存しました',
-                'results_file': results_file,
-                'results': results
+                'detections': detections,
+                'annotated_image': annotated_image,
+                'count': len(detections)
             }
-        
+            
         except Exception as e:
-            print(f"結果保存エラー: {e}")
-            return {'status': 'error', 'message': f'結果保存エラー: {str(e)}'}
+            logger.error(f"検出エラー: {e}")
+            return {
+                'detections': [],
+                'annotated_image': image if 'image' in locals() else None,
+                'count': 0,
+                'error': str(e)
+            }
+    
+    def batch_detect(self, image_paths):
+        """
+        複数画像の一括検出
+        
+        Args:
+            image_paths: 画像パスのリスト
+            
+        Returns:
+            list: 各画像の検出結果
+        """
+        results = []
+        
+        for image_path in image_paths:
+            try:
+                result = self.detect(image_path)
+                result['image_path'] = image_path
+                results.append(result)
+            except Exception as e:
+                logger.error(f"バッチ検出エラー ({image_path}): {e}")
+                results.append({
+                    'image_path': image_path,
+                    'detections': [],
+                    'count': 0,
+                    'error': str(e)
+                })
+        
+        return results
+    
+    def _fallback_detect(self, image):
+        """
+        YOLOモデルが使用できない場合のフォールバック検出
+        
+        Args:
+            image: 入力画像
+            
+        Returns:
+            dict: 検出結果
+        """
+        try:
+            # グレースケール変換
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
+            
+            # 適応的二値化
+            binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                         cv2.THRESH_BINARY_INV, 11, 2)
+            
+            # 輪郭検出
+            contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            detections = []
+            annotated_image = image.copy()
+            
+            for cnt in contours:
+                area = cv2.contourArea(cnt)
+                if 500 < area < 5000:  # 面積フィルタ
+                    x, y, w, h = cv2.boundingRect(cnt)
+                    
+                    # アスペクト比チェック
+                    aspect_ratio = w / h if h > 0 else 0
+                    if 0.5 < aspect_ratio < 2.0:
+                        detections.append({
+                            'bbox': [x, y, x + w, y + h],
+                            'confidence': 0.5,  # フォールバック時の固定信頼度
+                            'class_id': 0,
+                            'class_name': 'papillae'
+                        })
+                        
+                        # 描画
+                        cv2.rectangle(annotated_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                        cv2.putText(annotated_image, "Papillae (fallback)", 
+                                  (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 
+                                  0.5, (0, 255, 0), 2)
+            
+            return {
+                'detections': detections,
+                'annotated_image': annotated_image,
+                'count': len(detections),
+                'fallback': True
+            }
+            
+        except Exception as e:
+            logger.error(f"フォールバック検出エラー: {e}")
+            return {
+                'detections': [],
+                'annotated_image': image,
+                'count': 0,
+                'error': str(e)
+            }
+    
+    def update_confidence(self, conf_threshold):
+        """信頼度閾値を更新"""
+        self.conf_threshold = conf_threshold
+        if self.model:
+            self.model.conf = conf_threshold
+    
+    def reload_model(self, model_path=None):
+        """モデルを再読み込み"""
+        if model_path:
+            self.model_path = model_path
+        self._load_model()

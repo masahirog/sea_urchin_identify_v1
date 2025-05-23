@@ -1,436 +1,732 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLO管理 - ウニ生殖乳頭分析システム</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="/static/css/style.css" rel="stylesheet">
+</head>
+<body>
+    <!-- ナビゲーション -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/">ウニ生殖乳頭分析システム</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/">ホーム</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/video/upload">動画処理</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/learning">学習システム</a></li>
+                    <li class="nav-item"><a class="nav-link active" href="/yolo">YOLO管理</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
 
-{% block content %}
-<div class="container mt-4">
-  <h1>YOLO物体検出モデル管理</h1>
-  
-  <div class="row mt-4">
-    <div class="col-md-6">
-      <div class="card">
-        <div class="card-header">
-          <h5>モデルトレーニング</h5>
-        </div>
-        <div class="card-body">
-          <form id="training-form">
-            <div class="mb-3">
-              <label for="weights" class="form-label">初期重み</label>
-              <select class="form-select" id="weights" name="weights">
-                <option value="yolov5s.pt" selected>YOLOv5s (小)</option>
-                <option value="yolov5m.pt">YOLOv5m (中)</option>
-                <option value="yolov5l.pt">YOLOv5l (大)</option>
-                <option value="yolov5n.pt">YOLOv5n (極小)</option>
-              </select>
+    <div class="container">
+        <h1 class="mb-4"><i class="fas fa-object-group me-2"></i>YOLO管理システム</h1>
+
+        <!-- アラートコンテナ -->
+        <div id="alert-container"></div>
+
+        <!-- YOLOトレーニング設定 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-cog me-2"></i>YOLOトレーニング設定</h5>
             </div>
-            
-            <div class="mb-3">
-              <label for="batch-size" class="form-label">バッチサイズ</label>
-              <input type="number" class="form-control" id="batch-size" name="batch_size" value="4" min="1" max="64">
-              <div class="form-text">メモリ容量に応じて調整してください。小さいほどメモリ消費が少なくなります。</div>
-            </div>
-            
-            <div class="mb-3">
-              <label for="epochs" class="form-label">エポック数</label>
-              <input type="number" class="form-control" id="epochs" name="epochs" value="50" min="1" max="1000">
-              <div class="form-text">トレーニングの繰り返し回数。多いほど精度が向上する可能性がありますが、時間がかかります。</div>
-            </div>
-            
-            <div class="mb-3">
-              <label for="img-size" class="form-label">画像サイズ</label>
-              <select class="form-select" id="img-size" name="img_size">
-                <option value="416">416x416</option>
-                <option value="512">512x512</option>
-                <option value="640" selected>640x640</option>
-                <option value="1280">1280x1280</option>
-              </select>
-            </div>
-            
-            <div class="d-grid gap-2">
-              <button type="button" id="start-training-btn" class="btn btn-primary">トレーニング開始</button>
-              <button type="button" id="stop-training-btn" class="btn btn-danger">トレーニング停止</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-    
-    <div class="col-md-6">
-      <div class="card">
-        <div class="card-header">
-          <h5>トレーニング状況</h5>
-        </div>
-        <div class="card-body">
-          <div id="training-status">
-            <p>トレーニングはまだ開始されていません。</p>
-          </div>
-          
-          <div class="progress mb-3" style="display: none;">
-            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
-          </div>
-          
-          <div class="row mt-3">
-            <div class="col-md-6">
-              <div class="mb-2">
-                <strong>経過時間:</strong> <span id="elapsed-time">-</span>
-              </div>
-              <div class="mb-2">
-                <strong>現在のエポック:</strong> <span id="current-epoch">-</span> / <span id="total-epochs">-</span>
-              </div>
-            </div>
-            <div class="col-md-6">
-              <div class="mb-2">
-                <strong>Box Loss:</strong> <span id="box-loss">-</span>
-              </div>
-              <div class="mb-2">
-                <strong>Obj Loss:</strong> <span id="obj-loss">-</span>
-              </div>
-              <div class="mb-2">
-                <strong>mAP50:</strong> <span id="map50">-</span>
-              </div>
-            </div>
-          </div>
-          
-          <div id="training-images" class="mt-4">
-            <!-- トレーニング中の画像が表示されます -->
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-  
-  <div class="row mt-4">
-    <div class="col-md-12">
-      <div class="card">
-        <div class="card-header">
-          <h5>検出テスト</h5>
-        </div>
-        <div class="card-body">
-          <form id="detection-form">
-            <div class="mb-3">
-              <label for="test-image" class="form-label">テスト画像</label>
-              <input class="form-control" type="file" id="test-image" accept="image/*">
-            </div>
-            
-            <div class="mb-3">
-              <label for="confidence" class="form-label">信頼度閾値</label>
-              <input type="range" class="form-range" id="confidence" min="0" max="1" step="0.05" value="0.25">
-              <div class="text-center" id="confidence-value">0.25</div>
-            </div>
-            
-            <div class="d-grid gap-2">
-              <button type="button" id="detect-btn" class="btn btn-success">検出実行</button>
-            </div>
-          </form>
-          
-          <div class="mt-4" id="detection-results" style="display: none;">
-            <h6>検出結果:</h6>
-            <div class="row">
-              <div class="col-md-6">
-                <div id="result-image-container" class="text-center">
-                  <!-- 結果画像が表示されます -->
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="weights" class="form-label">事前学習済みモデル</label>
+                            <select id="weights" class="form-select">
+                                <option value="yolov5s.pt" selected>YOLOv5s (高速・軽量)</option>
+                                <option value="yolov5m.pt">YOLOv5m (バランス型)</option>
+                                <option value="yolov5l.pt">YOLOv5l (高精度)</option>
+                                <option value="yolov5x.pt">YOLOv5x (最高精度)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="batch-size" class="form-label">バッチサイズ</label>
+                            <input type="number" id="batch-size" class="form-control" value="4" min="1" max="64">
+                            <small class="text-muted">メモリ容量に応じて調整してください</small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="epochs" class="form-label">エポック数</label>
+                            <input type="number" id="epochs" class="form-control" value="50" min="1" max="1000">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="img-size" class="form-label">画像サイズ</label>
+                            <select id="img-size" class="form-select">
+                                <option value="320">320px (高速)</option>
+                                <option value="640" selected>640px (標準)</option>
+                                <option value="1280">1280px (高精度)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="device" class="form-label">デバイス</label>
+                            <select id="device" class="form-select">
+                                <option value="" selected>自動選択</option>
+                                <option value="0">GPU 0</option>
+                                <option value="cpu">CPU</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="workers" class="form-label">ワーカー数</label>
+                            <input type="number" id="workers" class="form-control" value="4" min="0" max="16">
+                        </div>
+                    </div>
                 </div>
-              </div>
-              <div class="col-md-6">
-                <div id="detection-details">
-                  <!-- 検出詳細が表示されます -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="experiment-name" class="form-label">実験名</label>
+                            <input type="text" id="experiment-name" class="form-control" value="exp" placeholder="実験名を入力">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="exist-ok">
+                                <label class="form-check-label" for="exist-ok">
+                                    既存の実験フォルダを上書き
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-              </div>
             </div>
-          </div>
         </div>
-      </div>
+
+        <!-- トレーニング制御 -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-play-circle me-2"></i>トレーニング制御</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <button id="start-training" class="btn btn-success w-100">
+                            <i class="fas fa-play me-2"></i>トレーニング開始
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <button id="stop-training" class="btn btn-danger w-100" disabled>
+                            <i class="fas fa-stop me-2"></i>トレーニング停止
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- ステータス表示 -->
+                <div class="alert alert-info" role="alert">
+                    <i class="fas fa-info-circle me-2"></i>
+                    ステータス: <span id="training-status" class="status-badge text-secondary">アイドル</span>
+                </div>
+
+                <!-- プログレスバー -->
+                <div class="progress progress-lg mb-3">
+                    <div id="training-progress" class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%">0%</div>
+                </div>
+
+                <!-- エポック情報 -->
+                <div id="epoch-info" class="text-center mb-3"></div>
+
+                <!-- メトリクス表示 -->
+                <div id="training-metrics" class="mb-3"></div>
+
+                <!-- ログ表示 -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">トレーニングログ</h6>
+                    </div>
+                    <div class="card-body">
+                        <pre id="training-log" class="bg-dark text-light p-3" style="height: 200px; overflow-y: auto;"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 検出テスト -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-vial me-2"></i>検出テスト</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>単一画像テスト</h6>
+                        <div class="mb-3">
+                            <label for="test-image" class="form-label">テスト画像</label>
+                            <input type="file" id="test-image" class="form-control" accept="image/*">
+                        </div>
+                        <div class="mb-3">
+                            <label for="test-confidence" class="form-label">信頼度閾値</label>
+                            <input type="range" id="test-confidence" class="form-range" 
+                                   min="0.1" max="0.9" step="0.05" value="0.25">
+                            <small class="text-muted">値: <span id="test-confidence-value">0.25</span></small>
+                        </div>
+                        <button id="test-detection" class="btn btn-primary">
+                            <i class="fas fa-search me-2"></i>検出実行
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>バッチ検出</h6>
+                        <div class="mb-3">
+                            <label for="batch-images" class="form-label">複数画像</label>
+                            <input type="file" id="batch-images" class="form-control" accept="image/*" multiple>
+                        </div>
+                        <div class="mb-3">
+                            <label for="batch-confidence" class="form-label">信頼度閾値</label>
+                            <input type="range" id="batch-confidence" class="form-range" 
+                                   min="0.1" max="0.9" step="0.05" value="0.25">
+                            <small class="text-muted">値: <span id="batch-confidence-value">0.25</span></small>
+                        </div>
+                        <button id="batch-detection" class="btn btn-primary">
+                            <i class="fas fa-layer-group me-2"></i>バッチ検出実行
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 検出結果表示 -->
+                <div id="detection-result" class="mt-4"></div>
+                <div id="batch-result" class="mt-4"></div>
+            </div>
+        </div>
+
+        <!-- リンク -->
+        <div class="text-center mb-4">
+            <a href="/yolo/annotate" class="btn btn-outline-primary">
+                <i class="fas fa-edit me-2"></i>アノテーションツール
+            </a>
+            <a href="/learning" class="btn btn-outline-secondary ms-2">
+                <i class="fas fa-graduation-cap me-2"></i>学習システムに戻る
+            </a>
+        </div>
     </div>
-  </div>
-  
-  <div class="row mt-4 mb-5">
-    <div class="col-md-12">
-      <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <h5>画像管理とアノテーション</h5>
-          <a href="/yolo/annotate" class="btn btn-primary">アノテーションツールを開く</a>
-        </div>
-        <div class="card-body">
-          <p>生殖乳頭の検出精度を向上させるには、より多くの画像とアノテーションが必要です。</p>
-          <p>アノテーションツールを使用して、画像内の生殖乳頭にバウンディングボックスを付けることができます。</p>
-          
-          <form id="upload-images-form" class="mt-3">
-            <div class="mb-3">
-              <label for="upload-images" class="form-label">画像をアップロード</label>
-              <input class="form-control" type="file" id="upload-images" multiple accept="image/*">
+
+    <!-- ローディングオーバーレイ -->
+    <div id="loadingOverlay" class="d-none">
+        <div class="loading-content">
+            <div class="spinner-border text-light" role="status">
+                <span class="visually-hidden">処理中...</span>
             </div>
-            
-            <div class="d-grid gap-2">
-              <button type="button" id="upload-btn" class="btn btn-primary">アップロード</button>
-            </div>
-          </form>
+            <div class="loading-message mt-3">処理中...</div>
         </div>
-      </div>
     </div>
-  </div>
-</div>
-<!-- ページ末尾に追加 -->
-<script src="{{ url_for('static', filename='js/learning/AnnotationManager.js') }}" type="module"></script>
-<script src="{{ url_for('static', filename='js/learning/YoloDetector.js') }}" type="module"></script>
-<script>
-  document.addEventListener('DOMContentLoaded', function() {
-    // 信頼度スライダーの値を表示
-    document.getElementById('confidence').addEventListener('input', function() {
-      document.getElementById('confidence-value').textContent = this.value;
-    });
-    
-    // トレーニング開始ボタン
-    document.getElementById('start-training-btn').addEventListener('click', function() {
-      const form = document.getElementById('training-form');
-      const formData = new FormData(form);
-      
-      // FormDataをJSONに変換
-      const jsonData = {};
-      formData.forEach((value, key) => {
-        jsonData[key] = value;
-      });
-      
-      // トレーニング開始APIを呼び出し
-      fetch('/yolo/training/start', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(jsonData)
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status === 'success') {
-          alert(data.message);
-          // 状態更新を開始
-          startStatusPolling();
-        } else {
-          alert('エラー: ' + data.message);
-        }
-      })
-      .catch(error => {
-        console.error('エラー:', error);
-        alert('通信エラーが発生しました。');
-      });
-    });
-    
-    // トレーニング停止ボタン
-    document.getElementById('stop-training-btn').addEventListener('click', function() {
-      if (confirm('トレーニングを停止しますか？')) {
-        fetch('/yolo/training/stop', {
-          method: 'POST'
-        })
-        .then(response => response.json())
-        .then(data => {
-          alert(data.message);
-        })
-        .catch(error => {
-          console.error('エラー:', error);
-          alert('通信エラーが発生しました。');
-        });
-      }
-    });
-    
-    // 検出実行ボタン
-    document.getElementById('detect-btn').addEventListener('click', function() {
-      const fileInput = document.getElementById('test-image');
-      if (fileInput.files.length === 0) {
-        alert('画像を選択してください。');
-        return;
-      }
-      
-      const formData = new FormData();
-      formData.append('image', fileInput.files[0]);
-      formData.append('confidence', document.getElementById('confidence').value);
-      
-      fetch('/yolo/detect', {
-        method: 'POST',
-        body: formData
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status === 'success') {
-          // 結果の表示
-          showDetectionResults(data);
-        } else {
-          alert('エラー: ' + data.message);
-        }
-      })
-      .catch(error => {
-        console.error('エラー:', error);
-        alert('通信エラーが発生しました。');
-      });
-    });
-    
-    // 画像アップロードボタン
-    document.getElementById('upload-btn').addEventListener('click', function() {
-      const fileInput = document.getElementById('upload-images');
-      if (fileInput.files.length === 0) {
-        alert('画像を選択してください。');
-        return;
-      }
-      
-      const formData = new FormData();
-      for (let i = 0; i < fileInput.files.length; i++) {
-        formData.append('images[]', fileInput.files[i]);
-      }
-      
-      fetch('/yolo/batch_detect', {
-        method: 'POST',
-        body: formData
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status === 'success') {
-          alert(`${data.message}\nアップロードが完了しました。アノテーションツールで画像を編集できます。`);
-        } else {
-          alert('エラー: ' + data.message);
-        }
-      })
-      .catch(error => {
-        console.error('エラー:', error);
-        alert('通信エラーが発生しました。');
-      });
-    });
-    
-    // トレーニング状態の定期的な更新
-    let statusInterval = null;
-    
-    function startStatusPolling() {
-      // 既存のポーリングを停止
-      if (statusInterval) {
-        clearInterval(statusInterval);
-      }
-      
-      // 状態の初回取得
-      updateTrainingStatus();
-      
-      // 5秒ごとに状態を更新
-      statusInterval = setInterval(updateTrainingStatus, 5000);
-    }
-    
-    function updateTrainingStatus() {
-      fetch('/yolo/training/status')
-        .then(response => response.json())
-        .then(data => {
-          if (data.status === 'not_started') {
-            document.getElementById('training-status').innerHTML = '<p>トレーニングはまだ開始されていません。</p>';
-            document.querySelector('.progress').style.display = 'none';
-          } else {
-            // プログレスバーの更新
-            const progressBar = document.querySelector('.progress-bar');
-            progressBar.style.width = `${data.progress}%`;
-            progressBar.textContent = `${Math.round(data.progress)}%`;
-            document.querySelector('.progress').style.display = 'block';
-            
-            // ステータス情報の更新
-            document.getElementById('elapsed-time').textContent = data.elapsed_time;
-            document.getElementById('current-epoch').textContent = data.current_epoch;
-            document.getElementById('total-epochs').textContent = data.total_epochs;
-            
-            // メトリクスの更新
-            if (data.metrics) {
-              const boxLoss = data.metrics.box_loss.length > 0 ? data.metrics.box_loss[data.metrics.box_loss.length - 1].toFixed(4) : '-';
-              const objLoss = data.metrics.obj_loss.length > 0 ? data.metrics.obj_loss[data.metrics.obj_loss.length - 1].toFixed(4) : '-';
-              const map50 = data.metrics.mAP50.length > 0 ? data.metrics.mAP50[data.metrics.mAP50.length - 1].toFixed(4) : '-';
-              
-              document.getElementById('box-loss').textContent = boxLoss;
-              document.getElementById('obj-loss').textContent = objLoss;
-              document.getElementById('map50').textContent = map50;
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // YOLOトレーニング管理用JavaScript
+        document.addEventListener('DOMContentLoaded', function() {
+            // グローバル変数
+            let statusUpdateInterval = null;
+            let isTraining = false;
+
+            // DOM要素の取得
+            const startButton = document.getElementById('start-training');
+            const stopButton = document.getElementById('stop-training');
+            const statusDisplay = document.getElementById('training-status');
+            const progressBar = document.getElementById('training-progress');
+            const logContainer = document.getElementById('training-log');
+
+            // 初期化
+            updateTrainingStatus();
+
+            // イベントリスナーの設定
+            if (startButton) {
+                startButton.addEventListener('click', startTraining);
             }
-            
-            // 結果画像の表示
-            if (data.result_images) {
-              let imagesHtml = '';
-              
-              if (data.result_images.train_batch) {
-                imagesHtml += `
-                  <div class="mb-3">
-                    <h6>トレーニングバッチ:</h6>
-                    <img src="${data.result_images.train_batch}" alt="トレーニングバッチ" class="img-fluid">
-                  </div>
-                `;
-              }
-              
-              if (data.result_images.labels) {
-                imagesHtml += `
-                  <div class="mb-3">
-                    <h6>ラベル分布:</h6>
-                    <img src="${data.result_images.labels}" alt="ラベル分布" class="img-fluid">
-                  </div>
-                `;
-              }
-              
-              if (data.result_images.results) {
-                imagesHtml += `
-                  <div class="mb-3">
-                    <h6>学習結果:</h6>
-                    <img src="${data.result_images.results}" alt="学習結果" class="img-fluid">
-                  </div>
-                `;
-              }
-              
-              document.getElementById('training-images').innerHTML = imagesHtml;
+
+            if (stopButton) {
+                stopButton.addEventListener('click', stopTraining);
             }
-            
-            // トレーニングが完了した場合、ポーリングを停止
-            if (data.status === 'completed') {
-              document.getElementById('training-status').innerHTML = '<p class="text-success">トレーニングが完了しました。</p>';
-              if (statusInterval) {
-                clearInterval(statusInterval);
-                statusInterval = null;
-              }
-            } else {
-              document.getElementById('training-status').innerHTML = '<p class="text-primary">トレーニングを実行中...</p>';
+
+            // 検出テストボタン
+            const detectButton = document.getElementById('test-detection');
+            if (detectButton) {
+                detectButton.addEventListener('click', testDetection);
             }
-          }
-        })
-        .catch(error => {
-          console.error('ステータス取得エラー:', error);
+
+            // バッチ検出ボタン
+            const batchDetectButton = document.getElementById('batch-detection');
+            if (batchDetectButton) {
+                batchDetectButton.addEventListener('click', batchDetection);
+            }
+
+            // 信頼度スライダー
+            setupConfidenceSlider('test-confidence', 'test-confidence-value');
+            setupConfidenceSlider('batch-confidence', 'batch-confidence-value');
+
+            // トレーニング開始
+            async function startTraining() {
+                const params = {
+                    epochs: parseInt(document.getElementById('epochs').value) || 50,
+                    batch_size: parseInt(document.getElementById('batch-size').value) || 4,
+                    img_size: parseInt(document.getElementById('img-size').value) || 640,
+                    weights: document.getElementById('weights').value || 'yolov5s.pt',
+                    device: document.getElementById('device').value || '',
+                    workers: parseInt(document.getElementById('workers').value) || 4,
+                    name: document.getElementById('experiment-name').value || 'exp',
+                    exist_ok: document.getElementById('exist-ok').checked || false
+                };
+
+                try {
+                    showAlert('トレーニングを開始しています...', 'info');
+
+                    const response = await fetch('/yolo/training/start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(params)
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        showAlert(data.message, 'success');
+                        isTraining = true;
+                        updateButtonStates();
+                        startStatusUpdates();
+                    } else {
+                        showAlert(data.message || 'トレーニングの開始に失敗しました', 'danger');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    showAlert('トレーニングの開始に失敗しました: ' + error.message, 'danger');
+                }
+            }
+
+            // トレーニング停止
+            async function stopTraining() {
+                if (!confirm('トレーニングを停止しますか？')) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/yolo/training/stop', {
+                        method: 'POST'
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        showAlert(data.message, 'success');
+                        isTraining = false;
+                        updateButtonStates();
+                        stopStatusUpdates();
+                    } else {
+                        showAlert(data.message || 'トレーニングの停止に失敗しました', 'danger');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    showAlert('トレーニングの停止に失敗しました: ' + error.message, 'danger');
+                }
+            }
+
+            // ステータス更新開始
+            function startStatusUpdates() {
+                if (statusUpdateInterval) {
+                    clearInterval(statusUpdateInterval);
+                }
+
+                updateTrainingStatus();
+                statusUpdateInterval = setInterval(updateTrainingStatus, 2000);
+            }
+
+            // ステータス更新停止
+            function stopStatusUpdates() {
+                if (statusUpdateInterval) {
+                    clearInterval(statusUpdateInterval);
+                    statusUpdateInterval = null;
+                }
+            }
+
+            // トレーニング状態を更新
+            async function updateTrainingStatus() {
+                try {
+                    const response = await fetch('/yolo/training/status');
+                    const status = await response.json();
+
+                    // ステータス表示更新
+                    if (statusDisplay) {
+                        let statusText = status.status || 'idle';
+                        let statusClass = 'text-secondary';
+
+                        switch (statusText) {
+                            case 'running':
+                                statusText = 'トレーニング中';
+                                statusClass = 'text-primary';
+                                break;
+                            case 'completed':
+                                statusText = 'トレーニング完了';
+                                statusClass = 'text-success';
+                                break;
+                            case 'failed':
+                                statusText = 'トレーニング失敗';
+                                statusClass = 'text-danger';
+                                break;
+                            case 'stopped':
+                                statusText = 'トレーニング停止';
+                                statusClass = 'text-warning';
+                                break;
+                            default:
+                                statusText = 'アイドル';
+                        }
+
+                        statusDisplay.textContent = statusText;
+                        statusDisplay.className = 'status-badge ' + statusClass;
+                    }
+
+                    // プログレスバー更新
+                    if (progressBar && status.progress !== undefined) {
+                        const progress = Math.round(status.progress * 100);
+                        progressBar.style.width = progress + '%';
+                        progressBar.textContent = progress + '%';
+                        progressBar.setAttribute('aria-valuenow', progress);
+
+                        // エポック情報の表示
+                        if (status.current_epoch !== undefined && status.total_epochs !== undefined) {
+                            const epochInfo = document.getElementById('epoch-info');
+                            if (epochInfo) {
+                                epochInfo.textContent = `エポック: ${status.current_epoch}/${status.total_epochs}`;
+                            }
+                        }
+                    }
+
+                    // ログ更新
+                    if (logContainer && status.logs) {
+                        updateLogs(status.logs);
+                    }
+
+                    // メトリクス更新
+                    if (status.metrics) {
+                        updateMetrics(status.metrics);
+                    }
+
+                    // トレーニング状態の更新
+                    isTraining = status.status === 'running';
+                    updateButtonStates();
+
+                    // 完了時の処理
+                    if (status.status === 'completed' || status.status === 'failed' || status.status === 'stopped') {
+                        stopStatusUpdates();
+
+                        if (status.status === 'completed') {
+                            showAlert('トレーニングが完了しました！', 'success');
+                        }
+                    }
+
+                } catch (error) {
+                    console.error('ステータス更新エラー:', error);
+                }
+            }
+
+            // ログ更新
+            function updateLogs(logs) {
+                if (!logContainer) return;
+
+                let logText = '';
+                if (Array.isArray(logs)) {
+                    logText = logs.join('\n');
+                } else {
+                    logText = logs;
+                }
+
+                logContainer.textContent = logText;
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+
+            // メトリクス更新
+            function updateMetrics(metrics) {
+                const metricsContainer = document.getElementById('training-metrics');
+                if (!metricsContainer) return;
+
+                let html = '<div class="row">';
+
+                if (metrics.loss) {
+                    html += `
+                        <div class="col-md-3">
+                            <div class="metric-card">
+                                <h6>損失</h6>
+                                <p class="metric-value">${metrics.loss.toFixed(4)}</p>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (metrics.precision) {
+                    html += `
+                        <div class="col-md-3">
+                            <div class="metric-card">
+                                <h6>精度</h6>
+                                <p class="metric-value">${(metrics.precision * 100).toFixed(1)}%</p>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (metrics.recall) {
+                    html += `
+                        <div class="col-md-3">
+                            <div class="metric-card">
+                                <h6>再現率</h6>
+                                <p class="metric-value">${(metrics.recall * 100).toFixed(1)}%</p>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (metrics.mAP) {
+                    html += `
+                        <div class="col-md-3">
+                            <div class="metric-card">
+                                <h6>mAP</h6>
+                                <p class="metric-value">${(metrics.mAP * 100).toFixed(1)}%</p>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                html += '</div>';
+                metricsContainer.innerHTML = html;
+            }
+
+            // ボタン状態の更新
+            function updateButtonStates() {
+                if (startButton) {
+                    startButton.disabled = isTraining;
+                }
+
+                if (stopButton) {
+                    stopButton.disabled = !isTraining;
+                }
+
+                // パラメータ入力の有効/無効
+                const paramInputs = document.querySelectorAll('.card-body input, .card-body select');
+                paramInputs.forEach(input => {
+                    if (input.id !== 'test-image' && input.id !== 'batch-images' && 
+                        input.id !== 'test-confidence' && input.id !== 'batch-confidence') {
+                        input.disabled = isTraining;
+                    }
+                });
+            }
+
+            // 検出テスト
+            async function testDetection() {
+                const fileInput = document.getElementById('test-image');
+                const confidenceInput = document.getElementById('test-confidence');
+
+                if (!fileInput.files.length) {
+                    showAlert('画像を選択してください', 'warning');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('image', fileInput.files[0]);
+                formData.append('confidence', confidenceInput.value || 0.25);
+
+                try {
+                    showLoading('検出処理中...');
+
+                    const response = await fetch('/yolo/detect', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+                    hideLoading();
+
+                    if (response.ok) {
+                        showAlert(result.message, 'success');
+                        displayDetectionResult(result);
+                    } else {
+                        showAlert(result.message || '検出処理に失敗しました', 'danger');
+                    }
+                } catch (error) {
+                    hideLoading();
+                    console.error('検出エラー:', error);
+                    showAlert('検出処理に失敗しました: ' + error.message, 'danger');
+                }
+            }
+
+            // バッチ検出
+            async function batchDetection() {
+                const fileInput = document.getElementById('batch-images');
+                const confidenceInput = document.getElementById('batch-confidence');
+
+                if (!fileInput.files.length) {
+                    showAlert('画像を選択してください', 'warning');
+                    return;
+                }
+
+                const formData = new FormData();
+                for (let file of fileInput.files) {
+                    formData.append('images[]', file);
+                }
+                formData.append('confidence', confidenceInput.value || 0.25);
+
+                try {
+                    showLoading(`${fileInput.files.length}枚の画像を処理中...`);
+
+                    const response = await fetch('/yolo/batch_detect', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+                    hideLoading();
+
+                    if (response.ok) {
+                        showAlert(result.message, 'success');
+                        displayBatchResults(result.results);
+                    } else {
+                        showAlert(result.message || 'バッチ処理に失敗しました', 'danger');
+                    }
+                } catch (error) {
+                    hideLoading();
+                    console.error('バッチ処理エラー:', error);
+                    showAlert('バッチ処理に失敗しました: ' + error.message, 'danger');
+                }
+            }
+
+            // 検出結果の表示
+            function displayDetectionResult(result) {
+                const resultContainer = document.getElementById('detection-result');
+                if (!resultContainer) return;
+
+                let html = '<div class="detection-result">';
+
+                if (result.result_image_path) {
+                    html += `
+                        <div class="mb-3">
+                            <img src="${result.result_image_path}" class="img-fluid" alt="検出結果">
+                        </div>
+                    `;
+                }
+
+                html += `
+                    <div class="alert alert-info">
+                        <strong>検出数:</strong> ${result.detections.length}個
+                        ${result.fallback ? '<br><small>（フォールバックモード）</small>' : ''}
+                    </div>
+                `;
+
+                if (result.detections.length > 0) {
+                    html += '<h5>検出詳細:</h5><ul class="list-group">';
+                    result.detections.forEach((det, idx) => {
+                        html += `
+                            <li class="list-group-item">
+                                ${idx + 1}. ${det.class_name} 
+                                (信頼度: ${(det.confidence * 100).toFixed(1)}%)
+                                [${det.bbox.join(', ')}]
+                            </li>
+                        `;
+                    });
+                    html += '</ul>';
+                }
+
+                html += '</div>';
+                resultContainer.innerHTML = html;
+            }
+
+            // バッチ結果の表示
+            function displayBatchResults(results) {
+                const resultContainer = document.getElementById('batch-result');
+                if (!resultContainer) return;
+
+                let html = '<div class="batch-results">';
+
+                results.forEach((result, idx) => {
+                    const filename = result.path.split('/').pop();
+                    html += `
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                ${filename}
+                            </div>
+                            <div class="card-body">
+                    `;
+
+                    if (result.error) {
+                        html += `<div class="alert alert-danger">エラー: ${result.error}</div>`;
+                    } else {
+                        if (result.result_image_path) {
+                            html += `<img src="${result.result_image_path}" class="img-fluid mb-2" alt="検出結果">`;
+                        }
+                        html += `<p>検出数: ${result.count}個</p>`;
+                    }
+
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += '</div>';
+                resultContainer.innerHTML = html;
+            }
+
+            // 信頼度スライダーの設定
+            function setupConfidenceSlider(sliderId, valueId) {
+                const slider = document.getElementById(sliderId);
+                const valueDisplay = document.getElementById(valueId);
+
+                if (slider && valueDisplay) {
+                    slider.addEventListener('input', function() {
+                        valueDisplay.textContent = this.value;
+                    });
+                }
+            }
+
+            // アラート表示
+            function showAlert(message, type = 'info') {
+                const alertContainer = document.getElementById('alert-container');
+                const alertId = 'alert-' + Date.now();
+
+                const alertHtml = `
+                    <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show" role="alert">
+                        ${message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+
+                alertContainer.insertAdjacentHTML('afterbegin', alertHtml);
+
+                setTimeout(() => {
+                    const alert = document.getElementById(alertId);
+                    if (alert) {
+                        alert.remove();
+                    }
+                }, 5000);
+            }
+
+            // ローディング表示
+            function showLoading(message = '処理中...') {
+                const overlay = document.getElementById('loadingOverlay');
+                const messageEl = overlay.querySelector('.loading-message');
+                
+                if (overlay) {
+                    overlay.classList.remove('d-none');
+                }
+                if (messageEl) {
+                    messageEl.textContent = message;
+                }
+            }
+
+            // ローディング非表示
+            function hideLoading() {
+                const overlay = document.getElementById('loadingOverlay');
+                if (overlay) {
+                    overlay.classList.add('d-none');
+                }
+            }
         });
-    }
-    
-    // 検出結果の表示
-    function showDetectionResults(data) {
-      const resultsContainer = document.getElementById('detection-results');
-      resultsContainer.style.display = 'block';
-      
-      // 結果画像の表示
-      const imageContainer = document.getElementById('result-image-container');
-      if (data.result_image_path) {
-        imageContainer.innerHTML = `<img src="${data.result_image_path}" alt="検出結果" class="img-fluid">`;
-      } else {
-        imageContainer.innerHTML = `<img src="${data.image_path}" alt="元画像" class="img-fluid">`;
-      }
-      
-      // 検出詳細の表示
-      const detailsContainer = document.getElementById('detection-details');
-      let detailsHtml = `<p>${data.message}</p>`;
-      
-      if (data.detections && data.detections.length > 0) {
-        detailsHtml += '<table class="table table-sm">';
-        detailsHtml += '<thead><tr><th>#</th><th>クラス</th><th>信頼度</th><th>位置</th></tr></thead>';
-        detailsHtml += '<tbody>';
-        
-        data.detections.forEach((detection, index) => {
-          detailsHtml += `
-            <tr>
-              <td>${index + 1}</td>
-              <td>${detection.name || '生殖乳頭'}</td>
-              <td>${(detection.confidence * 100).toFixed(1)}%</td>
-              <td>[${Math.round(detection.xmin)}, ${Math.round(detection.ymin)}, ${Math.round(detection.xmax)}, ${Math.round(detection.ymax)}]</td>
-            </tr>
-          `;
-        });
-        
-        detailsHtml += '</tbody></table>';
-      } else {
-        detailsHtml += '<p class="text-muted">検出された物体はありません。</p>';
-      }
-      
-      detailsContainer.innerHTML = detailsHtml;
-    }
-    
-    // 初期状態の更新
-    updateTrainingStatus();
-  });
-</script>
-{% endblock %}
+    </script>
+</body>
+</html>

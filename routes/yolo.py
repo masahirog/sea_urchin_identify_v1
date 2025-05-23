@@ -4,8 +4,11 @@ from flask import Blueprint, request, jsonify, render_template, current_app
 import os
 import json
 from werkzeug.utils import secure_filename
-# 修正部分: PapillaeDetector をインポート
-from core.PapillaeDetector import PapillaeDetector
+import cv2
+import numpy as np
+# 修正部分: YoloDetectorをインポート
+from core.YoloDetector import YoloDetector
+# YoloTrainerは別ファイルから
 from core.YoloTrainer import YoloTrainer
 
 # Blueprintの作成
@@ -111,42 +114,35 @@ def detect_objects():
     file.save(file_path)
     
     try:
-        # 検出の実行 (修正部分: PapillaeDetector を使用)
-        detector = PapillaeDetector(conf_threshold=conf_threshold)
-        # 以下の行も使用するメソッド名などに応じて修正が必要かもしれません
-        detections, annotated_image = detector.detect_papillae(cv2.imread(file_path))
+        # YoloDetectorを使用して検出
+        detector = YoloDetector(conf_threshold=conf_threshold)
+        result = detector.detect(file_path)
         
         # 結果画像の保存
-        result_dir = os.path.join('static', 'images', 'detection_results')
-        os.makedirs(result_dir, exist_ok=True)
-        result_filename = f"result_{os.path.splitext(filename)[0]}.jpg"
-        result_path = os.path.join(result_dir, result_filename)
-        cv2.imwrite(result_path, annotated_image)
-        
-        # 検出結果の整形
-        detection_results = []
-        for i, cnt in enumerate(detections):
-            # 境界ボックスを取得
-            x, y, w, h = cv2.boundingRect(cnt)
-            detection_results.append({
-                "xmin": float(x),
-                "ymin": float(y),
-                "xmax": float(x + w),
-                "ymax": float(y + h),
-                "confidence": 1.0,  # PapillaeDetectorでは信頼度が出ない場合は1.0に設定
-                "class": 0,
-                "name": "papillae"
+        if result.get('annotated_image') is not None:
+            result_dir = os.path.join('static', 'images', 'detection_results')
+            os.makedirs(result_dir, exist_ok=True)
+            result_filename = f"result_{os.path.splitext(filename)[0]}.jpg"
+            result_path = os.path.join(result_dir, result_filename)
+            cv2.imwrite(result_path, result['annotated_image'])
+            
+            return jsonify({
+                'status': 'success',
+                'message': f'{result["count"]}個の生殖乳頭を検出しました',
+                'detections': result['detections'],
+                'image_path': '/' + os.path.relpath(file_path, start='.').replace('\\', '/'),
+                'result_image_path': '/' + os.path.relpath(result_path, start='.').replace('\\', '/'),
+                'fallback': result.get('fallback', False)
             })
-        
-        return jsonify({
-            'status': 'success',
-            'message': f'{len(detections)}個の物体を検出しました',
-            'detections': detection_results,
-            'image_path': '/' + os.path.relpath(file_path, start='.'),
-            'result_image_path': '/' + os.path.relpath(result_path, start='.')
-        })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': '検出処理に失敗しました',
+                'error': result.get('error', '不明なエラー')
+            }), 500
     
     except Exception as e:
+        current_app.logger.error(f'検出処理エラー: {str(e)}')
         return jsonify({
             'status': 'error',
             'message': f'検出処理中にエラーが発生しました: {str(e)}'
@@ -183,51 +179,38 @@ def batch_detect():
         file_paths.append(file_path)
     
     try:
-        # 一括検出の実行 (修正部分: PapillaeDetector を使用)
-        detector = PapillaeDetector(conf_threshold=conf_threshold)
-        results = []
+        # YoloDetectorを使用して一括検出
+        detector = YoloDetector(conf_threshold=conf_threshold)
+        batch_results = detector.batch_detect(file_paths)
         
-        for file_path in file_paths:
-            img = cv2.imread(file_path)
-            if img is None:
+        # 結果の整形
+        results = []
+        result_dir = os.path.join('static', 'images', 'detection_results')
+        os.makedirs(result_dir, exist_ok=True)
+        
+        for i, result in enumerate(batch_results):
+            base_name = os.path.basename(result['image_path'])
+            
+            # エラーがある場合
+            if 'error' in result:
                 results.append({
-                    'path': file_path,
-                    'error': '画像の読み込みに失敗しました'
+                    'path': result['image_path'],
+                    'error': result['error']
                 })
                 continue
-                
-            # 検出実行
-            detections, annotated_image = detector.detect_papillae(img)
             
             # 結果画像の保存
-            result_dir = os.path.join('static', 'images', 'detection_results')
-            os.makedirs(result_dir, exist_ok=True)
-            base_name = os.path.basename(file_path)
-            result_filename = f"result_{os.path.splitext(base_name)[0]}.jpg"
-            result_path = os.path.join(result_dir, result_filename)
-            cv2.imwrite(result_path, annotated_image)
-            
-            # 検出結果の整形
-            detection_results = []
-            for cnt in detections:
-                # 境界ボックスを取得
-                x, y, w, h = cv2.boundingRect(cnt)
-                detection_results.append({
-                    "xmin": float(x),
-                    "ymin": float(y),
-                    "xmax": float(x + w),
-                    "ymax": float(y + h),
-                    "confidence": 1.0,
-                    "class": 0,
-                    "name": "papillae"
+            if result.get('annotated_image') is not None:
+                result_filename = f"result_{os.path.splitext(base_name)[0]}.jpg"
+                result_path = os.path.join(result_dir, result_filename)
+                cv2.imwrite(result_path, result['annotated_image'])
+                
+                results.append({
+                    'path': result['image_path'],
+                    'count': result['count'],
+                    'detections': result['detections'],
+                    'result_image_path': '/' + os.path.relpath(result_path, start='.').replace('\\', '/')
                 })
-            
-            results.append({
-                'path': file_path,
-                'count': len(detections),
-                'detections': detection_results,
-                'result_image_path': '/' + os.path.relpath(result_path, start='.')
-            })
         
         return jsonify({
             'status': 'success',
@@ -236,6 +219,7 @@ def batch_detect():
         })
     
     except Exception as e:
+        current_app.logger.error(f'一括検出処理エラー: {str(e)}')
         return jsonify({
             'status': 'error',
             'message': f'一括検出処理中にエラーが発生しました: {str(e)}'
@@ -348,3 +332,16 @@ def handle_annotations(image_id):
             'status': 'success',
             'message': 'アノテーションを保存しました'
         })
+
+@yolo_bp.route('/training/save', methods=['POST'])
+def save_training_results():
+    """トレーニング結果を保存"""
+    try:
+        result = trainer.save_training_results()
+        return jsonify(result)
+    except Exception as e:
+        current_app.logger.error(f'トレーニング結果保存エラー: {str(e)}')
+        return jsonify({
+            'status': 'error',
+            'message': f'結果保存エラー: {str(e)}'
+        }), 500
