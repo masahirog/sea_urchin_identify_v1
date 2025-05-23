@@ -4,6 +4,13 @@
  * 雌雄判定機能とアプリケーション初期化を統合
  */
 
+import {
+    showLoading,
+    hideLoading,
+    showSuccessMessage,
+    showErrorMessage
+} from './utilities.js';
+
 // ===========================================
 // グローバル変数とアプリケーション状態管理
 // ===========================================
@@ -30,8 +37,6 @@ const classificationService = {
  * DOMが読み込まれたら実行
  */
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('メインアプリケーション初期化開始');
-    
     // アプリケーション全体の初期化
     initMainApplication();
     
@@ -39,16 +44,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (isClassificationPage()) {
         initClassificationService();
     }
-    
-    console.log('メインアプリケーション初期化完了');
 });
 
 /**
  * メインアプリケーションの初期化
  */
 function initMainApplication() {
-    console.log('アプリケーション全体初期化開始');
-    
     // 既存のタスクIDを復元
     restoreTaskState();
     
@@ -64,8 +65,6 @@ function initMainApplication() {
     
     // 初期表示データの読み込み
     loadDatasetInfo();
-    
-    console.log('アプリケーション全体初期化完了');
 }
 
 /**
@@ -97,8 +96,6 @@ function initTabHandlers() {
     document.getElementById('history-tab')?.addEventListener('click', function() {
         loadTaskHistory();
     });
-    
-    // その他のタブ切り替え時の処理があればここに追加
 }
 
 /**
@@ -123,8 +120,6 @@ function getTaskId() {
  * 雌雄判定サービスの初期化
  */
 function initClassificationService() {
-    console.log('雌雄判定サービスの初期化開始');
-    
     // フォーム送信イベントの設定
     initClassificationForm();
     
@@ -136,8 +131,6 @@ function initClassificationService() {
     
     // 判定履歴の読み込み
     loadJudgmentHistory();
-    
-    console.log('雌雄判定サービスの初期化完了');
 }
 
 /**
@@ -150,7 +143,6 @@ function initClassificationForm() {
             e.preventDefault();
             executeClassification();
         });
-        console.log('判定フォームイベント設定完了');
     }
 }
 
@@ -181,8 +173,6 @@ function initFeedbackButtons() {
             submitFeedback('wrong', 'female');
         });
     }
-    
-    console.log('フィードバックボタンイベント設定完了');
 }
 
 /**
@@ -195,8 +185,6 @@ function executeClassification() {
         alert('画像ファイルを選択してください');
         return;
     }
-    
-    console.log('雌雄判定実行開始:', imageFile.name);
     
     // フォームデータの作成
     const formData = new FormData();
@@ -220,8 +208,7 @@ function executeClassification() {
         hideLoading();
         
         if (data.error) {
-            console.error('判定エラー:', data.error);
-            showError('判定中にエラーが発生しました: ' + data.error);
+            showErrorMessage('判定中にエラーが発生しました: ' + data.error);
             return;
         }
         
@@ -233,13 +220,10 @@ function executeClassification() {
         
         // 統計更新
         updateStatistics();
-        
-        console.log('雌雄判定完了');
     })
     .catch(error => {
         hideLoading();
-        console.error('判定エラー:', error);
-        showError('判定中にエラーが発生しました: ' + error.message);
+        showErrorMessage('判定中にエラーが発生しました: ' + error.message);
     });
 }
 
@@ -248,8 +232,6 @@ function executeClassification() {
  * @param {Object} data - 判定結果データ
  */
 function displayClassificationResult(data) {
-    console.log('判定結果表示開始:', data);
-    
     // 現在の結果を保存
     classificationService.currentResult = {
         ...data,
@@ -293,8 +275,6 @@ function displayClassificationResult(data) {
     
     // 特徴重要度表示
     displayFeatureImportance(data.feature_importance);
-    
-    console.log('判定結果表示完了');
 }
 
 /**
@@ -338,7 +318,6 @@ function displayFeatureImportance(featureImportance) {
  */
 function submitFeedback(type, correctGender = null) {
     if (!classificationService.currentResult) {
-        console.error('フィードバック対象の判定結果がありません');
         return;
     }
     
@@ -346,8 +325,6 @@ function submitFeedback(type, correctGender = null) {
         alert('このデータには既にフィードバックが送信されています');
         return;
     }
-    
-    console.log('フィードバック送信:', type, correctGender);
     
     const feedbackData = {
         result_id: classificationService.currentResult.timestamp,
@@ -380,8 +357,6 @@ function submitFeedback(type, correctGender = null) {
     
     // 履歴更新
     updateHistoryWithFeedback(feedbackData);
-    
-    console.log('フィードバック送信完了');
 }
 
 /**
@@ -445,7 +420,7 @@ function loadStatistics() {
         try {
             classificationService.statistics = JSON.parse(savedStats);
         } catch (e) {
-            console.error('統計データ読み込みエラー:', e);
+            // 統計データ読み込みエラー
         }
     }
     
@@ -497,7 +472,7 @@ function loadJudgmentHistory() {
         try {
             classificationService.judgmentHistory = JSON.parse(savedHistory);
         } catch (e) {
-            console.error('履歴データ読み込みエラー:', e);
+            // 履歴データ読み込みエラー
         }
     }
     
@@ -581,76 +556,6 @@ function updateHistoryWithFeedback(feedbackData) {
 }
 
 // ===========================================
-// 共通ユーティリティ関数
-// ===========================================
-
-/**
- * エラーメッセージの表示
- * @param {string} message - エラーメッセージ
- */
-function showError(message) {
-    // 既存のアラートを削除
-    const existingAlert = document.querySelector('.alert-danger.auto-dismiss');
-    if (existingAlert) {
-        existingAlert.remove();
-    }
-    
-    // エラーアラートを作成
-    const alertElement = document.createElement('div');
-    alertElement.className = 'alert alert-danger alert-dismissible fade show auto-dismiss';
-    alertElement.innerHTML = `
-        <i class="fas fa-exclamation-circle me-2"></i> ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
-    `;
-    
-    // ページ上部に表示
-    const container = document.querySelector('.container');
-    if (container) {
-        container.insertBefore(alertElement, container.firstChild);
-        
-        // 5秒後に自動削除
-        setTimeout(() => {
-            if (alertElement.parentNode) {
-                alertElement.remove();
-            }
-        }, 5000);
-    }
-}
-
-/**
- * 成功メッセージの表示
- * @param {string} message - 成功メッセージ
- */
-function showSuccessMessage(message) {
-    // 既存のアラートを削除
-    const existingAlert = document.querySelector('.alert-success.auto-dismiss');
-    if (existingAlert) {
-        existingAlert.remove();
-    }
-    
-    // 成功アラートを作成
-    const alertElement = document.createElement('div');
-    alertElement.className = 'alert alert-success alert-dismissible fade show auto-dismiss';
-    alertElement.innerHTML = `
-        <i class="fas fa-check-circle me-2"></i> ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
-    `;
-    
-    // ページ上部に表示
-    const container = document.querySelector('.container');
-    if (container) {
-        container.insertBefore(alertElement, container.firstChild);
-        
-        // 3秒後に自動削除
-        setTimeout(() => {
-            if (alertElement.parentNode) {
-                alertElement.remove();
-            }
-        }, 3000);
-    }
-}
-
-// ===========================================
 // プレースホルダー関数（他モジュールとの互換性用）
 // ===========================================
 
@@ -658,7 +563,6 @@ function showSuccessMessage(message) {
  * 動画プロセッサーの初期化（プレースホルダー）
  */
 function initVideoProcessor() {
-    console.log('動画プロセッサー初期化（プレースホルダー）');
     // 動画処理ページでのみ動作する機能はvideo.jsに移行
 }
 
@@ -666,7 +570,6 @@ function initVideoProcessor() {
  * 画像分類器の初期化（プレースホルダー）
  */
 function initImageClassifier() {
-    console.log('画像分類器初期化（プレースホルダー）');
     // 雌雄判定機能は上記で実装済み
 }
 
@@ -674,7 +577,6 @@ function initImageClassifier() {
  * モデル訓練の初期化（プレースホルダー）
  */
 function initModelTrainer() {
-    console.log('モデル訓練初期化（プレースホルダー）');
     // 学習機能はlearning.jsに移行
 }
 
@@ -682,7 +584,6 @@ function initModelTrainer() {
  * タスクマネージャーの初期化（プレースホルダー）
  */
 function initTaskManager() {
-    console.log('タスクマネージャー初期化（プレースホルダー）');
     // 必要に応じて実装
 }
 
@@ -690,7 +591,6 @@ function initTaskManager() {
  * マーキングツールの初期化（プレースホルダー）
  */
 function initMarkingTools() {
-    console.log('マーキングツール初期化（プレースホルダー）');
     // アノテーション機能はlearning.jsに移行
 }
 
@@ -698,7 +598,6 @@ function initMarkingTools() {
  * データセット情報の読み込み（プレースホルダー）
  */
 function loadDatasetInfo() {
-    console.log('データセット情報読み込み（プレースホルダー）');
     // 必要に応じて実装
 }
 
@@ -706,7 +605,6 @@ function loadDatasetInfo() {
  * タスク状態のチェック（プレースホルダー）
  */
 function checkTaskStatus() {
-    console.log('タスク状態チェック（プレースホルダー）');
     // 必要に応じて実装
 }
 
@@ -714,7 +612,6 @@ function checkTaskStatus() {
  * 抽出画像の読み込み（プレースホルダー）
  */
 function loadExtractedImages() {
-    console.log('抽出画像読み込み（プレースホルダー）');
     // 動画処理関連はvideo.jsに移行
 }
 
@@ -722,9 +619,5 @@ function loadExtractedImages() {
  * タスク履歴の読み込み（プレースホルダー）
  */
 function loadTaskHistory() {
-    console.log('タスク履歴読み込み（プレースホルダー）');
     // 必要に応じて実装
 }
-
-// モジュールとしてエクスポート（必要に応じて）
-// export { currentTaskId, saveTaskId, getTaskId, classificationService };

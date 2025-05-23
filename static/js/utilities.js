@@ -1,12 +1,12 @@
 /**
- * ウニ生殖乳頭分析システム - ユーティリティ関数
- * アプリケーション全体で使用される共通ユーティリティ関数
+ * ウニ生殖乳頭分析システム - 共通ユーティリティ関数
+ * アプリケーション全体で使用される共通関数
  */
 
 /**
  * ローディングオーバーレイを表示する
  */
-function showLoading() {
+export function showLoading() {
     const overlay = document.getElementById('loadingOverlay');
     if (overlay) {
         overlay.classList.remove('d-none');
@@ -16,10 +16,186 @@ function showLoading() {
 /**
  * ローディングオーバーレイを非表示にする
  */
-function hideLoading() {
+export function hideLoading() {
     const overlay = document.getElementById('loadingOverlay');
     if (overlay) {
         overlay.classList.add('d-none');
+    }
+}
+
+/**
+ * 成功メッセージを表示
+ * @param {string} message - 表示するメッセージ
+ * @param {number} [duration=3000] - 表示時間（ミリ秒）
+ */
+export function showSuccessMessage(message, duration = 3000) {
+    showUserMessage(message, 'success', duration);
+}
+
+/**
+ * エラーメッセージを表示
+ * @param {string} message - 表示するメッセージ
+ * @param {number} [duration=5000] - 表示時間（ミリ秒）
+ */
+export function showErrorMessage(message, duration = 5000) {
+    showUserMessage(message, 'danger', duration);
+}
+
+/**
+ * 警告メッセージを表示
+ * @param {string} message - 表示するメッセージ
+ * @param {number} [duration=4000] - 表示時間（ミリ秒）
+ */
+export function showWarningMessage(message, duration = 4000) {
+    showUserMessage(message, 'warning', duration);
+}
+
+/**
+ * ユーザーメッセージの表示
+ * @param {string} message - メッセージ
+ * @param {string} type - メッセージタイプ（'success', 'danger', 'warning', 'info'）
+ * @param {number} duration - 表示時間（ミリ秒）
+ */
+function showUserMessage(message, type, duration) {
+    const alertElement = document.createElement('div');
+    alertElement.className = `alert alert-${type} alert-dismissible fade show`;
+    
+    // タイプに応じたアイコンを選択
+    const icon = type === 'success' ? 'check-circle' : 
+                 type === 'danger' ? 'exclamation-circle' : 
+                 type === 'warning' ? 'exclamation-triangle' : 'info-circle';
+    
+    alertElement.innerHTML = `
+        <i class="fas fa-${icon} me-2"></i> ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    const container = document.querySelector('.container');
+    if (container) {
+        container.insertBefore(alertElement, container.firstChild);
+        
+        if (duration > 0) {
+            setTimeout(() => {
+                if (alertElement.parentNode) {
+                    alertElement.remove();
+                }
+            }, duration);
+        }
+    }
+}
+
+/**
+ * DOM要素のテキストを更新
+ * @param {string} elementId - 要素ID
+ * @param {*} text - 設定するテキスト
+ * @returns {boolean} 成功したかどうか
+ */
+export function setElementText(elementId, text) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.textContent = text;
+        return true;
+    }
+    return false;
+}
+
+/**
+ * DOM要素を表示
+ * @param {string} elementId - 要素ID
+ * @returns {boolean} 成功したかどうか
+ */
+export function showElement(elementId) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.classList.remove('d-none');
+        return true;
+    }
+    return false;
+}
+
+/**
+ * DOM要素を非表示
+ * @param {string} elementId - 要素ID
+ * @returns {boolean} 成功したかどうか
+ */
+export function hideElement(elementId) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.classList.add('d-none');
+        return true;
+    }
+    return false;
+}
+
+/**
+ * ファイル名を省略表示
+ * @param {string} filename - ファイル名
+ * @param {number} maxLength - 最大長
+ * @returns {string} 省略したファイル名
+ */
+export function truncateFilename(filename, maxLength = 20) {
+    if (!filename || filename.length <= maxLength) return filename;
+    const lastDotIndex = filename.lastIndexOf('.');
+    const name = lastDotIndex > 0 ? filename.substring(0, lastDotIndex) : filename;
+    const extension = lastDotIndex > 0 ? filename.substring(lastDotIndex) : '';
+    const availableLength = maxLength - extension.length - 3;
+    if (availableLength <= 0) return filename.substring(0, maxLength - 3) + '...';
+    return name.substring(0, availableLength) + '...' + extension;
+}
+
+/**
+ * 性別に応じたクラス名を取得
+ * @param {string} category - カテゴリ（'male', 'female', 'unknown'）
+ * @returns {string} クラス名
+ */
+export function getGenderClass(category) {
+    switch (category) {
+        case 'male': return 'border-primary';
+        case 'female': return 'border-danger';
+        default: return 'border-secondary';
+    }
+}
+
+/**
+ * 性別に応じたアイコンを取得
+ * @param {string} category - カテゴリ（'male', 'female', 'unknown'）
+ * @returns {string} アイコンクラス
+ */
+export function getGenderIcon(category) {
+    switch (category) {
+        case 'male': return 'fas fa-mars text-primary';
+        case 'female': return 'fas fa-venus text-danger';
+        default: return 'fas fa-question text-secondary';
+    }
+}
+
+/**
+ * ステータスに応じたアラートクラスを取得
+ * @param {string} status - ステータス
+ * @returns {string} アラートクラス
+ */
+export function getStatusAlertClass(status) {
+    switch (status) {
+        case 'completed':
+        case 'success': return 'alert-success';
+        case 'failed':
+        case 'error': return 'alert-danger';
+        case 'warning': return 'alert-warning';
+        default: return 'alert-info';
+    }
+}
+
+/**
+ * 準備完了度に応じたアラートクラス取得
+ * @param {string} status - 準備状況
+ * @returns {string} アラートクラス
+ */
+export function getReadinessAlertClass(status) {
+    switch (status) {
+        case 'excellent': return 'alert-success';
+        case 'good': return 'alert-info';
+        case 'fair': return 'alert-warning';
+        default: return 'alert-danger';
     }
 }
 
@@ -28,7 +204,7 @@ function hideLoading() {
  * @param {string} base64String - Base64エンコードされた画像データ
  * @returns {string} サイズ（KB単位、小数点以下2桁）
  */
-function calculateImageSize(base64String) {
+export function calculateImageSize(base64String) {
     if (!base64String) return '0.00';
     
     // Base64のヘッダー部分を削除
@@ -42,79 +218,12 @@ function calculateImageSize(base64String) {
 }
 
 /**
- * 日付をフォーマット（YYYY-MM-DD HH:MM:SS）
- * @param {Date} [date=new Date()] - フォーマットする日付
- * @returns {string} フォーマットされた日付文字列
- */
-function formatDate(date) {
-    const d = date || new Date();
-    
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    const hours = String(d.getHours()).padStart(2, '0');
-    const minutes = String(d.getMinutes()).padStart(2, '0');
-    const seconds = String(d.getSeconds()).padStart(2, '0');
-    
-    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-}
-
-/**
- * エラーメッセージを表示する
- * @param {string} elementId - メッセージを表示する要素のID
- * @param {string} message - 表示するエラーメッセージ
- */
-function showError(elementId, message) {
-    const element = document.getElementById(elementId);
-    if (element) {
-        element.innerHTML = `
-            <div class="alert alert-danger">
-                <i class="fas fa-exclamation-circle me-2"></i> ${message}
-            </div>
-        `;
-    } else {
-        console.error('エラー表示要素が見つかりません:', elementId);
-        alert(message);
-    }
-}
-
-/**
- * 成功メッセージを表示する
- * @param {string} elementId - メッセージを表示する要素のID
- * @param {string} message - 表示する成功メッセージ
- */
-function showSuccess(elementId, message) {
-    const element = document.getElementById(elementId);
-    if (element) {
-        element.innerHTML = `
-            <div class="alert alert-success">
-                <i class="fas fa-check-circle me-2"></i> ${message}
-            </div>
-        `;
-    } else {
-        console.error('成功表示要素が見つかりません:', elementId);
-        alert(message);
-    }
-}
-
-/**
- * URLパラメータを取得する
- * @param {string} name - 取得するパラメータ名
- * @returns {string|null} パラメータの値（存在しない場合はnull）
- */
-function getUrlParameter(name) {
-    if (!name) return null;
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get(name);
-}
-
-/**
  * セッションストレージに値を保存する
  * @param {string} key - 保存するキー
  * @param {*} value - 保存する値
  * @returns {boolean} 保存の成功/失敗
  */
-function saveToSession(key, value) {
+export function saveToSession(key, value) {
     try {
         if (!key) throw new Error('キーが指定されていません');
         sessionStorage.setItem(key, JSON.stringify(value));
@@ -130,7 +239,7 @@ function saveToSession(key, value) {
  * @param {string} key - 取得するキー
  * @returns {*} 保存されている値（存在しない場合はnull）
  */
-function getFromSession(key) {
+export function getFromSession(key) {
     try {
         if (!key) return null;
         const value = sessionStorage.getItem(key);
@@ -142,19 +251,52 @@ function getFromSession(key) {
 }
 
 /**
- * セッションストレージから値を削除する
- * @param {string} key - 削除するキー
- * @returns {boolean} 削除の成功/失敗
+ * ネストされたオブジェクトから安全に値を取得するヘルパー関数
+ * @param {Object} obj - 対象オブジェクト
+ * @param {string} path - ドット区切りのパス（例: 'a.b.c'）
+ * @returns {*} - 取得した値、存在しない場合はundefined
  */
-function removeFromSession(key) {
-    try {
-        if (!key) return false;
-        sessionStorage.removeItem(key);
-        return true;
-    } catch (e) {
-        console.error('セッションストレージからの削除エラー:', e);
-        return false;
+export function getNestedValue(obj, path) {
+    if (!obj || !path) return undefined;
+    
+    const parts = path.split('.');
+    let current = obj;
+    
+    for (const part of parts) {
+        if (current === undefined || current === null) return undefined;
+        current = current[part];
     }
+    
+    return current;
+}
+
+/**
+ * 日付をフォーマット（YYYY-MM-DD HH:MM:SS）
+ * @param {Date} [date=new Date()] - フォーマットする日付
+ * @returns {string} フォーマットされた日付文字列
+ */
+export function formatDate(date) {
+    const d = date || new Date();
+    
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const seconds = String(d.getSeconds()).padStart(2, '0');
+    
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+/**
+ * URLパラメータを取得する
+ * @param {string} name - 取得するパラメータ名
+ * @returns {string|null} パラメータの値（存在しない場合はnull）
+ */
+export function getUrlParameter(name) {
+    if (!name) return null;
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get(name);
 }
 
 /**
@@ -162,7 +304,7 @@ function removeFromSession(key) {
  * @param {string} elementId - チェックする要素のID
  * @returns {boolean} 要素が存在するかどうか
  */
-function elementExists(elementId) {
+export function elementExists(elementId) {
     return !!document.getElementById(elementId);
 }
 
@@ -173,55 +315,11 @@ function elementExists(elementId) {
  * @param {Function} handler - イベントハンドラ関数
  * @returns {boolean} 追加の成功/失敗
  */
-function addSafeEventListener(elementId, eventType, handler) {
+export function addSafeEventListener(elementId, eventType, handler) {
     const element = document.getElementById(elementId);
     if (element) {
         element.addEventListener(eventType, handler);
         return true;
     }
     return false;
-}
-
-
-// 画像読み込みエラー処理関数（より堅牢な版）
-function handleImageError(imgElement) {
-    // 現在のインデックスを取得
-    let currentIndex = 0;
-    // フォールバック画像パスを収集
-    const fallbackPaths = [];
-    
-    // data-fallback-X属性から全てのフォールバックパスを取得
-    for (let i = 0; i < 10; i++) { // 最大10個のフォールバックを試す
-        const attr = imgElement.getAttribute(`data-fallback-${i}`);
-        if (attr) {
-            fallbackPaths.push(attr);
-            imgElement.removeAttribute(`data-fallback-${i}`);
-        }
-    }
-    
-    if (fallbackPaths.length > 0) {
-        // 次のフォールバックを試す
-        imgElement.src = fallbackPaths[0];
-        
-        // 残りのフォールバックを再設定
-        fallbackPaths.slice(1).forEach((path, idx) => {
-            imgElement.setAttribute(`data-fallback-${idx}`, path);
-        });
-    } else {
-        // 全てのフォールバックが失敗した場合
-        const graphType = imgElement.getAttribute('data-graph-type');
-        let message = 'グラフが利用できません。学習を実行して評価グラフを生成してください。';
-        
-        // アノテーション効果グラフの場合は特別なメッセージ
-        if (graphType === 'annotation_impact') {
-            message = 'アノテーションデータがありません。データにアノテーションを追加すると表示されます。';
-        }
-        
-        imgElement.parentElement.innerHTML = `
-            <div class="alert alert-warning">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                ${message}
-            </div>
-        `;
-    }
 }

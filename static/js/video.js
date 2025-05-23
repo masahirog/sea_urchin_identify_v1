@@ -3,6 +3,14 @@
  * 動画からの生殖乳頭画像抽出に特化したモジュール
  */
 
+import {
+    showLoading,
+    hideLoading,
+    showSuccessMessage,
+    showErrorMessage,
+    showWarningMessage
+} from './utilities.js';
+
 // 動画処理サービスの状態管理
 const videoProcessingService = {
     currentTaskId: null,
@@ -16,7 +24,6 @@ const videoProcessingService = {
  * ページ初期化処理
  */
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('動画処理サービス初期化開始');
     initVideoProcessingService();
 });
 
@@ -24,8 +31,6 @@ document.addEventListener('DOMContentLoaded', function() {
  * 動画処理サービスの初期化
  */
 function initVideoProcessingService() {
-    console.log('動画処理サービスの初期化開始');
-    
     // フォーム送信イベントの設定
     initVideoProcessingForm();
     
@@ -40,8 +45,6 @@ function initVideoProcessingService() {
     
     // 保存されたタスクIDの復元
     restoreCurrentTask();
-    
-    console.log('動画処理サービスの初期化完了');
 }
 
 /**
@@ -54,7 +57,6 @@ function initVideoProcessingForm() {
             e.preventDefault();
             executeVideoProcessing();
         });
-        console.log('動画処理フォームイベント設定完了');
     }
 }
 
@@ -101,8 +103,6 @@ function initActionButtons() {
             loadExtractedImages();
         });
     }
-    
-    console.log('アクションボタンイベント設定完了');
 }
 
 /**
@@ -140,8 +140,6 @@ function initModals() {
             downloadSingleImage();
         });
     }
-    
-    console.log('モーダルイベント設定完了');
 }
 
 /**
@@ -155,8 +153,6 @@ function executeVideoProcessing() {
         alert('動画ファイルを選択してください');
         return;
     }
-    
-    console.log('動画処理実行開始:', videoFile.name, '最大画像数:', maxImages);
     
     // フォームデータの作成
     const formData = new FormData();
@@ -184,7 +180,6 @@ function executeVideoProcessing() {
         hideLoading();
         
         if (data.error) {
-            console.error('動画処理エラー:', data.error);
             showProcessingStatus('エラー: ' + data.error, 'alert-danger', 0);
             return;
         }
@@ -193,7 +188,6 @@ function executeVideoProcessing() {
         videoProcessingService.currentTaskId = data.task_id;
         saveCurrentTask(data.task_id);
         
-        console.log('動画処理開始:', data.task_id);
         showProcessingStatus('動画を解析中...', 'alert-info', 10);
         
         // 状態チェック開始
@@ -203,9 +197,8 @@ function executeVideoProcessing() {
     })
     .catch(error => {
         hideLoading();
-        console.error('動画処理エラー:', error);
         showProcessingStatus('処理中にエラーが発生しました: ' + error.message, 'alert-danger', 0);
-        showError('動画処理中にエラーが発生しました: ' + error.message);
+        showErrorMessage('動画処理中にエラーが発生しました: ' + error.message);
     });
 }
 
@@ -220,8 +213,6 @@ function startStatusCheck() {
     videoProcessingService.statusCheckInterval = setInterval(() => {
         checkProcessingStatus();
     }, 2000); // 2秒間隔
-    
-    console.log('状態チェック開始');
 }
 
 /**
@@ -251,7 +242,6 @@ function checkProcessingStatus() {
         }
     })
     .catch(error => {
-        console.error('状態チェックエラー:', error);
         // エラーが続く場合は停止
         clearInterval(videoProcessingService.statusCheckInterval);
         videoProcessingService.statusCheckInterval = null;
@@ -281,8 +271,6 @@ function updateProcessingStatus(data) {
  * @param {Object} data - 完了データ
  */
 function handleProcessingComplete(data) {
-    console.log('動画処理完了:', data);
-    
     const imageCount = data.image_count || 0;
     
     if (imageCount > 0) {
@@ -347,11 +335,8 @@ function showProcessingActions() {
  */
 function loadExtractedImages() {
     if (!videoProcessingService.currentTaskId) {
-        console.warn('現在のタスクIDがありません');
         return;
     }
-    
-    console.log('抽出画像読み込み開始:', videoProcessingService.currentTaskId);
     
     fetch('/video/extracted-images/' + videoProcessingService.currentTaskId)
     .then(response => {
@@ -362,19 +347,16 @@ function loadExtractedImages() {
     })
     .then(data => {
         if (data.error) {
-            console.error('画像読み込みエラー:', data.error);
             return;
         }
         
         videoProcessingService.extractedImages = data.images || [];
-        console.log(`${videoProcessingService.extractedImages.length}枚の画像を読み込みました`);
         
         displayExtractionResults();
         updateImageCounter(videoProcessingService.extractedImages.length);
     })
     .catch(error => {
-        console.error('画像読み込みエラー:', error);
-        showError('抽出画像の読み込みに失敗しました: ' + error.message);
+        showErrorMessage('抽出画像の読み込みに失敗しました: ' + error.message);
     });
 }
 
@@ -420,7 +402,6 @@ function displayExtractionResults() {
     }).join('');
     
     container.innerHTML = imageCards;
-    console.log('抽出結果表示完了');
 }
 
 /**
@@ -443,7 +424,6 @@ function downloadAllImagesAsZip() {
         return;
     }
     
-    console.log('ZIP一括ダウンロード開始');
     showLoading();
     
     // ZIPダウンロードのURL
@@ -467,8 +447,6 @@ function openImageSelectionModal() {
         alert('選択する画像がありません');
         return;
     }
-    
-    console.log('画像選択モーダルを開く');
     
     // モーダル内に画像を表示
     const container = document.getElementById('selectableImagesContainer');
@@ -511,7 +489,6 @@ function selectAllImages() {
     checkboxes.forEach(checkbox => {
         checkbox.checked = true;
     });
-    console.log('全画像選択');
 }
 
 /**
@@ -522,7 +499,6 @@ function deselectAllImages() {
     checkboxes.forEach(checkbox => {
         checkbox.checked = false;
     });
-    console.log('全画像選択解除');
 }
 
 /**
@@ -537,7 +513,6 @@ function downloadSelectedImages() {
         return;
     }
     
-    console.log('選択画像ダウンロード:', selectedImageNames.length + '枚');
     showLoading();
     
     // 選択画像ダウンロードのリクエスト
@@ -580,8 +555,7 @@ function downloadSelectedImages() {
     })
     .catch(error => {
         hideLoading();
-        console.error('選択画像ダウンロードエラー:', error);
-        showError('選択画像のダウンロードに失敗しました: ' + error.message);
+        showErrorMessage('選択画像のダウンロードに失敗しました: ' + error.message);
     });
 }
 
@@ -629,8 +603,6 @@ function downloadSingleImage() {
         return;
     }
     
-    console.log('単一画像ダウンロード:', fileName);
-    
     // 画像ダウンロード実行
     const a = document.createElement('a');
     a.href = imageUrl;
@@ -658,7 +630,7 @@ function loadProcessingHistory() {
         updateHistoryDisplay();
     })
     .catch(error => {
-        console.error('履歴読み込みエラー:', error);
+        // エラー処理
     });
 }
 
@@ -716,7 +688,6 @@ function updateHistoryDisplay() {
  * @param {string} taskId - タスクID
  */
 function redownloadTask(taskId) {
-    console.log('タスク再ダウンロード:', taskId);
     showLoading();
     
     const downloadUrl = `/video/download-zip/${taskId}`;
@@ -743,66 +714,14 @@ function restoreCurrentTask() {
     const savedTaskId = localStorage.getItem('currentVideoTaskId');
     if (savedTaskId) {
         videoProcessingService.currentTaskId = savedTaskId;
-        console.log('保存されたタスクIDを復元:', savedTaskId);
         
         // 状態確認
         checkProcessingStatus();
     }
 }
 
-/**
- * エラーメッセージの表示
- * @param {string} message - エラーメッセージ
- */
-function showError(message) {
-    const alertElement = document.createElement('div');
-    alertElement.className = 'alert alert-danger alert-dismissible fade show';
-    alertElement.innerHTML = `
-        <i class="fas fa-exclamation-circle me-2"></i> ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
-    `;
-    
-    const container = document.querySelector('.container');
-    if (container) {
-        container.insertBefore(alertElement, container.firstChild);
-        setTimeout(() => alertElement.remove(), 5000);
-    }
-}
-
-/**
- * 成功メッセージの表示
- * @param {string} message - 成功メッセージ
- */
-function showSuccessMessage(message) {
-    const alertElement = document.createElement('div');
-    alertElement.className = 'alert alert-success alert-dismissible fade show';
-    alertElement.innerHTML = `
-        <i class="fas fa-check-circle me-2"></i> ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
-    `;
-    
-    const container = document.querySelector('.container');
-    if (container) {
-        container.insertBefore(alertElement, container.firstChild);
-        setTimeout(() => alertElement.remove(), 3000);
-    }
-}
-
-/**
- * 警告メッセージの表示
- * @param {string} message - 警告メッセージ
- */
-function showWarningMessage(message) {
-    const alertElement = document.createElement('div');
-    alertElement.className = 'alert alert-warning alert-dismissible fade show';
-    alertElement.innerHTML = `
-        <i class="fas fa-exclamation-triangle me-2"></i> ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="閉じる"></button>
-    `;
-    
-    const container = document.querySelector('.container');
-    if (container) {
-        container.insertBefore(alertElement, container.firstChild);
-        setTimeout(() => alertElement.remove(), 4000);
-    }
-}
+// グローバル関数のエクスポート
+window.selectAllImages = selectAllImages;
+window.deselectAllImages = deselectAllImages;
+window.openImageDetail = openImageDetail;
+window.redownloadTask = redownloadTask;

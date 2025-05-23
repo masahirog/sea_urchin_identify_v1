@@ -3,6 +3,20 @@
  * UI表示に関する処理を集約
  */
 
+
+import {
+    showSuccessMessage,
+    showErrorMessage,
+    setElementText,
+    showElement,
+    hideElement,
+    getGenderClass,
+    getGenderIcon,
+    truncateFilename,
+    getStatusAlertClass,
+    getReadinessAlertClass
+} from '../utilities.js';
+
 /**
  * UIマネージャークラス
  * UI要素の更新を担当
@@ -24,10 +38,10 @@ export class UIManager {
         this.updatePhaseDisplay();
         
         // 初期状態の設定
-        this.showElement('data-preparation-section');
-        this.hideElement('training-section');
-        this.hideElement('analysis-section');
-        this.showElement('results-placeholder');
+        showElement('data-preparation-section');
+        hideElement('training-section');
+        hideElement('analysis-section');
+        showElement('results-placeholder');
     }
 
     /**
@@ -83,7 +97,7 @@ export class UIManager {
     showPhaseSection() {
         // 全セクション非表示
         ['data-preparation-section', 'training-section', 'analysis-section'].forEach(sectionId => {
-            this.hideElement(sectionId);
+            hideElement(sectionId);
         });
         
         // 現在フェーズのセクション表示
@@ -100,13 +114,13 @@ export class UIManager {
                 break;
         }
         
-        this.showElement(sectionId);
+        showElement(sectionId);
         
         // results-placeholderの表示制御
         if (this.parent.currentPhase === 'analysis' && this.parent.learningResults) {
-            this.hideElement('results-placeholder');
+            hideElement('results-placeholder');
         } else if (this.parent.currentPhase !== 'analysis') {
-            this.showElement('results-placeholder');
+            showElement('results-placeholder');
         }
     }
 
@@ -117,9 +131,9 @@ export class UIManager {
         const stats = this.parent.datasetStats;
         
         // 基本カウンター更新
-        this.setElementText('dataset-male-count', stats.male_count || 0);
-        this.setElementText('dataset-female-count', stats.female_count || 0);
-        this.setElementText('dataset-annotated-count', stats.annotation_count || 0);
+        setElementText('dataset-male-count', stats.male_count || 0);
+        setElementText('dataset-female-count', stats.female_count || 0);
+        setElementText('dataset-annotated-count', stats.annotation_count || 0);
     }
 
     /**
@@ -128,7 +142,7 @@ export class UIManager {
      */
     updateReadinessDisplay(readiness) {
         // 準備完了度パーセンテージ
-        this.setElementText('dataset-readiness', readiness.readiness_percentage + '%');
+        setElementText('dataset-readiness', readiness.readiness_percentage + '%');
         
         // ステータスメッセージ
         const checkElement = document.getElementById('readiness-check');
@@ -136,7 +150,7 @@ export class UIManager {
         
         if (checkElement && messageElement) {
             // ステータスに応じたスタイル設定
-            checkElement.className = 'alert ' + this.getReadinessAlertClass(readiness.status);
+            checkElement.className = 'alert ' + getReadinessAlertClass(readiness.status);
             messageElement.textContent = readiness.message;
         }
         
@@ -149,20 +163,6 @@ export class UIManager {
             } else {
                 startBtn.classList.add('d-none');
             }
-        }
-    }
-
-    /**
-     * 準備完了度に応じたアラートクラス取得
-     * @param {string} status - 準備状況
-     * @returns {string} アラートクラス
-     */
-    getReadinessAlertClass(status) {
-        switch (status) {
-            case 'excellent': return 'alert-success';
-            case 'good': return 'alert-info';
-            case 'fair': return 'alert-warning';
-            default: return 'alert-danger';
         }
     }
 
@@ -189,8 +189,8 @@ export class UIManager {
         
         // 画像カードの生成
         const imageCards = allImages.map(item => {
-            const genderClass = this.getGenderClass(item.category);
-            const genderIcon = this.getGenderIcon(item.category);
+            const genderClass = getGenderClass(item.category);
+            const genderIcon = getGenderIcon(item.category);
             const annotationBadge = item.has_annotation ? 
                 '<span class="badge bg-success position-absolute top-0 end-0 m-1"><i class="fas fa-check"></i></span>' : 
                 '<span class="badge bg-secondary position-absolute top-0 end-0 m-1"><i class="fas fa-plus"></i></span>';
@@ -204,7 +204,7 @@ export class UIManager {
                     <img src="${item.url}" alt="${item.filename}" class="image-preview">
                     <div class="image-info">
                         <i class="${genderIcon} me-1"></i>
-                        ${this.truncateFilename(item.filename, 20)}
+                        ${truncateFilename(item.filename, 20)}
                         <div class="small text-muted mt-1">
                             ${item.has_annotation ? 'アノテーション済み' : '未アノテーション'}
                         </div>
@@ -219,14 +219,12 @@ export class UIManager {
         
         container.innerHTML = imageCards;
         
-        console.log(`学習データ表示完了: ${allImages.length}枚`);
     }
 
     /**
      * サマリーメトリクス更新
      */
     updateSummaryMetrics() {
-        console.log('サマリーメトリクス更新開始:', this.parent.learningResults);
         
         // サマリー情報の取得
         const result = this.parent.learningResults || {};
@@ -276,23 +274,14 @@ export class UIManager {
         }
         
         // 精度と適合率、再現率の表示更新
-        this.setElementText('final-accuracy', (accuracy * 100).toFixed(1) + '%');
-        this.setElementText('final-precision', (precision * 100).toFixed(1) + '%');
-        this.setElementText('final-recall', (recall * 100).toFixed(1) + '%');
+        setElementText('final-accuracy', (accuracy * 100).toFixed(1) + '%');
+        setElementText('final-precision', (precision * 100).toFixed(1) + '%');
+        setElementText('final-recall', (recall * 100).toFixed(1) + '%');
         
         // アノテーション情報の表示更新
-        this.setElementText('male-annotation-count', maleAnnotated);
-        this.setElementText('female-annotation-count', femaleAnnotated);
-        
-        console.log('メトリクス更新完了:', {
-            accuracy: accuracy * 100,
-            precision: precision * 100,
-            recall: recall * 100,
-            annotations: {
-                male: maleAnnotated,
-                female: femaleAnnotated
-            }
-        });
+        setElementText('male-annotation-count', maleAnnotated);
+        setElementText('female-annotation-count', femaleAnnotated);
+
     }
 
     /**
@@ -318,7 +307,7 @@ export class UIManager {
      */
     showAnalysisGuidance() {
         // プレースホルダーを表示
-        this.showElement('results-placeholder');
+        showElement('results-placeholder');
         
         // 案内メッセージ
         const container = document.getElementById('unified-results-content');
@@ -333,7 +322,7 @@ export class UIManager {
             `;
         }
         
-        this.showSuccessMessage('分析フェーズに移動しました。学習を実行すると結果が表示されます。');
+        this.showSuccess('分析フェーズに移動しました。学習を実行すると結果が表示されます。');
     }
 
     /**
@@ -341,7 +330,6 @@ export class UIManager {
      * @param {Array} history - 履歴データ
      */
     displayLearningHistory(history) {
-        console.log('統合履歴表示処理開始:', history.length, '件');
         
         const container = document.getElementById('unified-learning-history');
         if (!container) {
@@ -365,7 +353,7 @@ export class UIManager {
         // 履歴リストを生成（重複するタイムスタンプは統合）
         let historyListHTML = '';
         
-        history.forEach((item, index) => {
+        history.forEach((item) => {
             // タイムスタンプが既に表示されていればスキップ
             const timestamp = item.timestamp || '';
             if (displayedTimestamps.has(timestamp)) {
@@ -418,7 +406,6 @@ export class UIManager {
         });
         
         container.innerHTML = historyListHTML;
-        console.log('統合履歴表示処理完了');
     }
 
     /**
@@ -535,122 +522,35 @@ export class UIManager {
      */
     updateTrainingDetails() {
         const stats = this.parent.datasetStats;
-        this.setElementText('training-male-count', stats.male_count || 0);
-        this.setElementText('training-female-count', stats.female_count || 0);
-        this.setElementText('training-annotated-count', stats.annotation_count || 0);
-    }
-
-    /**
-     * 性別に応じたクラス名を取得
-     * @param {string} category - カテゴリ（'male', 'female', 'unknown'）
-     * @returns {string} クラス名
-     */
-    getGenderClass(category) {
-        switch (category) {
-            case 'male': return 'border-primary';
-            case 'female': return 'border-danger';
-            default: return 'border-secondary';
-        }
-    }
-
-    /**
-     * 性別に応じたアイコンを取得
-     * @param {string} category - カテゴリ（'male', 'female', 'unknown'）
-     * @returns {string} アイコンクラス
-     */
-    getGenderIcon(category) {
-        switch (category) {
-            case 'male': return 'fas fa-mars text-primary';
-            case 'female': return 'fas fa-venus text-danger';
-            default: return 'fas fa-question text-secondary';
-        }
-    }
-
-    /**
-     * ファイル名を省略表示
-     * @param {string} filename - ファイル名
-     * @param {number} maxLength - 最大長
-     * @returns {string} 省略したファイル名
-     */
-    truncateFilename(filename, maxLength = 20) {
-        if (!filename || filename.length <= maxLength) return filename;
-        const lastDotIndex = filename.lastIndexOf('.');
-        const name = lastDotIndex > 0 ? filename.substring(0, lastDotIndex) : filename;
-        const extension = lastDotIndex > 0 ? filename.substring(lastDotIndex) : '';
-        const availableLength = maxLength - extension.length - 3;
-        if (availableLength <= 0) return filename.substring(0, maxLength - 3) + '...';
-        return name.substring(0, availableLength) + '...' + extension;
-    }
-
-    /**
-     * ステータスに応じたアラートクラスを取得
-     * @param {string} status - ステータス
-     * @returns {string} アラートクラス
-     */
-    getStatusAlertClass(status) {
-        switch (status) {
-            case 'completed': return 'alert-success';
-            case 'failed':
-            case 'error': return 'alert-danger';
-            default: return 'alert-info';
-        }
+        setElementText('training-male-count', stats.male_count || 0);
+        setElementText('training-female-count', stats.female_count || 0);
+        setElementText('training-annotated-count', stats.annotation_count || 0);
     }
 
     /**
      * トレーニングフェーズの表示
      */
     showTrainingPhase() {
-        this.hideElement('data-preparation-section');
-        this.showElement('training-section');
-        this.hideElement('analysis-section');
+        hideElement('data-preparation-section');
+        showElement('training-section');
+        hideElement('analysis-section');
     }
 
     /**
      * 分析フェーズの表示
      */
     showAnalysisPhase() {
-        this.hideElement('data-preparation-section');
-        this.hideElement('training-section');  
-        this.showElement('analysis-section');
-    }
-
-    // ===== ユーティリティメソッド =====
-
-    /**
-     * 要素のテキストを設定
-     * @param {string} elementId - 要素ID
-     * @param {*} text - 設定するテキスト
-     */
-    setElementText(elementId, text) {
-        const element = document.getElementById(elementId);
-        if (element) element.textContent = text;
-    }
-
-    /**
-     * 要素を表示
-     * @param {string} elementId - 要素ID
-     */
-    showElement(elementId) {
-        const element = document.getElementById(elementId);
-        if (element) element.classList.remove('d-none');
-    }
-
-    /**
-     * 要素を非表示
-     * @param {string} elementId - 要素ID
-     */
-    hideElement(elementId) {
-        const element = document.getElementById(elementId);
-        if (element) element.classList.add('d-none');
+        hideElement('data-preparation-section');
+        hideElement('training-section');  
+        showElement('analysis-section');
     }
 
     /**
      * 成功メッセージの表示
      * @param {string} message - メッセージ
      */
-    showSuccessMessage(message) {
-        console.log('成功:', message);
-        this.showUserMessage(message, 'success');
+    showSuccess(message) {
+        showSuccessMessage(message);
     }
 
     /**
@@ -659,25 +559,6 @@ export class UIManager {
      */
     showError(message) {
         console.error('エラー:', message);
-        this.showUserMessage(message, 'danger');
-    }
-
-    /**
-     * ユーザーメッセージの表示
-     * @param {string} message - メッセージ
-     * @param {string} type - メッセージタイプ（'success', 'danger', 'warning', 'info'）
-     */
-    showUserMessage(message, type) {
-        const alertDiv = document.createElement('div');
-        alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-        alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 1060; max-width: 300px;';
-        alertDiv.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        document.body.appendChild(alertDiv);
-        
-        // 自動削除
-        setTimeout(() => alertDiv.remove(), 5000);
+        showErrorMessage(message);
     }
 }

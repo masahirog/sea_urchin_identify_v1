@@ -3,6 +3,15 @@
  * 画像アノテーションのための機能を提供
  */
 
+import {
+    showLoading,
+    hideLoading,
+    showSuccessMessage,
+    showErrorMessage,
+    calculateImageSize,
+    saveToSession
+} from '../utilities.js';
+
 // モジュール内のデータを保持するための変数
 const annotationTools = {
     selectedCard: null,
@@ -20,8 +29,6 @@ const annotationTools = {
  * @param {string} imagePath - 画像パス
  */
 export function selectImageForAnnotation(imagePath) {
-    console.log('画像詳細表示:', imagePath);
-    
     if (!imagePath) {
         alert('画像が指定されていません');
         return;
@@ -36,15 +43,12 @@ export function selectImageForAnnotation(imagePath) {
  * @param {string} imagePath - 画像パス
  */
 export function openImageDetailModal(imagePath) {
-    console.log('画像詳細モーダル表示:', imagePath);
-    
     // 既存のアノテーション情報を確認
     checkExistingAnnotation(imagePath)
         .then(annotationInfo => {
             createImageDetailModal(imagePath, annotationInfo);
         })
         .catch(error => {
-            console.error('アノテーション情報取得エラー:', error);
             createImageDetailModal(imagePath, null);
         });
 }
@@ -76,7 +80,6 @@ async function checkExistingAnnotation(imagePath) {
         return { exists: false };
         
     } catch (error) {
-        console.error('アノテーション確認エラー:', error);
         return null;
     }
 }
@@ -242,8 +245,6 @@ function setupImageDetailModalEvents(imagePath, annotationInfo) {
  * @param {Object} annotationInfo - アノテーション情報
  */
 export function openAnnotationEditModal(imagePath, annotationInfo) {
-    console.log('アノテーション編集モーダル表示:', imagePath);
-    
     // アノテーション作成と同じモーダルを使用するが、既存のアノテーションを読み込む
     openAnnotationModal(imagePath, true, annotationInfo);
 }
@@ -275,7 +276,7 @@ async function deleteAnnotation(imagePath, annotationInfo) {
         
         // 成功メッセージ
         if (window.unifiedLearningSystem) {
-            window.unifiedLearningSystem.showSuccessMessage('アノテーションを削除しました');
+            showSuccessMessage('アノテーションを削除しました');
         } else {
             alert('アノテーションを削除しました');
         }
@@ -289,9 +290,8 @@ async function deleteAnnotation(imagePath, annotationInfo) {
         }
         
     } catch (error) {
-        console.error('アノテーション削除エラー:', error);
         if (window.unifiedLearningSystem) {
-            window.unifiedLearningSystem.showError('アノテーション削除に失敗しました: ' + error.message);
+            showErrorMessage('アノテーション削除に失敗しました: ' + error.message);
         } else {
             alert('アノテーション削除に失敗しました: ' + error.message);
         }
@@ -303,9 +303,6 @@ async function deleteAnnotation(imagePath, annotationInfo) {
  * @param {string} imagePath - 画像パス
  */
 function moveImageToDataset(imagePath) {
-    // データセット移動の実装
-    console.log('データセット移動:', imagePath);
-    
     // 性別選択ダイアログを表示
     const gender = prompt('移動先を選択してください:\n1: オス (male)\n2: メス (female)\n\n番号を入力してください:');
     
@@ -318,9 +315,8 @@ function moveImageToDataset(imagePath) {
     }
     
     // 移動処理の実装（実際のAPIコールが必要）
-    console.log(`${imagePath} を ${targetGender} カテゴリに移動`);
     if (window.unifiedLearningSystem) {
-        window.unifiedLearningSystem.showSuccessMessage(`画像を${targetGender}カテゴリに移動しました`);
+        showSuccessMessage(`画像を${targetGender}カテゴリに移動しました`);
     } else {
         alert(`画像を${targetGender}カテゴリに移動しました`);
     }
@@ -361,7 +357,7 @@ export async function deleteImage(imagePath) {
         
         // 成功メッセージ表示
         if (window.unifiedLearningSystem) {
-            window.unifiedLearningSystem.showSuccessMessage(data.message);
+            showSuccessMessage(data.message);
             
             // データ更新
             await window.unifiedLearningSystem.refreshDatasetStats();
@@ -380,10 +376,9 @@ export async function deleteImage(imagePath) {
         
     } catch (error) {
         hideLoading();
-        console.error('削除エラー:', error);
         
         if (window.unifiedLearningSystem) {
-            window.unifiedLearningSystem.showError('削除中にエラーが発生しました: ' + error.message);
+            showErrorMessage('削除中にエラーが発生しました: ' + error.message);
         } else {
             alert('削除中にエラーが発生しました: ' + error.message);
         }
@@ -397,8 +392,6 @@ export async function deleteImage(imagePath) {
  * @param {Object} existingAnnotation - 既存のアノテーション情報
  */
 export function openAnnotationModal(paramImagePath, isEdit = false, existingAnnotation = null) {
-    console.log('アノテーションモーダルを開く:', paramImagePath, isEdit ? '(編集モード)' : '(新規作成)');
-    
     if (!paramImagePath) {
         alert('画像が指定されていません');
         return;
@@ -519,7 +512,6 @@ function setupAnnotationCanvas(selectedCard, isEdit = false, existingAnnotation 
         initAnnotationEvents();
     };
     img.onerror = function() {
-        console.error('画像の読み込みに失敗しました:', img.src);
         alert('画像の読み込みに失敗しました');
     };
     
@@ -533,7 +525,6 @@ function setupAnnotationCanvas(selectedCard, isEdit = false, existingAnnotation 
         imagePath = '/sample' + imagePath;
     }
     
-    console.log('読み込む画像パス:', imagePath);
     img.src = imagePath;
 }
 
@@ -729,15 +720,13 @@ function enableTouchSupport(canvas) {
  */
 function saveAnnotationData() {
     try {
-        showLoading(); // ローディング表示を追加
-        console.log('アノテーション保存開始');
+        showLoading();
 
         // キャンバスのデータをBase64形式で取得
         const annotationData = annotationTools.canvas.toDataURL('image/png');
-        console.log('Base64データサイズ:', calculateImageSize(annotationData), 'KB');
+        const annotationSize = calculateImageSize(annotationData);
 
         const selectedCard = annotationTools.selectedCard;
-        console.log('選択カード:', selectedCard.dataset.path);
 
         // 画像データをサーバーに送信
         fetch('/learning/save-annotation', {
@@ -751,23 +740,19 @@ function saveAnnotationData() {
             })
         })
         .then(response => {
-            console.log('サーバーレスポンスステータス:', response.status);
             if (!response.ok) {
                 throw new Error('サーバーレスポンスが不正です');
             }
             return response.json();
         })
         .then(data => {
-            hideLoading(); // ローディング表示を非表示
-            console.log('アノテーション保存レスポンス:', data);
+            hideLoading();
             
             if (data.error) {
-                console.error('保存エラー:', data.error);
                 alert('エラー: ' + data.error);
             } else {
                 alert('アノテーションを保存しました');
                 saveToSession('annotationSaved', true);
-                console.log('保存成功フラグ設定');
                 
                 // モーダルを閉じる
                 bootstrap.Modal.getInstance(document.getElementById('annotationModal')).hide();
@@ -780,12 +765,10 @@ function saveAnnotationData() {
         })
         .catch(error => {
             hideLoading();
-            console.error('保存エラー:', error);
             alert('保存中にエラーが発生しました: ' + error);
         });
     } catch (e) {
         hideLoading();
-        console.error('アノテーション処理エラー:', e);
         alert('アノテーションの保存中にエラーが発生しました: ' + e);
     }
 }
@@ -806,52 +789,9 @@ function cleanupAnnotationModal() {
     }
 }
 
-// ユーティリティ関数の参照（utilities.jsから）
-function showLoading() {
-    const overlay = document.getElementById('loadingOverlay');
-    if (overlay) {
-        overlay.classList.remove('d-none');
-    }
-}
-
-function hideLoading() {
-    const overlay = document.getElementById('loadingOverlay');
-    if (overlay) {
-        overlay.classList.add('d-none');
-    }
-}
-
-function calculateImageSize(base64String) {
-    if (!base64String) return '0.00';
-    
-    // Base64のヘッダー部分を削除
-    const base64Data = base64String.includes(',') ? 
-        base64String.split(',')[1] : base64String;
-    
-    // Base64のデータサイズを計算（バイト単位）
-    const sizeInBytes = Math.ceil((base64Data.length * 3) / 4);
-    // KB単位に変換（小数点以下2桁）
-    return (sizeInBytes / 1024).toFixed(2);
-}
-
-function saveToSession(key, value) {
-    try {
-        if (!key) throw new Error('キーが指定されていません');
-        sessionStorage.setItem(key, JSON.stringify(value));
-        return true;
-    } catch (e) {
-        console.error('セッションストレージへの保存エラー:', e);
-        return false;
-    }
-}
-
-// アノテーションツール初期化
-export function initAnnotationTools() {
-    console.log('アノテーションツール初期化');
-    // 必要な初期化処理があればここに追加
-}
-
-// グローバルエクスポートのためのラッパー
+/**
+ * グローバルエクスポートのためのラッパー
+ */
 export function setupAnnotationTools() {
     window.selectImageForAnnotation = selectImageForAnnotation;
     window.openImageDetailModal = openImageDetailModal;
@@ -859,6 +799,4 @@ export function setupAnnotationTools() {
     window.openAnnotationModal = openAnnotationModal;
     window.showQuickDeleteConfirm = showQuickDeleteConfirm;
     window.deleteImage = deleteImage;
-    
-    console.log('アノテーションツールのグローバル関数を設定しました');
 }

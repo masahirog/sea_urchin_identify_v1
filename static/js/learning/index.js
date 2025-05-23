@@ -11,8 +11,6 @@ let unifiedLearningSystem;
 
 // DOMロード時の初期化
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('統合学習システム初期化開始');
-    
     // システムインスタンスを作成
     unifiedLearningSystem = new UnifiedLearningSystem();
     
@@ -24,9 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // アノテーションツールのセットアップ
     setupAnnotationTools();
-    
-    console.log('統合学習システム初期化完了');
 });
 
-// グローバルエクスポート（必要に応じて）
+// グローバルエクスポート
 export { unifiedLearningSystem };

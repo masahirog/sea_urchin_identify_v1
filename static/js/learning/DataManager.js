@@ -3,6 +3,13 @@
  * データの読み込み、保存、処理を担当
  */
 
+import {
+    showSuccessMessage,
+    showErrorMessage,
+    getNestedValue,
+    getStatusAlertClass
+} from '../utilities.js';
+
 /**
  * データマネージャークラス
  * データ操作を担当
@@ -48,21 +55,17 @@ export class DataManager {
             const history = data.history || [];
             
             if (history.length > 0) {
-                // 最新の結果を取得
-                const latestResult = history[0];
-                
-                // evaluation タイプの最新結果を探す
+                // 最新の評価結果を探す
                 const latestEvaluation = history.find(item => item.type === 'evaluation');
                 
                 if (latestEvaluation) {
-                    console.log('最新の評価結果を発見:', latestEvaluation.timestamp);
                     
                     // 結果を仮想的に設定
                     this.parent.learningResults = {
                         summary: {
                             overall_accuracy: latestEvaluation.cv_mean || 0,
-                            precision: latestEvaluation.classification_report?.weighted_avg?.precision || 0,
-                            recall: latestEvaluation.classification_report?.weighted_avg?.recall || 0,
+                            precision: getNestedValue(latestEvaluation, 'classification_report.weighted_avg.precision') || 0,
+                            recall: getNestedValue(latestEvaluation, 'classification_report.weighted_avg.recall') || 0,
                             annotation_rate: latestEvaluation.dataset?.annotation_rate || 0
                         },
                         evaluation: latestEvaluation,
@@ -153,18 +156,15 @@ export class DataManager {
      */
     async loadLearningHistory() {
         try {
-            console.log('学習履歴読み込み開始');
             const response = await fetch('/learning/learning-history');
             if (!response.ok) {
                 throw new Error(`履歴データの取得に失敗しました: ${response.status}`);
             }
             
             const data = await response.json();
-            console.log('取得した履歴データ:', data);
             
             // 履歴データが空でないことを確認
             if (!data.history || data.history.length === 0) {
-                console.log('履歴データが空です');
                 this.parent.uiManager.displayEmptyHistory();
                 return [];
             }
@@ -177,7 +177,6 @@ export class DataManager {
                 return timestampB.localeCompare(timestampA);
             });
             
-            console.log('ソート後の履歴データ:', sortedHistory);
             
             // 統合された履歴を表示
             this.parent.uiManager.displayLearningHistory(sortedHistory);
@@ -196,7 +195,6 @@ export class DataManager {
      */
     async loadHistoricalResult(timestamp) {
         try {
-            console.log('履歴結果を読み込み:', timestamp);
             
             if (!timestamp) {
                 this.parent.uiManager.showError('タイムスタンプが無効です');
@@ -219,11 +217,9 @@ export class DataManager {
             if (relatedItems.length === 0) {
                 this.parent.uiManager.showError('指定された履歴が見つかりませんでした');
                 console.error('見つからないタイムスタンプ:', timestamp);
-                console.log('利用可能な履歴:', history.map(h => h.timestamp));
                 return null;
             }
             
-            console.log('見つかった履歴結果:', relatedItems);
             
             // 評価とアノテーションの結果を探す
             const evaluationItem = relatedItems.find(item => item.type === 'evaluation');
@@ -237,9 +233,9 @@ export class DataManager {
             this.parent.learningResults = {
                 summary: {
                     overall_accuracy: resultData.cv_mean || resultData.accuracy || 0,
-                    precision: this.getNestedValue(resultData, 'classification_report.weighted_avg.precision') || 0,
-                    recall: this.getNestedValue(resultData, 'classification_report.weighted_avg.recall') || 0,
-                    annotation_rate: annotationData.annotation_rate || this.getNestedValue(resultData, 'dataset.annotation_rate') || 0
+                    precision: getNestedValue(resultData, 'classification_report.weighted_avg.precision') || 0,
+                    recall: getNestedValue(resultData, 'classification_report.weighted_avg.recall') || 0,
+                    annotation_rate: annotationData.annotation_rate || getNestedValue(resultData, 'dataset.annotation_rate') || 0
                 },
                 evaluation: resultData,
                 metadata: {
@@ -262,7 +258,7 @@ export class DataManager {
             
             // 履歴表示であることを通知
             const date = evaluationItem?.date || annotationItem?.date || '過去の結果';
-            this.parent.uiManager.showSuccessMessage(`${date} の統合結果を表示しています`);
+            showSuccessMessage(`${date} の統合結果を表示しています`);
             
             return this.parent.learningResults;
         } catch (error) {
@@ -270,51 +266,6 @@ export class DataManager {
             this.parent.uiManager.showError('履歴結果の読み込みに失敗しました: ' + error.message);
             throw error;
         }
-    }
-
-    /**
-     * グラフパスを生成
-     * @param {string} graphType - グラフタイプ
-     * @param {string} baseTimestamp - 基本タイムスタンプ
-     * @param {string} annotationTimestamp - アノテーションタイムスタンプ
-     * @returns {Array} パスの配列
-     */
-    generateGraphPaths(graphType, baseTimestamp, annotationTimestamp) {
-        const paths = [];
-        
-        // 基本パターン
-        paths.push(`/evaluation/images/${graphType}_${baseTimestamp}.png`);
-        
-        // ISO形式のタイムスタンプ変換を試みる
-        if (baseTimestamp.includes('_')) {
-            try {
-                // YYYYMMDD_HHMMSS → YYYY-MM-DDTHH:MM:SS 形式に変換
-                const year = baseTimestamp.substring(0, 4);
-                const month = baseTimestamp.substring(4, 6);
-                const day = baseTimestamp.substring(6, 8);
-                const hour = baseTimestamp.substring(9, 11);
-                const minute = baseTimestamp.substring(11, 13);
-                const second = baseTimestamp.substring(13, 15);
-                
-                const isoTimestamp = `${year}-${month}-${day}T${hour}:${minute}:${second}`;
-                paths.push(`/evaluation/images/${graphType}_${isoTimestamp}.png`);
-                
-                // 完全なISO文字列も試す
-                paths.push(`/evaluation/images/${graphType}_${isoTimestamp}.558600.png`);
-            } catch (e) {
-                console.warn('タイムスタンプ変換エラー:', e);
-            }
-        }
-        
-        // アノテーション効果の場合は特別なパスも追加
-        if (graphType === 'annotation_impact' && annotationTimestamp && annotationTimestamp !== baseTimestamp) {
-            paths.push(`/evaluation/images/${graphType}_${annotationTimestamp}.png`);
-        }
-        
-        // 既知の動作確認済みパスを追加（フォールバック）
-        paths.push(`/evaluation/images/${graphType}_2025-05-23T09:52:21.613416.png`);
-        
-        return paths;
     }
 
     /**
@@ -352,11 +303,161 @@ export class DataManager {
                 }
             }
             
-            console.log('見つかった最新のグラフファイル:', latestFiles);
             return latestFiles;
         } catch (error) {
             console.error('最新評価ファイル取得エラー:', error);
             return {};
+        }
+    }
+
+    /**
+     * データアップロード処理
+     */
+    async handleDataUpload() {
+        const fileInput = document.getElementById('dataFiles');
+        const genderSelect = document.getElementById('dataGender');
+        
+        const files = fileInput.files;
+        const gender = genderSelect.value;
+        
+        if (files.length === 0) {
+            this.parent.uiManager.showError('画像ファイルを選択してください');
+            return false;
+        }
+        
+        
+        try {
+            // フォームデータ作成
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('images', files[i]);
+            }
+            formData.append('gender', gender);
+            
+            // アップロード進捗表示
+            this.parent.uiManager.showUploadProgress(0);
+            
+            // アップロード実行
+            const response = await fetch('/learning/upload-data', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) throw new Error(`サーバーエラー: ${response.status}`);
+            
+            const data = await response.json();
+            this.parent.uiManager.hideUploadProgress();
+            
+            if (data.error) {
+                this.parent.uiManager.showError('アップロードエラー: ' + data.error);
+                return false;
+            }
+            
+            // 成功処理
+            let message = data.message;
+            if (data.error_count > 0) {
+                message += ` (${data.error_count}ファイルでエラー)`;
+            }
+            showSuccessMessage(message);
+            
+            // フォームリセット
+            fileInput.value = '';
+            
+            // データ更新
+            await this.refreshDatasetStats();
+            await this.loadLearningData();
+            
+            return true;
+        } catch (error) {
+            this.parent.uiManager.hideUploadProgress();
+            console.error('アップロードエラー:', error);
+            this.parent.uiManager.showError('アップロード中にエラーが発生しました: ' + error.message);
+            return false;
+        }
+    }
+
+    /**
+     * 統合学習の開始
+     */
+    async startUnifiedTraining() {
+        
+        try {
+            // 基本的なデータ存在チェックのみ
+            const stats = this.parent.datasetStats;
+            const totalCount = (stats.male_count || 0) + (stats.female_count || 0);
+            
+            if (totalCount === 0) {
+                this.parent.uiManager.showError('学習データが必要です。データ準備フェーズで画像をアップロードしてください。');
+                return false;
+            }
+            
+            // データが少ない場合は警告を表示するが続行可能
+            if (totalCount < 5) {
+                const confirmed = confirm(`現在のデータ数は${totalCount}枚です。\n学習は可能ですが、より多くのデータがあると精度が向上します。\n\n続行しますか？`);
+                if (!confirmed) {
+                    return false;
+                }
+            }
+            
+            // フェーズ切り替え
+            this.parent.currentPhase = 'training';
+            this.parent.uiManager.updatePhaseDisplay();
+            this.parent.uiManager.showTrainingPhase();
+            
+            // 統合学習API呼び出し
+            const response = await fetch('/learning/start-unified-training', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            });
+            
+            if (!response.ok) throw new Error(`サーバーエラー: ${response.status}`);
+            
+            const data = await response.json();
+            
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            // タスクID保存
+            this.parent.taskId = data.task_id;
+            
+            // 進捗監視開始
+            this.parent.startProgressMonitoring();
+            
+            // 成功メッセージ
+            showSuccessMessage('統合学習プロセスを開始しました');
+            
+            // 学習詳細の更新
+            this.parent.uiManager.updateTrainingDetails();
+            
+            return true;
+        } catch (error) {
+            console.error('統合学習開始エラー:', error);
+            this.parent.uiManager.showError('統合学習の開始に失敗しました: ' + error.message);
+            
+            // エラー時はフェーズを戻す
+            this.parent.currentPhase = 'preparation';
+            this.parent.uiManager.updatePhaseDisplay();
+            
+            return false;
+        }
+    }
+
+    /**
+     * 統合ステータスのチェック
+     */
+    async checkUnifiedStatus() {
+        if (!this.parent.taskId) return null;
+        
+        try {
+            const response = await fetch(`/learning/unified-status/${this.parent.taskId}`);
+            if (!response.ok) throw new Error('ステータス取得に失敗しました');
+            
+            const status = await response.json();
+            return status;
+        } catch (error) {
+            console.error('ステータスチェックエラー:', error);
+            return null;
         }
     }
 
@@ -422,179 +523,5 @@ export class DataManager {
         
         // 重複を削除して返す
         return [...new Set(formats)];
-    }
-
-    /**
-     * データアップロード処理
-     * @param {HTMLFormElement} form - アップロードフォーム
-     */
-    async handleDataUpload(form) {
-        const fileInput = document.getElementById('dataFiles');
-        const genderSelect = document.getElementById('dataGender');
-        
-        const files = fileInput.files;
-        const gender = genderSelect.value;
-        
-        if (files.length === 0) {
-            this.parent.uiManager.showError('画像ファイルを選択してください');
-            return false;
-        }
-        
-        console.log(`データアップロード開始: ${files.length}ファイル, 性別: ${gender}`);
-        
-        try {
-            // フォームデータ作成
-            const formData = new FormData();
-            for (let i = 0; i < files.length; i++) {
-                formData.append('images', files[i]);
-            }
-            formData.append('gender', gender);
-            
-            // アップロード進捗表示
-            this.parent.uiManager.showUploadProgress(0);
-            
-            // アップロード実行
-            const response = await fetch('/learning/upload-data', {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (!response.ok) throw new Error(`サーバーエラー: ${response.status}`);
-            
-            const data = await response.json();
-            this.parent.uiManager.hideUploadProgress();
-            
-            if (data.error) {
-                this.parent.uiManager.showError('アップロードエラー: ' + data.error);
-                return false;
-            }
-            
-            // 成功処理
-            let message = data.message;
-            if (data.error_count > 0) {
-                message += ` (${data.error_count}ファイルでエラー)`;
-            }
-            this.parent.uiManager.showSuccessMessage(message);
-            
-            // フォームリセット
-            fileInput.value = '';
-            
-            // データ更新
-            await this.refreshDatasetStats();
-            await this.loadLearningData();
-            
-            return true;
-        } catch (error) {
-            this.parent.uiManager.hideUploadProgress();
-            console.error('アップロードエラー:', error);
-            this.parent.uiManager.showError('アップロード中にエラーが発生しました: ' + error.message);
-            return false;
-        }
-    }
-
-    /**
-     * 統合学習の開始
-     */
-    async startUnifiedTraining() {
-        console.log('統合学習開始');
-        
-        try {
-            // 基本的なデータ存在チェックのみ
-            const stats = this.parent.datasetStats;
-            const totalCount = (stats.male_count || 0) + (stats.female_count || 0);
-            
-            if (totalCount === 0) {
-                this.parent.uiManager.showError('学習データが必要です。データ準備フェーズで画像をアップロードしてください。');
-                return false;
-            }
-            
-            // データが少ない場合は警告を表示するが続行可能
-            if (totalCount < 5) {
-                const confirmed = confirm(`現在のデータ数は${totalCount}枚です。\n学習は可能ですが、より多くのデータがあると精度が向上します。\n\n続行しますか？`);
-                if (!confirmed) {
-                    return false;
-                }
-            }
-            
-            // フェーズ切り替え
-            this.parent.currentPhase = 'training';
-            this.parent.uiManager.updatePhaseDisplay();
-            this.parent.uiManager.showTrainingPhase();
-            
-            // 統合学習API呼び出し
-            const response = await fetch('/learning/start-unified-training', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'}
-            });
-            
-            if (!response.ok) throw new Error(`サーバーエラー: ${response.status}`);
-            
-            const data = await response.json();
-            
-            if (data.error) {
-                throw new Error(data.error);
-            }
-            
-            // タスクID保存
-            this.parent.taskId = data.task_id;
-            
-            // 進捗監視開始
-            this.parent.startProgressMonitoring();
-            
-            // 成功メッセージ
-            this.parent.uiManager.showSuccessMessage('統合学習プロセスを開始しました');
-            
-            // 学習詳細の更新
-            this.parent.uiManager.updateTrainingDetails();
-            
-            return true;
-        } catch (error) {
-            console.error('統合学習開始エラー:', error);
-            this.parent.uiManager.showError('統合学習の開始に失敗しました: ' + error.message);
-            
-            // エラー時はフェーズを戻す
-            this.parent.currentPhase = 'preparation';
-            this.parent.uiManager.updatePhaseDisplay();
-            
-            return false;
-        }
-    }
-
-    /**
-     * 統合ステータスのチェック
-     */
-    async checkUnifiedStatus() {
-        if (!this.parent.taskId) return null;
-        
-        try {
-            const response = await fetch(`/learning/unified-status/${this.parent.taskId}`);
-            if (!response.ok) throw new Error('ステータス取得に失敗しました');
-            
-            const status = await response.json();
-            return status;
-        } catch (error) {
-            console.error('ステータスチェックエラー:', error);
-            return null;
-        }
-    }
-
-    /**
-     * ネストされたオブジェクトから安全に値を取得するヘルパー関数
-     * @param {Object} obj - 対象オブジェクト
-     * @param {string} path - ドット区切りのパス（例: 'a.b.c'）
-     * @returns {*} - 取得した値、存在しない場合はundefined
-     */
-    getNestedValue(obj, path) {
-        if (!obj || !path) return undefined;
-        
-        const parts = path.split('.');
-        let current = obj;
-        
-        for (const part of parts) {
-            if (current === undefined || current === null) return undefined;
-            current = current[part];
-        }
-        
-        return current;
     }
 }

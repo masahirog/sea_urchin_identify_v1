@@ -2,10 +2,10 @@
  * ウニ生殖乳頭分析システム - 統合学習システム コアクラス
  * 学習システムの中心的な機能を提供
  */
-
 import { UIManager } from './UIManager.js';
 import { DataManager } from './DataManager.js';
 import { EvaluationManager } from './EvaluationManager.js';
+import { showSuccessMessage } from '../utilities.js';
 
 /**
  * 統合学習システムクラス
@@ -48,16 +48,12 @@ export class UnifiedLearningSystem {
         this.dataManager = new DataManager(this);
         this.uiManager = new UIManager(this);
         this.evaluationManager = new EvaluationManager(this);
-        
-        console.log('統合学習システム初期化');
     }
 
     /**
      * システム初期化
      */
     async initialize() {
-        console.log('統合学習システム初期化開始');
-        
         try {
             // UI初期化
             this.uiManager.initializeUI();
@@ -77,10 +73,7 @@ export class UnifiedLearningSystem {
             // アノテーションコールバック設定
             this.setupAnnotationCallback();
             
-            console.log('統合学習システム初期化完了');
-            
         } catch (error) {
-            console.error('初期化エラー:', error);
             this.uiManager.showError('システムの初期化に失敗しました: ' + error.message);
         }
     }
@@ -167,8 +160,6 @@ export class UnifiedLearningSystem {
             analysisPhase.style.cursor = 'pointer';
             analysisPhase.title = '結果分析フェーズに移動';
         }
-
-        console.log('フェーズナビゲーション設定完了');
     }
 
     /**
@@ -176,11 +167,8 @@ export class UnifiedLearningSystem {
      * @param {string} targetPhase - 移動先フェーズ
      */
     navigateToPhase(targetPhase) {
-        console.log('フェーズナビゲーション:', this.currentPhase, '->', targetPhase);
-
         // 現在のフェーズと同じ場合は何もしない
         if (this.currentPhase === targetPhase) {
-            console.log('既に同じフェーズです');
             return;
         }
 
@@ -192,7 +180,7 @@ export class UnifiedLearningSystem {
         // フェーズ固有の処理
         this.handlePhaseNavigation(targetPhase);
 
-        this.uiManager.showSuccessMessage(`${this.phases[targetPhase].name}フェーズに移動しました`);
+        showSuccessMessage(`${this.phases[targetPhase].name}フェーズに移動しました`);
     }
 
     /**
@@ -214,7 +202,7 @@ export class UnifiedLearningSystem {
                 
                 // 実行中のタスクがあるかチェック
                 if (this.taskId && this.statusCheckInterval) {
-                    this.uiManager.showSuccessMessage('学習進捗を監視中です');
+                    showSuccessMessage('学習進捗を監視中です');
                 }
                 break;
 
@@ -250,7 +238,7 @@ export class UnifiedLearningSystem {
             this.uiManager.showTrainingGuidance('データが少なめです', `現在${totalCount}枚のデータがあります。より良い結果のため、追加データをアップロードすることを推奨します。`);
         } else {
             // 十分なデータがある場合
-            this.uiManager.showSuccessMessage('学習準備完了：十分なデータが揃っています');
+            showSuccessMessage('学習準備完了：十分なデータが揃っています');
         }
     }
 
@@ -260,10 +248,9 @@ export class UnifiedLearningSystem {
     setupAnnotationCallback() {
         // グローバルコールバック関数を設定
         window.onAnnotationSaved = () => {
-            console.log('アノテーション保存完了 - データ更新中...');
             this.dataManager.refreshDatasetStats();
             this.dataManager.loadLearningData();
-            this.uiManager.showSuccessMessage('アノテーションが保存され、統計情報を更新しました');
+            showSuccessMessage('アノテーションが保存され、統計情報を更新しました');
         };
     }
 
@@ -286,8 +273,6 @@ export class UnifiedLearningSystem {
         this.statusCheckInterval = setInterval(() => {
             this.checkUnifiedStatus();
         }, 2000); // 2秒間隔
-        
-        console.log('進捗監視開始:', this.taskId);
     }
 
     /**
@@ -310,7 +295,7 @@ export class UnifiedLearningSystem {
             }
             
         } catch (error) {
-            console.error('ステータスチェックエラー:', error);
+            // エラー処理
         }
     }
 
@@ -334,8 +319,6 @@ export class UnifiedLearningSystem {
      * @param {Object} status - 完了ステータス
      */
     async handleTrainingComplete(status) {
-        console.log('統合学習完了:', status);
-        
         // 進捗監視停止
         if (this.statusCheckInterval) {
             clearInterval(this.statusCheckInterval);
@@ -353,16 +336,14 @@ export class UnifiedLearningSystem {
         // 結果表示
         this.evaluationManager.displayUnifiedResults();
         
-        // 履歴更新（デバッグログ追加）
-        console.log('履歴更新を開始します...');
+        // 履歴更新
         try {
             await this.dataManager.loadLearningHistory();
-            console.log('履歴更新完了');
         } catch (error) {
-            console.error('履歴更新エラー:', error);
+            // 履歴更新エラー
         }
         
-        this.uiManager.showSuccessMessage('統合学習プロセスが正常に完了しました！');
+        showSuccessMessage('統合学習プロセスが正常に完了しました！');
     }
 
     /**
@@ -370,8 +351,6 @@ export class UnifiedLearningSystem {
      * @param {Object} status - エラーステータス
      */
     handleTrainingError(status) {
-        console.error('統合学習エラー:', status);
-        
         // 進捗監視停止
         if (this.statusCheckInterval) {
             clearInterval(this.statusCheckInterval);
@@ -403,7 +382,7 @@ export class UnifiedLearningSystem {
         this.uiManager.updatePhaseDisplay();
         await this.dataManager.refreshDatasetStats();
         
-        this.uiManager.showSuccessMessage('新しい学習サイクルを開始します');
+        showSuccessMessage('新しい学習サイクルを開始します');
     }
 
     /**
@@ -435,6 +414,13 @@ export class UnifiedLearningSystem {
      */
     async loadHistoricalResult(timestamp) {
         return await this.dataManager.loadHistoricalResult(timestamp);
+    }
+
+    /**
+     * 統合結果の表示
+     */
+    displayUnifiedResults() {
+        this.evaluationManager.displayUnifiedResults();
     }
 }
 
