@@ -1,0 +1,32 @@
+/**
+ * ウニ生殖乳頭分析システム - 統合学習システム エントリポイント
+ * 学習システムの初期化と設定を行う
+ */
+
+import { UnifiedLearningSystem } from './UnifiedLearningSystem.js';
+import { setupAnnotationTools } from './AnnotationTools.js';
+
+// グローバルインスタンス
+let unifiedLearningSystem;
+
+// DOMロード時の初期化
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('統合学習システム初期化開始');
+    
+    // システムインスタンスを作成
+    unifiedLearningSystem = new UnifiedLearningSystem();
+    
+    // グローバル変数として公開
+    window.unifiedLearningSystem = unifiedLearningSystem;
+    
+    // システム初期化
+    unifiedLearningSystem.initialize();
+    
+    // アノテーションツールのセットアップ
+    setupAnnotationTools();
+    
+    console.log('統合学習システム初期化完了');
+});
+
+// グローバルエクスポート（必要に応じて）
+export { unifiedLearningSystem };
