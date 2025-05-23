@@ -4,7 +4,8 @@ from flask import Blueprint, request, jsonify, render_template, current_app
 import os
 import json
 from werkzeug.utils import secure_filename
-from core.YoloDetector import YoloDetector
+# 修正部分: PapillaeDetector をインポート
+from core.PapillaeDetector import PapillaeDetector
 from core.YoloTrainer import YoloTrainer
 
 # Blueprintの作成
@@ -110,16 +111,39 @@ def detect_objects():
     file.save(file_path)
     
     try:
-        # 検出の実行
-        detector = YoloDetector(conf_threshold=conf_threshold)
-        results = detector.detect(file_path)
+        # 検出の実行 (修正部分: PapillaeDetector を使用)
+        detector = PapillaeDetector(conf_threshold=conf_threshold)
+        # 以下の行も使用するメソッド名などに応じて修正が必要かもしれません
+        detections, annotated_image = detector.detect_papillae(cv2.imread(file_path))
+        
+        # 結果画像の保存
+        result_dir = os.path.join('static', 'images', 'detection_results')
+        os.makedirs(result_dir, exist_ok=True)
+        result_filename = f"result_{os.path.splitext(filename)[0]}.jpg"
+        result_path = os.path.join(result_dir, result_filename)
+        cv2.imwrite(result_path, annotated_image)
+        
+        # 検出結果の整形
+        detection_results = []
+        for i, cnt in enumerate(detections):
+            # 境界ボックスを取得
+            x, y, w, h = cv2.boundingRect(cnt)
+            detection_results.append({
+                "xmin": float(x),
+                "ymin": float(y),
+                "xmax": float(x + w),
+                "ymax": float(y + h),
+                "confidence": 1.0,  # PapillaeDetectorでは信頼度が出ない場合は1.0に設定
+                "class": 0,
+                "name": "papillae"
+            })
         
         return jsonify({
             'status': 'success',
-            'message': f'{results["count"]}個の物体を検出しました',
-            'detections': results['detections'],
+            'message': f'{len(detections)}個の物体を検出しました',
+            'detections': detection_results,
             'image_path': '/' + os.path.relpath(file_path, start='.'),
-            'result_image_path': '/' + os.path.relpath(results['result_image_path'], start='.') if results['result_image_path'] else None
+            'result_image_path': '/' + os.path.relpath(result_path, start='.')
         })
     
     except Exception as e:
@@ -159,9 +183,51 @@ def batch_detect():
         file_paths.append(file_path)
     
     try:
-        # 一括検出の実行
-        detector = YoloDetector(conf_threshold=conf_threshold)
-        results = detector.batch_detect(file_paths)
+        # 一括検出の実行 (修正部分: PapillaeDetector を使用)
+        detector = PapillaeDetector(conf_threshold=conf_threshold)
+        results = []
+        
+        for file_path in file_paths:
+            img = cv2.imread(file_path)
+            if img is None:
+                results.append({
+                    'path': file_path,
+                    'error': '画像の読み込みに失敗しました'
+                })
+                continue
+                
+            # 検出実行
+            detections, annotated_image = detector.detect_papillae(img)
+            
+            # 結果画像の保存
+            result_dir = os.path.join('static', 'images', 'detection_results')
+            os.makedirs(result_dir, exist_ok=True)
+            base_name = os.path.basename(file_path)
+            result_filename = f"result_{os.path.splitext(base_name)[0]}.jpg"
+            result_path = os.path.join(result_dir, result_filename)
+            cv2.imwrite(result_path, annotated_image)
+            
+            # 検出結果の整形
+            detection_results = []
+            for cnt in detections:
+                # 境界ボックスを取得
+                x, y, w, h = cv2.boundingRect(cnt)
+                detection_results.append({
+                    "xmin": float(x),
+                    "ymin": float(y),
+                    "xmax": float(x + w),
+                    "ymax": float(y + h),
+                    "confidence": 1.0,
+                    "class": 0,
+                    "name": "papillae"
+                })
+            
+            results.append({
+                'path': file_path,
+                'count': len(detections),
+                'detections': detection_results,
+                'result_image_path': '/' + os.path.relpath(result_path, start='.')
+            })
         
         return jsonify({
             'status': 'success',
