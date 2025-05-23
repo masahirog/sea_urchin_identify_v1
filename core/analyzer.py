@@ -91,6 +91,7 @@ class UnifiedAnalyzer:
     # メイン機能: 動画処理
     # ================================
     
+    # core/analyzer.py の process_video メソッドの修正
     def process_video(self, video_path, output_dir, task_id, max_images=10):
         """
         動画から生殖乳頭画像を抽出
@@ -121,7 +122,7 @@ class UnifiedAnalyzer:
         # 状態初期化
         if global_status:
             processing_status[task_id] = {
-                "status": "processing", 
+                "status": "running", 
                 "progress": 20,  # 開始進捗を20%に変更
                 "message": "動画解析を開始しました"
             }
@@ -150,7 +151,7 @@ class UnifiedAnalyzer:
         # 状態更新
         if global_status:
             processing_status[task_id] = {
-                "status": "processing", 
+                "status": "running", 
                 "progress": 30,
                 "message": f"動画解析中: {frame_count}フレーム, {duration:.2f}秒"
             }
@@ -164,6 +165,7 @@ class UnifiedAnalyzer:
         
         # デバッグ用にフレーム処理の間隔を出力
         last_debug_time = time.time()
+        last_progress_update = time.time()
         
         while cap.isOpened() and len(extracted_images) < max_images:
             ret, frame = cap.read()
@@ -177,16 +179,17 @@ class UnifiedAnalyzer:
                 print(f"フレーム処理中: {frame_idx}/{frame_count} (経過時間: {current_time - start_time:.1f}秒)")
                 last_debug_time = current_time
                 
-            # 進捗更新
+            # 進捗更新 - より頻繁に更新
             progress = min(30 + (frame_idx / max(frame_count, 1)) * 60, 90)  # 30%～90%の範囲で進捗
-            if global_status and frame_idx % 30 == 0:  # 30フレームごとに更新
-                elapsed = time.time() - start_time
+            if global_status and (current_time - last_progress_update > 2.0 or frame_idx % 30 == 0):  # 2秒ごとに更新
+                elapsed = current_time - start_time
                 remaining = (frame_count - frame_idx) / max(frame_idx / elapsed, 0.001) if frame_idx > 0 else 0
                 processing_status[task_id] = {
-                    "status": "processing",
+                    "status": "running",
                     "progress": int(progress),
                     "message": f"解析中: {frame_idx}/{frame_count} (残り{remaining:.1f}秒)"
                 }
+                last_progress_update = current_time
                 
             # フレーム間隔チェック
             if frame_idx % self.frame_interval == 0:
@@ -214,12 +217,11 @@ class UnifiedAnalyzer:
                             self.last_capture_frame = frame_idx
                             print(f"画像保存: {len(extracted_images)}/{max_images}")
                             
-                            # 画像保存時の進捗更新
+                            # 画像保存時の進捗更新（30%～90%を画像枚数に応じて分割）
                             if global_status:
-                                # 画像保存ごとに進捗を更新（30%～90%を画像枚数に応じて分割）
                                 img_progress = 30 + (len(extracted_images) / max(max_images, 1)) * 60
                                 processing_status[task_id] = {
-                                    "status": "processing",
+                                    "status": "running",
                                     "progress": int(img_progress),
                                     "message": f"画像抽出中: {len(extracted_images)}/{max_images}枚"
                                 }

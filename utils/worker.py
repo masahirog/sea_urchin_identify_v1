@@ -9,7 +9,6 @@ import joblib
 import traceback
 from datetime import datetime
 
-
 def processing_worker(queue, status_dict, app_config):
     """
     処理タスクを実行するワーカースレッド
@@ -51,8 +50,10 @@ def processing_worker(queue, status_dict, app_config):
                     max_images = task.get('max_images', 10)
                     
                     # 状態更新
-                    status_dict[task_id]["message"] = "動画処理の準備中..."
-                    status_dict[task_id]["progress"] = 20
+                    status_dict[task_id].update({
+                        "message": "動画処理の準備中...",
+                        "progress": 20
+                    })
                     
                     # 分析インスタンス作成
                     analyzer = UrchinPapillaeAnalyzer()
@@ -60,10 +61,50 @@ def processing_worker(queue, status_dict, app_config):
                     # 出力ディレクトリ
                     output_dir = app_config.get('EXTRACTED_FOLDER', 'extracted_images')
                     
-                    # 処理実行
-                    extracted_images = analyzer.process_video(video_path, output_dir, task_id, max_images)
+                    # この処理は時間がかかるので、途中で進捗を更新
+                    import threading
                     
-                    # 処理状態の更新はprocess_video内で行われる
+                    # 進捗更新スレッド
+                    def update_progress():
+                        """バックグラウンドで進捗を更新するヘルパー関数"""
+                        progress = 30
+                        while task_id in status_dict and status_dict[task_id].get('status') == 'running':
+                            # 定期的に進捗を更新（30%から80%までゆっくり上げる）
+                            if progress < 80:
+                                progress += 2
+                                status_dict[task_id].update({
+                                    "message": f"動画から生殖乳頭を検出中... ({progress}%)",
+                                    "progress": progress
+                                })
+                            import time
+                            time.sleep(2)  # 2秒ごとに更新
+                    
+                    # 進捗更新スレッドを開始
+                    progress_thread = threading.Thread(target=update_progress)
+                    progress_thread.daemon = True
+                    progress_thread.start()
+                    
+                    try:
+                        # 処理実行
+                        extracted_images = analyzer.process_video(video_path, output_dir, task_id, max_images)
+                        
+                        # 処理完了を記録
+                        image_count = len(extracted_images) if extracted_images else 0
+                        status_dict[task_id] = {
+                            "status": "completed",
+                            "message": f"抽出完了: {image_count}枚",
+                            "image_count": image_count,
+                            "progress": 100
+                        }
+                        print(f"動画処理完了: {task_id}, {image_count}枚の画像を抽出")
+                        
+                    except Exception as e:
+                        status_dict[task_id] = {
+                            "status": "error",
+                            "message": f"動画処理エラー: {str(e)}",
+                            "progress": 100
+                        }
+                        print(f"動画処理エラー: {str(e)}")
                 
                 elif task_type == 'train_model':
                     # モデル訓練タスク
@@ -202,6 +243,10 @@ def processing_worker(queue, status_dict, app_config):
                         "result": result,
                         "progress": 100
                     }
+                
+                # 統合学習タスクの処理を追加
+                elif task_type == 'unified_training':
+                    handle_unified_training_task(task, status_dict, app_config)
                 
                 else:
                     # 未知のタスクタイプ
@@ -893,78 +938,3 @@ def generate_improvement_suggestions(accuracy, annotation_dataset, sample_count)
     
     return suggestions
 
-
-# ===== 既存のprocessing_worker関数に統合タスクを追加 =====
-def processing_worker(queue, status_dict, app_config):
-    """
-    処理タスクを実行するワーカースレッド (修正版)
-    統合学習タスクのサポートを追加
-    """
-    print("ワーカースレッド開始")
-    
-    while True:
-        try:
-            task = queue.get()
-            
-            if task is None:
-                break
-            
-            task_id = task.get('id')
-            task_type = task.get('type')
-            
-            try:
-                # 処理開始を記録
-                status_dict[task_id] = {
-                    "status": "running",
-                    "message": f"{task_type}処理を実行中...",
-                    "progress": 10
-                }
-                
-                # ===== 新しい統合タスク処理を追加 =====
-                if task_type == 'unified_training':
-                    handle_unified_training_task(task, status_dict, app_config)
-                
-                # ===== 既存のタスク処理はそのまま保持 =====
-                elif task_type == 'process_video':
-                    # 既存の動画処理 (変更なし)
-                    pass
-                    
-                elif task_type == 'train_model':
-                    # 既存のモデル訓練 (変更なし)
-                    pass
-                    
-                elif task_type == 'evaluate_model':
-                    # 既存のモデル評価 (変更なし)
-                    pass
-                    
-                elif task_type == 'analyze_annotation':
-                    # 既存のアノテーション分析 (変更なし)
-                    pass
-                
-                else:
-                    # 未知のタスクタイプ
-                    status_dict[task_id] = {
-                        "status": "failed",
-                        "message": f"未知のタスクタイプ: {task_type}",
-                        "progress": 100
-                    }
-            
-            except Exception as e:
-                # エラーを記録
-                error_msg = f"処理エラー ({task_type}): {str(e)}"
-                print(error_msg)
-                traceback.print_exc()
-                
-                status_dict[task_id] = {
-                    "status": "failed",
-                    "message": error_msg,
-                    "error_details": traceback.format_exc(),
-                    "progress": 100
-                }
-            
-            finally:
-                queue.task_done()
-        
-        except Exception as e:
-            print(f"ワーカースレッドエラー: {str(e)}")
-            traceback.print_exc()
