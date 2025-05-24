@@ -172,28 +172,54 @@ class YoloTrainer:
                     # コンソールにも出力（デバッグ用）
                     print(f"[YOLO] {line.strip()}")
                     
-                    # エポック情報の抽出
-                    if 'Epoch' in line and 'GPU_mem' in line:
-                        parts = line.strip().split()
-                        if len(parts) > 1 and '/' in parts[0]:
-                            current, total = parts[0].split('/')
+                    # エポック情報の抽出（修正版）
+                    # YOLOv5の出力形式: "     0/99         0G     0.1276    0.02734     0.0309          8        640"
+                    line_stripped = line.strip()
+                    if '/' in line_stripped and len(line_stripped.split()) > 6:
+                        parts = line_stripped.split()
+                        if '/' in parts[0]:
                             try:
-                                self.current_epoch = int(current)
+                                current, total = parts[0].split('/')
+                                self.current_epoch = int(current) + 1  # 0ベースなので+1
+                                self.total_epochs = int(total)
                                 logger.info(f"エポック進捗: {self.current_epoch}/{self.total_epochs}")
+                                
+                                # メトリクスの更新
+                                if len(parts) >= 7:
+                                    try:
+                                        self.metrics['box_loss'].append(float(parts[2]))
+                                        self.metrics['obj_loss'].append(float(parts[3]))
+                                        self.metrics['cls_loss'].append(float(parts[4]))
+                                    except ValueError:
+                                        pass
                             except ValueError:
                                 pass
                     
-                    # メトリクス情報の抽出
-                    if 'all' in line and 'instances' in line:
+                    # 評価メトリクスの抽出（修正版）
+                    # "       all          3          1    0.00172          1     0.0076    0.00152"
+                    if line_stripped.startswith('all') and len(line_stripped.split()) >= 7:
                         try:
-                            parts = [p for p in line.strip().split() if p]
+                            parts = [p for p in line_stripped.split() if p]
                             if len(parts) >= 7:
-                                self.metrics['precision'].append(float(parts[-6]) if parts[-6] != 'p' else 0)
-                                self.metrics['recall'].append(float(parts[-5]) if parts[-5] != 'r' else 0)
-                                self.metrics['mAP50'].append(float(parts[-4]) if parts[-4] != 'map50' else 0)
-                                self.metrics['mAP50-95'].append(float(parts[-3]) if parts[-3] != 'map' else 0)
-                        except (ValueError, IndexError):
-                            pass
+                                # parts[0] = 'all'
+                                # parts[1] = images
+                                # parts[2] = instances  
+                                # parts[3] = P
+                                # parts[4] = R
+                                # parts[5] = mAP50
+                                # parts[6] = mAP50-95
+                                self.metrics['precision'].append(float(parts[3]))
+                                self.metrics['recall'].append(float(parts[4]))
+                                self.metrics['mAP50'].append(float(parts[5]))
+                                self.metrics['mAP50-95'].append(float(parts[6]))
+                                logger.info(f"評価メトリクス更新: P={parts[3]}, R={parts[4]}, mAP50={parts[5]}")
+                        except (ValueError, IndexError) as e:
+                            logger.debug(f"メトリクス解析エラー: {e}")
+                    
+                    # トレーニング完了の検出
+                    if "epochs completed in" in line:
+                        logger.info("トレーニングが完了しました")
+                        self.current_epoch = self.total_epochs
                 
                 # プロセスの終了を待つ
                 return_code = self.training_process.wait()
@@ -209,18 +235,10 @@ class YoloTrainer:
             self.is_training = False
             self.training_process = None
             logger.info("トレーニングプロセス終了処理完了")
-    
-    def stop_training(self):
-        """トレーニングを停止する"""
-        if self.is_training and self.training_process:
-            logger.info("トレーニングを停止します")
-            self.training_process.terminate()
-            self.is_training = False
-            return True
-        return False
-    
+
+
     def get_training_status(self):
-        """現在のトレーニング状況を取得する"""
+        """現在のトレーニング状況を取得する（改善版）"""
         if not self.is_training and not self.start_time:
             return {
                 'status': 'not_started',
@@ -232,14 +250,21 @@ class YoloTrainer:
         hours, remainder = divmod(elapsed, 3600)
         minutes, seconds = divmod(remainder, 60)
         
+        # 進捗率の計算（エポックベース）
+        if self.total_epochs > 0:
+            progress = (self.current_epoch / self.total_epochs)
+        else:
+            progress = 0
+        
         status = {
             'status': 'running' if self.is_training else 'completed',
             'start_time': self.start_time.strftime('%Y-%m-%d %H:%M:%S') if self.start_time else None,
             'elapsed_time': f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}",
             'current_epoch': self.current_epoch,
             'total_epochs': self.total_epochs,
-            'progress': (self.current_epoch / self.total_epochs) * 100 if self.total_epochs > 0 else 0,
-            'metrics': self.metrics
+            'progress': progress,
+            'metrics': self.metrics,
+            'message': f'エポック {self.current_epoch}/{self.total_epochs} を実行中...' if self.is_training else 'トレーニング完了'
         }
         
         # 最新の実験ディレクトリを取得
@@ -259,6 +284,11 @@ class YoloTrainer:
                     'confusion_matrix': f'/static/runs/train/{latest_exp}/confusion_matrix.png' if os.path.exists(os.path.join(exp_dir, 'confusion_matrix.png')) else None,
                     'PR_curve': f'/static/runs/train/{latest_exp}/PR_curve.png' if os.path.exists(os.path.join(exp_dir, 'PR_curve.png')) else None
                 }
+                
+                # モデルファイルのパス
+                best_model_path = os.path.join(exp_dir, 'weights/best.pt')
+                if os.path.exists(best_model_path):
+                    status['best_model_path'] = best_model_path
                 
                 # 結果ファイルの読み込み
                 results_csv = os.path.join(exp_dir, 'results.csv')

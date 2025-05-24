@@ -207,3 +207,9 @@ if __name__ == '__main__':
     
     logger.info("アプリケーションを起動します")
     app.run(host='0.0.0.0', port=8080, debug=DEBUG)
+
+# YOLOの結果ディレクトリを静的ファイルとして公開
+@app.route('/static/runs/<path:path>')
+def serve_yolo_results(path):
+    """YOLOの学習結果ファイルを配信"""
+    return send_from_directory('yolov5/runs', path)

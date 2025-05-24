@@ -667,60 +667,148 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // トレーニング状態監視
     let trainingInterval = null;
-    
+
     function startTrainingMonitoring() {
+        let noProgressCount = 0;
+        let lastProgress = 0;
+        
         trainingInterval = setInterval(async function() {
             try {
                 const response = await fetch('/yolo/training/status');
                 const status = await response.json();
                 
+                console.log('Training status:', status); // デバッグ用
+                
                 updateTrainingStatus(status);
                 
-                if (['completed', 'failed', 'stopped'].includes(status.status)) {
+                // 進捗が変わらない場合のカウント
+                if (status.progress === lastProgress) {
+                    noProgressCount++;
+                } else {
+                    noProgressCount = 0;
+                    lastProgress = status.progress;
+                }
+                
+                // 60秒以上進捗がない場合は警告
+                if (noProgressCount > 30) {
+                    console.warn('トレーニングの進捗が停滞しています');
+                }
+                
+                // トレーニング完了の検出
+                if (status.status === 'completed' || 
+                    (status.current_epoch >= status.total_epochs && status.total_epochs > 0)) {
                     clearInterval(trainingInterval);
                     
-                    if (status.status === 'completed') {
-                        showTrainingResults();
+                    // 完了メッセージ
+                    if (window.showSuccessMessage) {
+                        window.showSuccessMessage('トレーニングが完了しました！');
+                    }
+                    
+                    // 結果表示
+                    showTrainingResults();
+                } else if (status.status === 'failed' || status.status === 'stopped') {
+                    clearInterval(trainingInterval);
+                    
+                    if (window.showErrorMessage) {
+                        window.showErrorMessage('トレーニングが中断されました');
                     }
                 }
             } catch (error) {
                 console.error('ステータス取得エラー:', error);
             }
-        }, 2000);
+        }, 2000); // 2秒ごとに更新
     }
-    
-    // トレーニング状態更新
+
+    // トレーニング状態更新の改善版
     function updateTrainingStatus(status) {
         const progressBar = document.querySelector('#trainingProgress .progress-bar');
         const statusText = document.getElementById('trainingStatus');
         
         if (progressBar) {
-            const progress = (status.progress || 0) * 100;
-            progressBar.style.width = progress + '%';
-            progressBar.textContent = Math.round(progress) + '%';
+            const progressPercent = (status.progress || 0) * 100;
+            progressBar.style.width = progressPercent + '%';
+            progressBar.textContent = Math.round(progressPercent) + '%';
+            
+            // エポック情報も表示
+            if (status.current_epoch !== undefined && status.total_epochs) {
+                progressBar.textContent = `${status.current_epoch}/${status.total_epochs} (${Math.round(progressPercent)}%)`;
+            }
         }
         
         if (statusText) {
-            statusText.textContent = status.message || 'トレーニング中...';
+            if (status.message) {
+                statusText.textContent = status.message;
+            } else if (status.current_epoch !== undefined && status.total_epochs) {
+                statusText.textContent = `エポック ${status.current_epoch}/${status.total_epochs} を実行中...`;
+            }
+            
+            // 経過時間も表示
+            if (status.elapsed_time) {
+                statusText.textContent += ` (経過時間: ${status.elapsed_time})`;
+            }
+        }
+        
+        // メトリクスの更新（もしあれば）
+        if (status.metrics && status.metrics.mAP50 && status.metrics.mAP50.length > 0) {
+            const latestMAP = status.metrics.mAP50[status.metrics.mAP50.length - 1];
+            const mapElement = document.getElementById('currentMAP');
+            if (mapElement) {
+                mapElement.textContent = latestMAP.toFixed(3);
+            }
         }
     }
-    
-    // トレーニング結果表示
+
+    // トレーニング結果表示の改善版
     async function showTrainingResults() {
         trainingResultsEl.classList.remove('d-none');
         
         try {
-            const response = await fetch('/yolo/training/results');
-            const results = await response.json();
+            // まずトレーニング状態から結果を取得
+            let response = await fetch('/yolo/training/status');
+            let status = await response.json();
             
-            document.getElementById('accuracy').textContent = 
-                results.accuracy ? (results.accuracy * 100).toFixed(1) + '%' : '-';
-            document.getElementById('mAP').textContent = 
-                results.mAP ? results.mAP.toFixed(3) : '-';
+            // 結果画像があれば表示
+            if (status.result_images) {
+                // 結果グラフを表示するエリアを追加
+                const resultsContainer = document.getElementById('trainingResultsGraphs');
+                if (resultsContainer && status.result_images.results) {
+                    resultsContainer.innerHTML = `
+                        <div class="text-center mt-4">
+                            <h5>トレーニング結果グラフ</h5>
+                            <img src="${status.result_images.results}" class="img-fluid" alt="Training Results">
+                        </div>
+                    `;
+                }
+            }
+            
+            // results.csv から最終的なメトリクスを取得
+            if (status.latest_results) {
+                const results = status.latest_results;
+                
+                // mAP値を取得（カラム名の違いに対応）
+                const mAP = results['metrics/mAP_0.5'] || results['mAP_0.5'] || 
+                           results['metrics/mAP50'] || results['mAP50'] || 0;
+                
+                document.getElementById('accuracy').textContent = 
+                    mAP ? (parseFloat(mAP) * 100).toFixed(1) + '%' : '-';
+                document.getElementById('mAP').textContent = 
+                    mAP ? parseFloat(mAP).toFixed(3) : '-';
+            } else {
+                // フォールバック: /yolo/training/results を試す
+                response = await fetch('/yolo/training/results');
+                const results = await response.json();
+                
+                document.getElementById('accuracy').textContent = 
+                    results.accuracy ? (results.accuracy * 100).toFixed(1) + '%' : '-';
+                document.getElementById('mAP').textContent = 
+                    results.mAP ? results.mAP.toFixed(3) : '-';
+            }
+            
+            // その他のメトリクス
             document.getElementById('totalImages').textContent = 
                 uploadedImages.length;
             document.getElementById('trainingTime').textContent = 
-                results.training_time || '-';
+                status.elapsed_time || '-';
                 
         } catch (error) {
             console.error('結果取得エラー:', error);
