@@ -54,7 +54,8 @@ async function checkYoloModelAvailability() {
         videoProcessingService.yoloDetectionEnabled = data.exists;
         updateYoloUiElements(data.exists);
     } catch (error) {
-        console.error('YOLOモデル状態チェックエラー:', error);
+        // 404エラーの場合は、YOLOモデルが利用不可として扱う
+        console.warn('YOLOモデル状態チェックをスキップしました:', error.message);
         videoProcessingService.yoloDetectionEnabled = false;
         updateYoloUiElements(false);
     }
