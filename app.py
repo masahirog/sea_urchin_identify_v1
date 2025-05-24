@@ -9,6 +9,10 @@ from config import *
 from routes.yolo import yolo_bp
 
 
+
+
+
+
 # ロギング設定
 logging.basicConfig(
     level=logging.INFO,
@@ -18,7 +22,9 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+logging.getLogger('core.YoloTrainer').setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
+
 
 # アプリケーション初期化
 app = Flask(__name__, static_folder='static', static_url_path='/static')

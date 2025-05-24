@@ -1,9 +1,15 @@
+# core/YoloTrainer.py
+
 import os
 import subprocess
 import json
 import threading
 import time
 from datetime import datetime
+import logging
+
+# ロガーの設定
+logger = logging.getLogger(__name__)
 
 class YoloTrainer:
     """YOLOv5モデルのトレーニングを管理するクラス"""
@@ -54,6 +60,26 @@ class YoloTrainer:
             bool: トレーニングが開始されたかどうか
         """
         if self.is_training:
+            logger.warning("既にトレーニングが実行中です")
+            return False
+        
+        logger.info(f"トレーニング開始: weights={weights}, batch_size={batch_size}, epochs={epochs}")
+        
+        # YOLOv5ディレクトリの存在確認
+        if not os.path.exists(self.yolo_dir):
+            logger.error(f"YOLOv5ディレクトリが存在しません: {self.yolo_dir}")
+            return False
+        
+        # データ設定ファイルの存在確認
+        full_data_yaml = os.path.join(os.getcwd(), self.data_yaml)
+        if not os.path.exists(full_data_yaml):
+            logger.error(f"データ設定ファイルが存在しません: {full_data_yaml}")
+            return False
+        
+        # train.pyの存在確認
+        train_script = os.path.join(self.yolo_dir, 'train.py')
+        if not os.path.exists(train_script):
+            logger.error(f"train.pyが存在しません: {train_script}")
             return False
         
         # トレーニングの設定を保存
@@ -76,6 +102,9 @@ class YoloTrainer:
         self.training_thread.daemon = True
         self.training_thread.start()
         
+        # スレッドが開始されるまで少し待つ
+        time.sleep(0.5)
+        
         return True
     
     def _run_training_process(self, weights, batch_size, epochs, img_size, device, workers, name, exist_ok):
@@ -90,13 +119,18 @@ class YoloTrainer:
         os.makedirs(log_dir, exist_ok=True)
         self.log_file = os.path.join(log_dir, f'yolo_training_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
         
+        logger.info(f"トレーニングプロセス開始: {self.log_file}")
+        
+        # 絶対パスを使用
+        data_yaml_path = os.path.abspath(self.data_yaml)
+        
         # コマンドラインの構築
         cmd = [
             'python', 'train.py',
             '--img', str(img_size),
             '--batch', str(batch_size),
             '--epochs', str(epochs),
-            '--data', self.data_yaml,
+            '--data', data_yaml_path,
             '--weights', weights,
             '--workers', str(workers),
             '--name', name
@@ -108,22 +142,35 @@ class YoloTrainer:
         if device:
             cmd.extend(['--device', device])
         
+        logger.info(f"実行コマンド: {' '.join(cmd)}")
+        logger.info(f"作業ディレクトリ: {self.yolo_dir}")
+        
         # プロセスの実行
         try:
             with open(self.log_file, 'w') as log_file:
+                # 環境変数の設定（必要に応じて）
+                env = os.environ.copy()
+                env['PYTHONUNBUFFERED'] = '1'  # 出力をバッファリングしない
+                
                 self.training_process = subprocess.Popen(
                     cmd,
                     cwd=self.yolo_dir,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     universal_newlines=True,
-                    bufsize=1
+                    bufsize=1,
+                    env=env
                 )
+                
+                logger.info(f"プロセスID: {self.training_process.pid}")
                 
                 # 出力の監視とメトリクスの更新
                 for line in self.training_process.stdout:
                     log_file.write(line)
                     log_file.flush()
+                    
+                    # コンソールにも出力（デバッグ用）
+                    print(f"[YOLO] {line.strip()}")
                     
                     # エポック情報の抽出
                     if 'Epoch' in line and 'GPU_mem' in line:
@@ -132,6 +179,7 @@ class YoloTrainer:
                             current, total = parts[0].split('/')
                             try:
                                 self.current_epoch = int(current)
+                                logger.info(f"エポック進捗: {self.current_epoch}/{self.total_epochs}")
                             except ValueError:
                                 pass
                     
@@ -147,18 +195,25 @@ class YoloTrainer:
                         except (ValueError, IndexError):
                             pass
                 
-                self.training_process.wait()
+                # プロセスの終了を待つ
+                return_code = self.training_process.wait()
+                logger.info(f"トレーニングプロセス終了: 返り値={return_code}")
+                
+                if return_code != 0:
+                    logger.error(f"トレーニングが異常終了しました: 返り値={return_code}")
         
         except Exception as e:
-            print(f"トレーニングエラー: {e}")
+            logger.error(f"トレーニングエラー: {e}", exc_info=True)
         
         finally:
             self.is_training = False
             self.training_process = None
+            logger.info("トレーニングプロセス終了処理完了")
     
     def stop_training(self):
         """トレーニングを停止する"""
         if self.is_training and self.training_process:
+            logger.info("トレーニングを停止します")
             self.training_process.terminate()
             self.is_training = False
             return True
@@ -216,6 +271,6 @@ class YoloTrainer:
                                 values = [v.strip() for v in lines[-1].split(',')]
                                 status['latest_results'] = dict(zip(headers, values))
                     except Exception as e:
-                        print(f"結果ファイル読み込みエラー: {e}")
+                        logger.error(f"結果ファイル読み込みエラー: {e}")
         
         return status
