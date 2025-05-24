@@ -275,14 +275,17 @@ export class EvaluationManager {
         const container = document.getElementById('unified-results-content');
         if (!container) return;
         
-        container.innerHTML = `
-            <div class="text-center my-3">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">読み込み中...</span>
+        // 初期化時は最新結果がない可能性があるので、早期リターン
+        if (!this.parent.learningResults?.evaluation) {
+            container.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>結果を表示するには学習を実行してください</strong><br>
+                    データ準備フェーズで画像をアップロードし、AI学習を開始してください。
                 </div>
-                <p class="mt-2">グラフデータを読み込んでいます...</p>
-            </div>
-        `;
+            `;
+            return;
+        }
         
         const timestamp = this.parent.learningResults?.metadata?.timestamp ||
                          this.parent.learningResults?.evaluation?.timestamp ||

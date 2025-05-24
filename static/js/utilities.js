@@ -222,6 +222,15 @@ export async function apiRequest(url, options = {}) {
             }
         });
         
+        // 404エラーの場合、特定のエンドポイントは無視
+        if (response.status === 404) {
+            const ignoredEndpoints = ['/yolo/dataset-status'];
+            if (ignoredEndpoints.some(endpoint => url.includes(endpoint))) {
+                console.warn(`エンドポイント ${url} は存在しません（無視されました）`);
+                return { error: 'Not found', status: 404 };
+            }
+        }
+        
         if (!response.ok) {
             throw new Error(`APIエラー: ${response.status}`);
         }

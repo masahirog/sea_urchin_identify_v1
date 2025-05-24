@@ -12,7 +12,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <!-- 共通CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    
+
+    <link rel="icon" href="data:,"> <!-- 空のfaviconで404を防ぐ -->
+
     <!-- ページ固有CSS -->
     {% block extra_css %}{% endblock %}
 </head>
@@ -110,7 +112,6 @@
     
     <!-- 共通JS -->
     <script src="{{ url_for('static', filename='js/utilities.js') }}" type="module"></script>
-    <script src="{{ url_for('static', filename='js/system.js') }}"></script>
     
     <!-- ページ固有JS -->
     {% block extra_js %}{% endblock %}

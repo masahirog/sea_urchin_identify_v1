@@ -214,8 +214,7 @@
 
 {% block extra_js %}
 <!-- ページ末尾に追加 -->
-<script src="{{ url_for('static', filename='js/learning/AnnotationManager.js') }}" type="module"></script>
-<script src="{{ url_for('static', filename='./learning/YoloDetector.js') }}" type="module"></script>
+<script type="module" src="{{ url_for('static', filename='js/yolo-annotate.js') }}"></script>
 <script type="module">
   import { YoloAnnotator } from '/static/js/learning/YoloAnnotator.js';
   

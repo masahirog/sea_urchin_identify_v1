@@ -59,8 +59,23 @@ export class DataManager {
             
             return status;
         } catch (error) {
-            console.error('YOLOデータセットチェックエラー:', error);
-            return null;
+            // 404エラーの場合は無視して、デフォルト値を返す
+            console.warn('YOLOデータセット状態の取得をスキップしました:', error.message);
+            
+            // デフォルトの状態を設定
+            const defaultStatus = {
+                exists: false,
+                images: { train: 0, val: 0 },
+                labels: { train: 0, val: 0 }
+            };
+            
+            this.parent.yoloDatasetStatus = defaultStatus;
+            
+            if (this.parent.uiManager && typeof this.parent.uiManager.updateYoloDatasetStatus === 'function') {
+                this.parent.uiManager.updateYoloDatasetStatus(defaultStatus);
+            }
+            
+            return defaultStatus;
         }
     }
 

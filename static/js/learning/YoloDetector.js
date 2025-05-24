@@ -3,52 +3,74 @@
  * アノテーションモーダルとAI検出機能
  */
 
-import { YoloAnnotator } from './AnnotationManager.js';
-
 import {
     showLoading,
     hideLoading,
     showSuccessMessage,
     showErrorMessage,
     showWarningMessage,
-    yoloToXY,
-    xyToYolo
+    apiRequest
 } from '../utilities.js';
 
-// ===========================================================
-// YOLOアノテーションモーダル
-// ===========================================================
-
 /**
- * YOLOアノテーションモーダルを作成
- * @param {string} imagePath - 画像パス
- * @param {boolean} isEdit - 編集モードかどうか
- * @param {string} yoloData - YOLO形式のデータ（編集モードの場合）
- * @returns {Promise} モーダルインスタンス
+ * YOLO検出マネージャークラス
  */
-export function createYoloAnnotationModal(imagePath, isEdit = false, yoloData = null) {
-    return new Promise((resolve, reject) => {
-        // 既存のモーダルを削除
-        const existingModal = document.getElementById('yoloAnnotationModal');
-        if (existingModal) {
-            existingModal.remove();
+export class YoloDetector {
+    constructor() {
+        this.modalId = 'yoloAnnotationModal';
+        this.annotator = null;
+    }
+
+    /**
+     * YOLOアノテーションモーダルを作成
+     * @param {string} imagePath - 画像パス
+     * @param {boolean} isEdit - 編集モードかどうか
+     * @param {string} yoloData - YOLO形式のデータ（編集モードの場合）
+     * @returns {Promise} モーダルインスタンス
+     */
+    async createAnnotationModal(imagePath, isEdit = false, yoloData = null) {
+        try {
+            // 既存のモーダルを削除
+            this.removeExistingModal();
+            
+            // モーダルHTMLを作成
+            const modalHTML = this.generateModalHTML(isEdit);
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            
+            // 画像とアノテーターの初期化
+            await this.initializeAnnotator(imagePath, isEdit, yoloData);
+            
+            // モーダルを表示
+            const modal = new bootstrap.Modal(document.getElementById(this.modalId));
+            modal.show();
+            
+            return { modal, annotator: this.annotator };
+        } catch (error) {
+            showErrorMessage('モーダルの作成に失敗しました: ' + error.message);
+            throw error;
         }
-        
-        // モーダルHTMLを作成
-        const modalHTML = `
-        <div class="modal fade" id="yoloAnnotationModal" tabindex="-1" aria-labelledby="yoloAnnotationModalLabel" aria-hidden="true">
+    }
+
+    /**
+     * モーダルHTMLを生成
+     * @param {boolean} isEdit - 編集モードかどうか
+     * @returns {string} モーダルHTML
+     */
+    generateModalHTML(isEdit) {
+        return `
+        <div class="modal fade" id="${this.modalId}" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-xl">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="yoloAnnotationModalLabel">
+                        <h5 class="modal-title">
                             ${isEdit ? 'YOLOアノテーション編集' : 'YOLOアノテーション作成'}
                         </h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
                         <div class="alert alert-info mb-3">
                             <i class="fas fa-info-circle me-2"></i>
-                            各生殖乳頭を囲むバウンディングボックスを描画してください。複数の乳頭がある場合は、それぞれにボックスを作成します。
+                            各生殖乳頭を囲むバウンディングボックスを描画してください。
                         </div>
                         
                         <div class="row mb-3">
@@ -58,58 +80,7 @@ export function createYoloAnnotationModal(imagePath, isEdit = false, yoloData = 
                                 </div>
                             </div>
                             <div class="col-md-4">
-                                <div class="card mb-3">
-                                    <div class="card-header">
-                                        <h6 class="mb-0">ツール</h6>
-                                    </div>
-                                    <div class="card-body">
-                                        <div class="btn-group w-100 mb-3" role="group">
-                                            <button type="button" class="btn btn-outline-primary active" id="createTool" title="新規作成">
-                                                <i class="fas fa-draw-polygon"></i> 作成
-                                            </button>
-                                            <button type="button" class="btn btn-outline-warning" id="editTool" title="移動・編集">
-                                                <i class="fas fa-edit"></i> 編集
-                                            </button>
-                                            <button type="button" class="btn btn-outline-danger" id="deleteTool" title="削除">
-                                                <i class="fas fa-trash"></i> 削除
-                                            </button>
-                                        </div>
-                                        
-                                        <div class="mb-3">
-                                            <label class="form-label">クラス:</label>
-                                            <select id="yoloClassSelect" class="form-select">
-                                                <option value="0" selected>生殖乳頭</option>
-                                            </select>
-                                        </div>
-                                        
-                                        <div class="mb-3">
-                                            <label class="form-label">操作:</label>
-                                            <div class="d-grid gap-2">
-                                                <button type="button" class="btn btn-outline-secondary" id="undoBtn">
-                                                    <i class="fas fa-undo"></i> 元に戻す
-                                                </button>
-                                                <button type="button" class="btn btn-outline-secondary" id="redoBtn">
-                                                    <i class="fas fa-redo"></i> やり直し
-                                                </button>
-                                                <button type="button" class="btn btn-outline-secondary" id="clearBtn">
-                                                    <i class="fas fa-trash-alt"></i> すべて消去
-                                                </button>
-                                                <button type="button" class="btn btn-outline-success" id="autoDetectBtn">
-                                                    <i class="fas fa-magic"></i> AI自動検出
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="card">
-                                    <div class="card-header">
-                                        <h6 class="mb-0">YOLO形式</h6>
-                                    </div>
-                                    <div class="card-body">
-                                        <textarea id="yoloTextArea" class="form-control" rows="6" readonly></textarea>
-                                    </div>
-                                </div>
+                                ${this.generateToolsPanel()}
                             </div>
                         </div>
                     </div>
@@ -123,470 +94,307 @@ export function createYoloAnnotationModal(imagePath, isEdit = false, yoloData = 
             </div>
         </div>
         `;
-        
-        // モーダルをDOMに追加
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-        
-        // モーダルを表示
-        const modal = new bootstrap.Modal(document.getElementById('yoloAnnotationModal'));
-        
-        // 画像とキャンバスの設定
+    }
+
+    /**
+     * ツールパネルを生成
+     * @returns {string} ツールパネルHTML
+     */
+    generateToolsPanel() {
+        return `
+            <div class="card mb-3">
+                <div class="card-header"><h6 class="mb-0">ツール</h6></div>
+                <div class="card-body">
+                    <div class="btn-group w-100 mb-3" role="group">
+                        <button type="button" class="btn btn-outline-primary active" id="createTool">
+                            <i class="fas fa-draw-polygon"></i> 作成
+                        </button>
+                        <button type="button" class="btn btn-outline-warning" id="editTool">
+                            <i class="fas fa-edit"></i> 編集
+                        </button>
+                        <button type="button" class="btn btn-outline-danger" id="deleteTool">
+                            <i class="fas fa-trash"></i> 削除
+                        </button>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">クラス:</label>
+                        <select id="yoloClassSelect" class="form-select">
+                            <option value="0" selected>生殖乳頭</option>
+                        </select>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-outline-secondary" id="undoBtn">
+                            <i class="fas fa-undo"></i> 元に戻す
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="redoBtn">
+                            <i class="fas fa-redo"></i> やり直し
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="clearBtn">
+                            <i class="fas fa-trash-alt"></i> すべて消去
+                        </button>
+                        <button type="button" class="btn btn-outline-success" id="autoDetectBtn">
+                            <i class="fas fa-magic"></i> AI自動検出
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header"><h6 class="mb-0">YOLO形式</h6></div>
+                <div class="card-body">
+                    <textarea id="yoloTextArea" class="form-control" rows="6" readonly></textarea>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * アノテーターを初期化
+     * @param {string} imagePath - 画像パス
+     * @param {boolean} isEdit - 編集モードかどうか
+     * @param {string} yoloData - YOLO形式のデータ
+     */
+    async initializeAnnotator(imagePath, isEdit, yoloData) {
         const canvas = document.getElementById('yoloCanvas');
         const img = new Image();
         img.crossOrigin = 'anonymous';
         
-        img.onload = function() {
-            // キャンバスのサイズを画像に合わせる
-            canvas.width = img.width;
-            canvas.height = img.height;
-            
-            // YOLOアノテーターを初期化
-            const annotator = new YoloAnnotator(canvas, img);
-            
-            // 編集モードの場合、既存のアノテーションを読み込む
-            if (isEdit && yoloData) {
-                annotator.loadFromYoloFormat(yoloData);
-            }
-            
-            // 初期描画
-            annotator.redraw();
-            
-            // ツールボタンのイベント
-            document.getElementById('createTool').addEventListener('click', function() {
-                annotator.setMode('create');
-                updateToolButtons('createTool');
-            });
-            
-            document.getElementById('editTool').addEventListener('click', function() {
-                annotator.setMode('edit');
-                updateToolButtons('editTool');
-            });
-            
-            document.getElementById('deleteTool').addEventListener('click', function() {
-                annotator.setMode('delete');
-                updateToolButtons('deleteTool');
-            });
-            
-            // クラス選択の変更
-            document.getElementById('yoloClassSelect').addEventListener('change', function() {
-                annotator.setCurrentClass(parseInt(this.value));
-            });
-            
-            // 元に戻す・やり直しボタン
-            document.getElementById('undoBtn').addEventListener('click', function() {
-                annotator.undo();
-                updateYoloText(annotator);
-            });
-            
-            document.getElementById('redoBtn').addEventListener('click', function() {
-                annotator.redo();
-                updateYoloText(annotator);
-            });
-            
-            // クリアボタン
-            document.getElementById('clearBtn').addEventListener('click', function() {
-                if (confirm('すべてのアノテーションを削除してもよろしいですか？')) {
-                    annotator.clearAnnotations();
-                    updateYoloText(annotator);
-                }
-            });
-            
-            // 自動検出ボタン
-            document.getElementById('autoDetectBtn').addEventListener('click', function() {
-                runAIDetection(annotator, imagePath)
-                    .then(() => {
-                        updateYoloText(annotator);
-                    });
-            });
-            
-            // 保存ボタン
-            document.getElementById('saveYoloAnnotation').addEventListener('click', function() {
-                // YOLOデータを取得
-                const yoloData = annotator.exportToYoloFormat();
+        return new Promise((resolve, reject) => {
+            img.onload = () => {
+                // キャンバスのサイズを画像に合わせる
+                canvas.width = img.width;
+                canvas.height = img.height;
                 
-                // 保存処理
-                saveYoloAnnotation(imagePath, yoloData);
-            });
+                // YOLOアノテーターを初期化（別途インポートが必要）
+                if (window.YoloAnnotator) {
+                    this.annotator = new window.YoloAnnotator(canvas, img);
+                    
+                    if (isEdit && yoloData) {
+                        this.annotator.loadFromYoloFormat(yoloData);
+                    }
+                    
+                    this.annotator.redraw();
+                    this.setupEventListeners(imagePath);
+                    this.updateYoloText();
+                    
+                    resolve();
+                } else {
+                    reject(new Error('YoloAnnotatorクラスが見つかりません'));
+                }
+            };
             
-            // YOLOテキストの初期更新
-            updateYoloText(annotator);
+            img.onerror = () => reject(new Error('画像の読み込みに失敗しました'));
             
-            // モーダルが閉じられたときの処理
-            document.getElementById('yoloAnnotationModal').addEventListener('hidden.bs.modal', function() {
-                // クリーンアップ
-                this.remove();
-            });
-            
-            // Promise解決
-            resolve({ modal, annotator });
-        };
-        
-        img.onerror = function() {
-            reject(new Error('画像の読み込みに失敗しました'));
-        };
-        
-        // 画像のロード
-        if (imagePath.startsWith('/')) {
-            img.src = imagePath;
-        } else {
-            img.src = '/sample/' + imagePath;
-        }
-    });
-}
+            // 画像のロード
+            img.src = imagePath.startsWith('/') ? imagePath : `/sample/${imagePath}`;
+        });
+    }
 
-/**
- * ツールボタンの状態を更新
- * @param {string} activeButtonId - アクティブにするボタンのID
- */
-function updateToolButtons(activeButtonId) {
-    const buttons = ['createTool', 'editTool', 'deleteTool'];
-    
-    buttons.forEach(buttonId => {
-        const button = document.getElementById(buttonId);
-        if (button) {
-            button.classList.remove('active');
-            if (buttonId === activeButtonId) {
-                button.classList.add('active');
+    /**
+     * イベントリスナーを設定
+     * @param {string} imagePath - 画像パス
+     */
+    setupEventListeners(imagePath) {
+        // ツールボタン
+        const toolButtons = {
+            'createTool': 'create',
+            'editTool': 'edit',
+            'deleteTool': 'delete'
+        };
+        
+        Object.entries(toolButtons).forEach(([id, mode]) => {
+            const button = document.getElementById(id);
+            if (button) {
+                button.addEventListener('click', () => {
+                    this.annotator.setMode(mode);
+                    this.updateToolButtons(id);
+                });
             }
-        }
-    });
-}
-
-/**
- * YOLOテキストエリアを更新
- * @param {YoloAnnotator} annotator - アノテーターインスタンス
- */
-function updateYoloText(annotator) {
-    const textArea = document.getElementById('yoloTextArea');
-    if (textArea) {
-        textArea.value = annotator.exportToYoloFormat();
-    }
-}
-
-/**
- * AI自動検出を実行
- * @param {YoloAnnotator} annotator - アノテーターインスタンス
- * @param {string} imagePath - 画像パス
- * @returns {Promise} 検出結果のPromise
- */
-export async function runAIDetection(annotator, imagePath) {
-    try {
-        showLoading();
-        
-        // 検出APIを呼び出す
-        const response = await fetch('/yolo/detect-in-image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                image_path: imagePath,
-                confidence: 0.25  // デフォルト信頼度閾値
-            })
         });
         
-        if (!response.ok) {
-            throw new Error('検出リクエストに失敗しました');
+        // アクションボタン
+        const actionButtons = {
+            'undoBtn': () => { this.annotator.undo(); this.updateYoloText(); },
+            'redoBtn': () => { this.annotator.redo(); this.updateYoloText(); },
+            'clearBtn': () => {
+                if (confirm('すべてのアノテーションを削除してもよろしいですか？')) {
+                    this.annotator.clearAnnotations();
+                    this.updateYoloText();
+                }
+            },
+            'autoDetectBtn': () => this.runAIDetection(imagePath),
+            'saveYoloAnnotation': () => this.saveAnnotation(imagePath)
+        };
+        
+        Object.entries(actionButtons).forEach(([id, handler]) => {
+            const button = document.getElementById(id);
+            if (button) button.addEventListener('click', handler);
+        });
+        
+        // クラス選択
+        const classSelect = document.getElementById('yoloClassSelect');
+        if (classSelect) {
+            classSelect.addEventListener('change', (e) => {
+                this.annotator.setCurrentClass(parseInt(e.target.value));
+            });
         }
         
-        const data = await response.json();
-        hideLoading();
-        
-        if (data.error) {
-            showErrorMessage('検出エラー: ' + data.error);
-            return;
+        // モーダルが閉じられたときの処理
+        const modal = document.getElementById(this.modalId);
+        modal.addEventListener('hidden.bs.modal', () => modal.remove());
+    }
+
+    /**
+     * ツールボタンの状態を更新
+     * @param {string} activeButtonId - アクティブにするボタンのID
+     */
+    updateToolButtons(activeButtonId) {
+        ['createTool', 'editTool', 'deleteTool'].forEach(id => {
+            const button = document.getElementById(id);
+            if (button) {
+                button.classList.toggle('active', id === activeButtonId);
+            }
+        });
+    }
+
+    /**
+     * YOLOテキストエリアを更新
+     */
+    updateYoloText() {
+        const textArea = document.getElementById('yoloTextArea');
+        if (textArea && this.annotator) {
+            textArea.value = this.annotator.exportToYoloFormat();
         }
-        
-        // 検出結果がある場合、アノテーションに変換
-        if (data.detections && data.detections.length > 0) {
-            const boxes = data.detections.map(detection => ({
-                x1: detection.xmin,
-                y1: detection.ymin,
-                x2: detection.xmax,
-                y2: detection.ymax
-            }));
+    }
+
+    /**
+     * AI自動検出を実行
+     * @param {string} imagePath - 画像パス
+     */
+    async runAIDetection(imagePath) {
+        try {
+            showLoading();
             
-            // アノテーターに追加
-            annotator.loadAutoDetectedBoxes(boxes);
+            const data = await apiRequest('/yolo/detect-in-image', {
+                method: 'POST',
+                body: JSON.stringify({
+                    image_path: imagePath,
+                    confidence: 0.25
+                })
+            });
             
-            showSuccessMessage(`${boxes.length}個の生殖乳頭を検出しました`);
-            return boxes;
-        } else {
-            showWarningMessage('生殖乳頭を検出できませんでした');
-            return [];
+            hideLoading();
+            
+            if (data.error) {
+                showErrorMessage('検出エラー: ' + data.error);
+                return;
+            }
+            
+            if (data.detections && data.detections.length > 0) {
+                const boxes = data.detections.map(detection => ({
+                    x1: detection.xmin,
+                    y1: detection.ymin,
+                    x2: detection.xmax,
+                    y2: detection.ymax
+                }));
+                
+                this.annotator.loadAutoDetectedBoxes(boxes);
+                this.updateYoloText();
+                showSuccessMessage(`${boxes.length}個の生殖乳頭を検出しました`);
+            } else {
+                showWarningMessage('生殖乳頭を検出できませんでした');
+            }
+        } catch (error) {
+            hideLoading();
+            showErrorMessage('検出処理中にエラーが発生しました: ' + error.message);
         }
-    } catch (error) {
-        hideLoading();
-        showErrorMessage('検出処理中にエラーが発生しました: ' + error.message);
-        throw error;
+    }
+
+    /**
+     * アノテーションを保存
+     * @param {string} imagePath - 画像パス
+     */
+    async saveAnnotation(imagePath) {
+        try {
+            showLoading();
+            
+            const yoloData = this.annotator.exportToYoloFormat();
+            
+            const data = await apiRequest('/yolo/save-annotation', {
+                method: 'POST',
+                body: JSON.stringify({
+                    image_path: imagePath,
+                    yolo_data: yoloData
+                })
+            });
+            
+            hideLoading();
+            
+            if (data.error) throw new Error(data.error);
+            
+            showSuccessMessage('YOLOアノテーションを保存しました');
+            
+            // モーダルを閉じる
+            const modal = bootstrap.Modal.getInstance(document.getElementById(this.modalId));
+            if (modal) modal.hide();
+            
+            // コールバック実行
+            if (window.onAnnotationSaved) {
+                window.onAnnotationSaved();
+            }
+            
+        } catch (error) {
+            hideLoading();
+            showErrorMessage('YOLOアノテーションの保存に失敗しました: ' + error.message);
+        }
+    }
+
+    /**
+     * 既存のモーダルを削除
+     */
+    removeExistingModal() {
+        const existingModal = document.getElementById(this.modalId);
+        if (existingModal) {
+            existingModal.remove();
+        }
+    }
+
+    /**
+     * 検出モデルの情報を取得
+     * @returns {Promise<Object>} モデル情報
+     */
+    async getModelInfo() {
+        try {
+            return await apiRequest('/yolo/model-info');
+        } catch (error) {
+            console.error('モデル情報取得エラー:', error);
+            return {
+                error: error.message,
+                model_name: 'unknown',
+                last_trained: 'unknown'
+            };
+        }
     }
 }
 
-/**
- * YOLOアノテーションを保存
- * @param {string} imagePath - 画像パス
- * @param {string} yoloData - YOLO形式のデータ
- * @returns {Promise} 保存結果のPromise
- */
-export async function saveYoloAnnotation(imagePath, yoloData) {
-    try {
-        showLoading();
-        
-        const response = await fetch('/yolo/save-annotation', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                image_path: imagePath,
-                yolo_data: yoloData
-            })
-        });
-        
-        if (!response.ok) throw new Error('保存リクエストに失敗しました');
-        
-        const data = await response.json();
-        
-        hideLoading();
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        // 成功メッセージ
-        showSuccessMessage('YOLOアノテーションを保存しました');
-        
-        // モーダルを閉じる
-        const modal = bootstrap.Modal.getInstance(document.getElementById('yoloAnnotationModal'));
-        if (modal) {
-            modal.hide();
-        }
-        
-        // コールバック
-        if (typeof window.onYoloAnnotationSaved === 'function') {
-            window.onYoloAnnotationSaved(imagePath, data);
-        }
-        
-        return data;
-        
-    } catch (error) {
-        hideLoading();
-        showErrorMessage('YOLOアノテーションの保存に失敗しました: ' + error.message);
-        throw error;
-    }
-}
+// シングルトンインスタンス
+const yoloDetector = new YoloDetector();
 
-/**
- * 複数画像の自動検出
- * @param {Array} imagePaths - 画像パスの配列
- * @param {number} confidence - 信頼度閾値
- * @returns {Promise} 検出結果のPromise
- */
-export async function batchDetectImages(imagePaths, confidence = 0.25) {
-    try {
-        showLoading();
-        
-        const response = await fetch('/yolo/batch-detect', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                image_paths: imagePaths,
-                confidence: confidence
-            })
-        });
-        
-        if (!response.ok) throw new Error('一括検出リクエストに失敗しました');
-        
-        const data = await response.json();
-        
-        hideLoading();
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        // 成功メッセージ
-        const totalDetections = Object.values(data.results).reduce((sum, item) => sum + item.count, 0);
-        showSuccessMessage(`${imagePaths.length}枚の画像から合計${totalDetections}個の生殖乳頭を検出しました`);
-        
-        return data.results;
-        
-    } catch (error) {
-        hideLoading();
-        showErrorMessage('一括検出中にエラーが発生しました: ' + error.message);
-        throw error;
-    }
-}
+// グローバル関数として公開
+window.createYoloAnnotationModal = (imagePath, isEdit, yoloData) => {
+    return yoloDetector.createAnnotationModal(imagePath, isEdit, yoloData);
+};
 
-/**
- * バッチでYOLOアノテーションを保存
- * @param {Object} detectionResults - 検出結果のオブジェクト
- * @returns {Promise} 保存結果のPromise
- */
-export async function saveBatchAnnotations(detectionResults) {
-    try {
-        showLoading();
-        
-        const response = await fetch('/yolo/save-batch-annotations', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                detection_results: detectionResults
-            })
-        });
-        
-        if (!response.ok) throw new Error('一括保存リクエストに失敗しました');
-        
-        const data = await response.json();
-        
-        hideLoading();
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        // 成功メッセージ
-        showSuccessMessage(`${data.saved_count}件のアノテーションを保存しました`);
-        
-        return data;
-        
-    } catch (error) {
-        hideLoading();
-        showErrorMessage('一括保存中にエラーが発生しました: ' + error.message);
-        throw error;
-    }
-}
+window.runAIDetection = (annotator, imagePath) => {
+    yoloDetector.annotator = annotator;
+    return yoloDetector.runAIDetection(imagePath);
+};
 
-/**
- * 検出モデルの情報を取得
- * @returns {Promise} モデル情報のPromise
- */
-export async function getDetectionModelInfo() {
-    try {
-        const response = await fetch('/yolo/model-info');
-        
-        if (!response.ok) throw new Error('モデル情報の取得に失敗しました');
-        
-        const data = await response.json();
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        return data;
-        
-    } catch (error) {
-        console.error('モデル情報取得エラー:', error);
-        return {
-            error: error.message,
-            model_name: 'unknown',
-            last_trained: 'unknown'
-        };
-    }
-}
+window.saveYoloAnnotation = (imagePath, yoloData) => {
+    return yoloDetector.saveAnnotation(imagePath);
+};
 
-/**
- * モデルの再学習を開始
- * @param {Object} options - 学習オプション
- * @returns {Promise} 学習開始結果のPromise
- */
-export async function startModelTraining(options = {}) {
-    try {
-        showLoading();
-        
-        const defaultOptions = {
-            epochs: 100,
-            batch_size: 16,
-            img_size: 640,
-            patience: 20,
-            use_pretrained: true
-        };
-        
-        const trainingOptions = { ...defaultOptions, ...options };
-        
-        const response = await fetch('/yolo/start-training', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(trainingOptions)
-        });
-        
-        if (!response.ok) throw new Error('学習開始リクエストに失敗しました');
-        
-        const data = await response.json();
-        
-        hideLoading();
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        // 成功メッセージ
-        showSuccessMessage('モデルの学習を開始しました。処理状況は学習管理画面で確認できます');
-        
-        return data;
-        
-    } catch (error) {
-        hideLoading();
-        showErrorMessage('学習開始中にエラーが発生しました: ' + error.message);
-        throw error;
-    }
-}
 
-/**
- * モデルの学習状況を取得
- * @returns {Promise} 学習状況のPromise
- */
-export async function getTrainingStatus() {
-    try {
-        const response = await fetch('/yolo/training-status');
-        
-        if (!response.ok) throw new Error('学習状況の取得に失敗しました');
-        
-        const data = await response.json();
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        return data;
-        
-    } catch (error) {
-        console.error('学習状況取得エラー:', error);
-        return {
-            error: error.message,
-            is_training: false,
-            progress: 0,
-            status: 'unknown'
-        };
-    }
-}
-
-/**
- * 実行中の学習をキャンセル
- * @returns {Promise} キャンセル結果のPromise
- */
-export async function cancelTraining() {
-    try {
-        showLoading();
-        
-        const response = await fetch('/yolo/cancel-training', {
-            method: 'POST'
-        });
-        
-        if (!response.ok) throw new Error('学習キャンセルリクエストに失敗しました');
-        
-        const data = await response.json();
-        
-        hideLoading();
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        // 成功メッセージ
-        showSuccessMessage('モデルの学習をキャンセルしました');
-        
-        return data;
-        
-    } catch (error) {
-        hideLoading();
-        showErrorMessage('学習キャンセル中にエラーが発生しました: ' + error.message);
-        throw error;
-    }
-}
+export default yoloDetector;
