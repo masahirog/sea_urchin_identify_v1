@@ -12,6 +12,7 @@ import {
     apiRequest
 } from '../utilities.js';
 
+import { YoloAnnotator } from './YoloAnnotator.js';
 /**
  * YOLO検出マネージャークラス
  */
@@ -175,8 +176,15 @@ export class YoloDetector {
                         this.annotator.loadFromYoloFormat(yoloData);
                     }
                     
+                    // 修正後のコード：
                     this.annotator.redraw();
                     this.setupEventListeners(imagePath);
+
+                    // アノテーター変更時のコールバック設定
+                    this.annotator.onAnnotationsChanged = () => {
+                        this.updateYoloText();
+                    };
+
                     this.updateYoloText();
                     
                     resolve();
@@ -396,5 +404,5 @@ window.saveYoloAnnotation = (imagePath, yoloData) => {
     return yoloDetector.saveAnnotation(imagePath);
 };
 
-
+export { YoloDetector };
 export default yoloDetector;

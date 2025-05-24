@@ -111,6 +111,11 @@ export class YoloAnnotator {
                 
                 this.annotations.push({ x1, y1, x2, y2, class: this.currentClass });
                 this.redraw();
+
+                // コールバック実行
+                if (this.onAnnotationsChanged) {
+                    this.onAnnotationsChanged();
+                }
             }
         }
     }
@@ -156,6 +161,11 @@ export class YoloAnnotator {
             this.annotations.splice(this.selectedAnnotation, 1);
             this.selectedAnnotation = -1;
             this.redraw();
+
+            // コールバック実行
+            if (this.onAnnotationsChanged) {
+                this.onAnnotationsChanged();
+            }
         }
         
         if (e.ctrlKey && e.key === 'z') {
@@ -187,6 +197,9 @@ export class YoloAnnotator {
             this.annotations = JSON.parse(JSON.stringify(this.history[this.historyIndex]));
             this.selectedAnnotation = -1;
             this.redraw();
+            if (this.onAnnotationsChanged) {
+                this.onAnnotationsChanged();
+            }
         }
     }
     
@@ -196,6 +209,9 @@ export class YoloAnnotator {
             this.annotations = JSON.parse(JSON.stringify(this.history[this.historyIndex]));
             this.selectedAnnotation = -1;
             this.redraw();
+            if (this.onAnnotationsChanged) {
+                this.onAnnotationsChanged();
+            }
         }
     }
     
@@ -328,6 +344,9 @@ export class YoloAnnotator {
         }
         
         this.redraw();
+        if (this.onAnnotationsChanged) {
+            this.onAnnotationsChanged();
+        }
     }
     
     clearAnnotations() {
@@ -335,6 +354,9 @@ export class YoloAnnotator {
         this.annotations = [];
         this.selectedAnnotation = -1;
         this.redraw();
+        if (this.onAnnotationsChanged) {
+            this.onAnnotationsChanged();
+        }
     }
     
     setMode(mode) {

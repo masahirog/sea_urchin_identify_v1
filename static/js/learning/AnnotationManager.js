@@ -480,13 +480,13 @@ window.deleteImage = (imagePath) => annotationManager.deleteImage(imagePath);
 // アノテーションコールバック設定
 annotationManager.setCallbacks({
     onSaved: () => {
-        if (window.unifiedLearningSystem) {
+        if (window.unifiedLearningSystem?.dataManager) {
             window.unifiedLearningSystem.dataManager.refreshDatasetStats();
             window.unifiedLearningSystem.dataManager.loadLearningData();
         }
     },
     onDeleted: () => {
-        if (window.unifiedLearningSystem) {
+        if (window.unifiedLearningSystem?.dataManager) {
             window.unifiedLearningSystem.dataManager.refreshDatasetStats();
             window.unifiedLearningSystem.dataManager.loadLearningData();
         }

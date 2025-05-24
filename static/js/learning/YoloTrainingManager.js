@@ -8,8 +8,12 @@ import {
     hideLoading,
     showSuccessMessage,
     showErrorMessage,
-    apiRequest
+    showWarningMessage,
+    apiRequest,
+    apiRequestFormData
 } from '../utilities.js';
+
+import { YoloAnnotator } from './YoloAnnotator.js';
 
 /**
  * YOLOトレーニング管理クラス
@@ -19,6 +23,14 @@ export class YoloTrainingManager {
         this.parent = parent;
         this.isTraining = false;
         this.statusCheckInterval = null;
+        
+        // ワークフロー用の新規プロパティ
+        this.workflowMode = false;
+        this.currentStep = 1;
+        this.uploadedImages = [];
+        this.currentImageIndex = 0;
+        this.annotations = {};
+        this.annotator = null;
     }
 
     /**
@@ -219,6 +231,28 @@ export class YoloTrainingManager {
             this.updateMetricsDisplay(status);
             this.updateTrainingImages(status.result_images || {});
             
+            // ワークフローモードの場合の追加処理
+            if (this.workflowMode && this.currentStep === 4) {
+                // トレーニング進捗をワークフローUIに反映
+                const progressBar = document.querySelector('#trainingProgress .progress-bar');
+                const statusText = document.getElementById('trainingStatus');
+                
+                if (progressBar) {
+                    const progress = (status.progress || 0) * 100;
+                    progressBar.style.width = progress + '%';
+                    progressBar.textContent = Math.round(progress) + '%';
+                }
+                
+                if (statusText) {
+                    statusText.textContent = status.message || 'トレーニング中...';
+                }
+                
+                // 完了時の処理
+                if (status.status === 'completed') {
+                    await this.displayWorkflowFinalResults();
+                }
+            }
+            
             // 完了または失敗時の処理
             if (['completed', 'stopped', 'failed', 'error'].includes(status.status)) {
                 this.isTraining = false;
@@ -371,44 +405,11 @@ export class YoloTrainingManager {
         const element = document.getElementById(id);
         if (element) element.textContent = text;
     }
-}
 
-import { YoloAnnotator } from './YoloAnnotator.js';
-import {
-    showLoading,
-    hideLoading,
-    showSuccessMessage,
-    showErrorMessage,
-    apiRequest,
-    apiRequestFormData
-} from '../utilities.js';
+    // ========================================
+    // ワークフローモード用メソッド
+    // ========================================
 
-/**
- * YOLOトレーニング管理クラス（拡張版）
- */
-export class YoloTrainingManager {
-    constructor(parent) {
-        this.parent = parent;
-        this.isTraining = false;
-        this.statusCheckInterval = null;
-        
-        // ワークフロー用の新規プロパティ
-        this.workflowMode = false;
-        this.currentStep = 1;
-        this.uploadedImages = [];
-        this.currentImageIndex = 0;
-        this.annotations = {};
-        this.annotator = null;
-    }
-
-    /**
-     * 初期化
-     */
-    initialize() {
-        this.setupEventListeners();
-        this.checkInitialStatus();
-    }
-    
     /**
      * ワークフローモードを有効化
      */
@@ -735,52 +736,6 @@ export class YoloTrainingManager {
         
         // 既存のステータス更新メカニズムを活用
         // updateTrainingStatusが自動的に結果を更新する
-    }
-    
-    // 既存のupdateTrainingStatusメソッドをオーバーライド
-    async updateTrainingStatus() {
-        try {
-            const status = await this.parent.dataManager.checkYoloTrainingStatus();
-            
-            // 既存の更新処理
-            this.updateStatusDisplay(status);
-            this.updateProgressDisplay(status);
-            this.updateMetricsDisplay(status);
-            this.updateTrainingImages(status.result_images || {});
-            
-            // ワークフローモードの場合の追加処理
-            if (this.workflowMode && this.currentStep === 4) {
-                // トレーニング進捗をワークフローUIに反映
-                const progressBar = document.querySelector('#trainingProgress .progress-bar');
-                const statusText = document.getElementById('trainingStatus');
-                
-                if (progressBar) {
-                    const progress = (status.progress || 0) * 100;
-                    progressBar.style.width = progress + '%';
-                    progressBar.textContent = Math.round(progress) + '%';
-                }
-                
-                if (statusText) {
-                    statusText.textContent = status.message || 'トレーニング中...';
-                }
-                
-                // 完了時の処理
-                if (status.status === 'completed') {
-                    await this.displayWorkflowFinalResults();
-                }
-            }
-            
-            // 元の処理を継続
-            if (['completed', 'stopped', 'failed', 'error'].includes(status.status)) {
-                this.isTraining = false;
-                this.disableTrainingUI();
-            } else if (status.status === 'running') {
-                this.isTraining = true;
-                this.enableTrainingUI();
-            }
-        } catch (error) {
-            console.error('トレーニング状態取得エラー:', error);
-        }
     }
     
     /**
