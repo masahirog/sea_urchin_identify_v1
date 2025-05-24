@@ -774,8 +774,6 @@ h1 {
     }
 }
 
-
-
 /* ==================== パフォーマンス最適化 ==================== */
 /* GPU加速の有効化 */
 .image-card,
@@ -810,7 +808,7 @@ h1 {
     }
 }
 
-/* static/css/style.css に追加するフェーズナビゲーション用CSS */
+/* フェーズナビゲーション用CSS */
 
 /* フェーズインジケーター - クリック可能スタイル */
 .clickable-phase {
@@ -935,19 +933,13 @@ h1 {
     }
 }
 
-CSSを整理して、より分かりやすい構造にします。以下が修正後のCSSコードです：
-css/* ==================== グラフカード ==================== */
+/* ==================== グラフカード ==================== */
 .graph-card {
     transition: transform 0.3s ease;
 }
 
 .graph-card:hover {
     transform: translateY(-5px);
-}
-
-.graph-info-icon {
-    cursor: help;
-    font-size: 0.9rem;
 }
 
 .graph-container {
@@ -961,27 +953,6 @@ css/* ==================== グラフカード ==================== */
     cursor: pointer !important;
     position: relative;
     z-index: 1;
-}
-
-/* グラフオーバーレイ */
-.graph-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    opacity: 0;
-    transition: opacity 0.3s;
-    pointer-events: none !important;  /* オーバーレイはクリックを通過させる */
-    z-index: 1 !important;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.graph-container:hover .graph-overlay {
-    opacity: 1;
 }
 
 /* ==================== モーダル設定 ==================== */
@@ -1052,64 +1023,7 @@ css/* ==================== グラフカード ==================== */
     overflow-y: auto;
 }
 
-
-/* ==================== YOLO関連スタイル ==================== */
-
-/* YOLO検出カード */
-.detection-card {
-    transition: all 0.3s ease;
-    border-radius: 12px;
-    overflow: hidden;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-
-.detection-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-}
-
-.detection-card .card-img-top {
-    height: 200px;
-    object-fit: cover;
-    border-bottom: 1px solid #eee;
-}
-
-.detection-info {
-    padding: 12px;
-    background: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.7));
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    color: white;
-    font-size: 14px;
-}
-
-/* YOLO検出結果テーブル */
-.detection-table {
-    font-size: 0.85rem;
-}
-
-.detection-table th {
-    background-color: #f8f9fa;
-    font-weight: 600;
-}
-
-.detection-confidence {
-    width: 100px;
-    height: 6px;
-    background-color: #e9ecef;
-    border-radius: 3px;
-    overflow: hidden;
-    margin-top: 5px;
-}
-
-.confidence-bar {
-    height: 100%;
-    background: linear-gradient(to right, #dc3545, #fd7e14, #ffc107, #28a745);
-    border-radius: 3px;
-}
+/* ==================== YOLO関連スタイル（使用中） ==================== */
 
 /* アノテーションキャンバス関連 */
 .annotation-area {
@@ -1179,18 +1093,6 @@ css/* ==================== グラフカード ==================== */
     text-align: center;
 }
 
-.metric-value {
-    font-size: 1.2rem;
-    font-weight: 600;
-    color: #495057;
-}
-
-.metric-label {
-    font-size: 0.8rem;
-    color: #6c757d;
-    text-transform: uppercase;
-}
-
 /* 結果グラフ表示 */
 .results-grid {
     display: grid;
@@ -1223,72 +1125,6 @@ css/* ==================== グラフカード ==================== */
     font-size: 0.9rem;
     text-align: center;
     border-top: 1px solid #dee2e6;
-}
-
-/* バウンディングボックス */
-.bounding-box {
-    position: absolute;
-    border: 2px solid rgba(255, 87, 34, 0.8);
-    background-color: rgba(255, 87, 34, 0.2);
-    cursor: move;
-}
-
-.bounding-box .box-label {
-    position: absolute;
-    top: -24px;
-    left: 0;
-    background-color: rgba(255, 87, 34, 0.9);
-    color: white;
-    font-size: 12px;
-    padding: 2px 6px;
-    border-radius: 4px;
-    white-space: nowrap;
-}
-
-.bounding-box .resize-handle {
-    position: absolute;
-    width: 8px;
-    height: 8px;
-    background-color: white;
-    border: 1px solid rgba(255, 87, 34, 0.8);
-}
-
-.bounding-box .handle-nw {
-    top: -4px;
-    left: -4px;
-    cursor: nw-resize;
-}
-
-.bounding-box .handle-ne {
-    top: -4px;
-    right: -4px;
-    cursor: ne-resize;
-}
-
-.bounding-box .handle-sw {
-    bottom: -4px;
-    left: -4px;
-    cursor: sw-resize;
-}
-
-.bounding-box .handle-se {
-    bottom: -4px;
-    right: -4px;
-    cursor: se-resize;
-}
-
-/* 強調表示ボックス */
-.highlight-box {
-    position: absolute;
-    border: 2px dashed rgba(33, 150, 243, 0.8);
-    background-color: rgba(33, 150, 243, 0.1);
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.5); }
-    70% { box-shadow: 0 0 0 6px rgba(33, 150, 243, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(33, 150, 243, 0); }
 }
 
 /* YOLO画像選択 */

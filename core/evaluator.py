@@ -16,30 +16,6 @@ from datetime import datetime
 import joblib
 import traceback
 
-# matplotlib設定（GUIなしの環境用）
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from matplotlib import font_manager as fm
-import os
-
-
-# プロジェクト内のフォントファイルを登録
-font_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 
-                        'static', 'fonts', 'NotoSansCJKjp-Regular.otf')
-
-if os.path.exists(font_path):
-    # フォントを登録
-    fm.fontManager.addfont(font_path)
-    prop = fm.FontProperties(fname=font_path)
-    plt.rcParams['font.family'] = prop.get_name()
-    plt.rcParams['axes.unicode_minus'] = False
-    print(f"カスタムフォントを読み込みました: {font_path}")
-else:
-    print(f"警告: フォントファイルが見つかりません: {font_path}")
-    # フォールバック設定
-    plt.rcParams['font.family'] = 'sans-serif'
-
 from sklearn.metrics import confusion_matrix, classification_report, roc_curve, auc
 from sklearn.model_selection import cross_val_score, learning_curve
 
@@ -358,128 +334,16 @@ class UnifiedEvaluator:
             with open(result_path, 'w') as f:
                 json.dump(results, f, indent=2)
             print(f"評価結果JSON保存: {result_path}")
-            
-            # 静的ディレクトリにグラフ保存
-            self._create_evaluation_plots(results, timestamp)
+
             
             return {
-                "saved_path": result_path,
-                "graphs_generated": True
+                "saved_path": result_path
             }
             
         except Exception as e:
             print(f"評価結果保存エラー: {str(e)}")
             return {"save_error": str(e)}
 
-    def _create_evaluation_plots(self, results, timestamp):
-        """評価グラフの生成"""
-        try:
-            from config import STATIC_EVALUATION_DIR
-            os.makedirs(STATIC_EVALUATION_DIR, exist_ok=True)
-            
-            print(f"グラフ生成開始: {STATIC_EVALUATION_DIR}")  # ★デバッグ用ログ追加
-            
-            # 学習曲線
-            self._plot_learning_curve(results, timestamp, STATIC_EVALUATION_DIR)
-            
-            # 混同行列
-            self._plot_confusion_matrix(results, timestamp, STATIC_EVALUATION_DIR)
-            
-            # ROCカーブ
-            self._plot_roc_curve(results, timestamp, STATIC_EVALUATION_DIR)
-            
-            print("評価グラフ生成完了")
-            
-        except Exception as e:
-            print(f"評価グラフ生成エラー: {str(e)}")
-            import traceback
-            traceback.print_exc()  # ★詳細エラー情報を出力
-
-    def _plot_learning_curve(self, results, timestamp, output_dir):
-        """学習曲線プロット"""
-        plt.figure(figsize=(10, 6))
-        
-        train_sizes = np.array(results["train_sizes"])
-        train_scores_mean = np.array(results["train_scores_mean"])
-        train_scores_std = np.array(results["train_scores_std"])
-        test_scores_mean = np.array(results["test_scores_mean"])
-        test_scores_std = np.array(results["test_scores_std"])
-        
-        plt.fill_between(train_sizes, 
-                        train_scores_mean - train_scores_std,
-                        train_scores_mean + train_scores_std, 
-                        alpha=0.1, color="blue")
-        plt.fill_between(train_sizes, 
-                        test_scores_mean - test_scores_std,
-                        test_scores_mean + test_scores_std, 
-                        alpha=0.1, color="green")
-        plt.plot(train_sizes, train_scores_mean, 'o-', color="blue", label="学習データ")
-        plt.plot(train_sizes, test_scores_mean, 'o-', color="green", label="検証データ")
-        plt.xlabel('学習サンプル数')
-        plt.ylabel('精度')
-        plt.title('学習曲線')
-        plt.legend(loc="best")
-        plt.grid(True)
-        
-        path = os.path.join(output_dir, f"learning_curve_{timestamp}.png")
-        plt.savefig(path, dpi=100, bbox_inches='tight')
-        plt.close()
-        print(f"学習曲線保存: {path}")
-
-    def _plot_confusion_matrix(self, results, timestamp, output_dir):
-        """混同行列プロット"""
-        plt.figure(figsize=(8, 6))
-        
-        cm = np.array(results["confusion_matrix"])
-        plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
-        plt.title('混同行列')
-        plt.colorbar()
-        
-        tick_marks = np.arange(2)
-        plt.xticks(tick_marks, ['オス', 'メス'])
-        plt.yticks(tick_marks, ['オス', 'メス'])
-        
-        # 値表示
-        thresh = cm.max() / 2.
-        for i in range(cm.shape[0]):
-            for j in range(cm.shape[1]):
-                plt.text(j, i, format(cm[i, j], 'd'),
-                        ha="center", va="center",
-                        color="white" if cm[i, j] > thresh else "black")
-        
-        plt.ylabel('実際のクラス')
-        plt.xlabel('予測されたクラス')
-        plt.tight_layout()
-        
-        path = os.path.join(output_dir, f"confusion_matrix_{timestamp}.png")
-        plt.savefig(path, dpi=100, bbox_inches='tight')
-        plt.close()
-        print(f"混同行列保存: {path}")
-
-    def _plot_roc_curve(self, results, timestamp, output_dir):
-        """ROCカーブプロット"""
-        plt.figure(figsize=(8, 6))
-        
-        if "fpr" in results and len(results["fpr"]) > 0:
-            fpr = np.array(results["fpr"])
-            tpr = np.array(results["tpr"])
-            roc_auc = results["roc_auc"]
-            
-            plt.plot(fpr, tpr, color='darkorange', lw=2, 
-                    label=f'ROC曲線 (AUC = {roc_auc:.2f})')
-            plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
-            plt.xlim([0.0, 1.0])
-            plt.ylim([0.0, 1.05])
-            plt.xlabel('偽陽性率')
-            plt.ylabel('真陽性率')
-            plt.title('ROC曲線')
-            plt.legend(loc="lower right")
-            plt.grid(True)
-            
-            path = os.path.join(output_dir, f"roc_curve_{timestamp}.png")
-            plt.savefig(path, dpi=100, bbox_inches='tight')
-            plt.close()
-            print(f"ROCカーブ保存: {path}")
 
     # ================================
     # 内部メソッド: アノテーション分析
@@ -584,80 +448,14 @@ class UnifiedEvaluator:
                 json.dump(analysis, f, indent=2)
             print(f"アノテーション分析結果保存: {analysis_path}")
             
-            # グラフ生成（timestampをそのまま渡す）
-            self._create_annotation_plot(analysis, timestamp)
-            
             return {
-                "saved_path": analysis_path,
-                "graph_generated": True
+                "saved_path": analysis_path
             }
             
         except Exception as e:
             print(f"アノテーション分析保存エラー: {str(e)}")
             return {"save_error": str(e)}
 
-    def _create_annotation_plot(self, analysis, timestamp):
-        """アノテーション影響グラフの生成"""
-        try:
-            from config import STATIC_EVALUATION_DIR
-            os.makedirs(STATIC_EVALUATION_DIR, exist_ok=True)
-            dataset = analysis.get("dataset", {})
-            male_annotated = dataset.get("male_annotated", 0)
-            female_annotated = dataset.get("female_annotated", 0)
-            male_total = dataset.get("male_total", 0)
-            female_total = dataset.get("female_total", 0)
-            warning = dataset.get("warning")
-            
-            plt.figure(figsize=(10, 6))
-            labels = ['オス', 'メス', '合計']
-            annotated = [male_annotated, female_annotated, male_annotated + female_annotated]
-            
-            # データ整合性確保
-            total = [max(male_total, male_annotated), 
-                    max(female_total, female_annotated), 
-                    max(male_total + female_total, male_annotated + female_annotated)]
-            
-            non_annotated = [t - a for t, a in zip(total, annotated)]
-            
-            x = np.arange(len(labels))
-            width = 0.35
-            
-            fig, ax = plt.subplots(figsize=(10, 6))
-            rects1 = ax.bar(x - width/2, annotated, width, label='アノテーション済み')
-            rects2 = ax.bar(x + width/2, non_annotated, width, label='未アノテーション')
-            
-            # タイトル
-            title = 'データセットのアノテーション状況'
-            if warning:
-                title += f'\n（警告: {warning}）'
-            ax.set_title(title)
-            
-            ax.set_ylabel('画像数')
-            ax.set_xticks(x)
-            ax.set_xticklabels(labels)
-            ax.legend()
-            
-            # 数値ラベル追加
-            def add_labels(rects):
-                for rect in rects:
-                    height = rect.get_height()
-                    ax.annotate(f'{height}',
-                                xy=(rect.get_x() + rect.get_width() / 2, height),
-                                xytext=(0, 3),
-                                textcoords="offset points",
-                                ha='center', va='bottom')
-            
-            add_labels(rects1)
-            add_labels(rects2)
-            
-            fig.tight_layout()
-            path = os.path.join(STATIC_EVALUATION_DIR, f"annotation_impact_{timestamp}.png")
-            plt.savefig(path, dpi=100, bbox_inches='tight')
-            plt.close()
-            print(f"アノテーション影響グラフ保存: {path}")
-            
-        except Exception as e:
-            print(f"アノテーション影響グラフ生成エラー: {str(e)}")
 
     # ================================
     # 内部メソッド: 履歴処理
@@ -672,14 +470,6 @@ class UnifiedEvaluator:
         
         timestamp = data.get("timestamp", eval_file.replace("eval_", "").replace(".json", ""))
         
-        # 関連画像ファイル確認
-        from config import STATIC_EVALUATION_DIR
-        images_exist = {
-            "learning_curve": os.path.exists(os.path.join(STATIC_EVALUATION_DIR, f"learning_curve_{timestamp}.png")),
-            "confusion_matrix": os.path.exists(os.path.join(STATIC_EVALUATION_DIR, f"confusion_matrix_{timestamp}.png")),
-            "roc_curve": os.path.exists(os.path.join(STATIC_EVALUATION_DIR, f"roc_curve_{timestamp}.png"))
-        }
-        
         return {
             "timestamp": timestamp,
             "cv_mean": data.get("cv_mean", 0),
@@ -687,13 +477,7 @@ class UnifiedEvaluator:
             "classification_report": data.get("classification_report", {}),
             "file": eval_file,
             "type": "evaluation",
-            "sample_count": data.get("sample_count", 0),
-            "images": {
-                "learning_curve": f"learning_curve_{timestamp}.png" if images_exist["learning_curve"] else None,
-                "confusion_matrix": f"confusion_matrix_{timestamp}.png" if images_exist["confusion_matrix"] else None,
-                "roc_curve": f"roc_curve_{timestamp}.png" if images_exist["roc_curve"] else None
-            },
-            "files_exist": images_exist
+            "sample_count": data.get("sample_count", 0)
         }
 
     def _process_annotation_file(self, evaluation_dir, anno_file):
@@ -705,20 +489,13 @@ class UnifiedEvaluator:
         
         timestamp = data.get("timestamp", anno_file.replace("annotation_impact_", "").replace(".json", ""))
         dataset = data.get("dataset", {})
-        
-        # アノテーション影響グラフ確認
-        from config import STATIC_EVALUATION_DIR
-        annotation_graph_exists = os.path.exists(os.path.join(STATIC_EVALUATION_DIR, f"annotation_impact_{timestamp}.png"))
-        
+                
         return {
             "timestamp": timestamp,
             "cv_mean": dataset.get("annotation_rate", 0),  # アノテーション率をCV平均として表示
             "cv_std": 0,
             "type": "annotation",
             "file": anno_file,
-            "images": {
-                "annotation_impact": f"annotation_impact_{timestamp}.png" if annotation_graph_exists else None
-            },
             "dataset": dataset,
             "classification_report": {
                 "male": {"precision": 0, "recall": 0, "f1_score": 0, "support": dataset.get("male_total", 0)},

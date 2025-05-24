@@ -31,16 +31,6 @@ def learning_page():
     """統合学習システムのメインページ"""
     return render_template('learning_management.html')
 
-@learning_bp.route('/management')
-def management_page():
-    """学習管理ページ（リダイレクト用）"""
-    return render_template('learning_management.html')
-
-@learning_bp.route('/unified-management')
-def unified_management_page():
-    """統合学習管理ページ"""
-    return render_template('learning_management.html')
-
 # ================================
 # データ管理API
 # ================================
@@ -411,168 +401,6 @@ def save_annotation():
 # 学習・評価実行
 # ================================
 
-@learning_bp.route('/start-training', methods=['POST'])
-def start_model_training():
-    """
-    モデル訓練を開始
-    
-    Returns:
-    - JSON: 訓練タスクの情報
-    """
-    import uuid
-    from app import processing_queue, processing_status, app
-    
-    try:
-        # データセット統計を確認
-        stats_response = get_dataset_stats()
-        stats_data = stats_response.get_json()
-        
-        if stats_data.get('male_count', 0) == 0 or stats_data.get('female_count', 0) == 0:
-            return jsonify({
-                "error": "オスとメスの両方の学習データが必要です。データをアップロードしてください。"
-            }), 400
-        
-        total_count = stats_data.get('total_count', 0)
-        if total_count < 10:
-            return jsonify({
-                "error": f"学習データが不足しています。最低10枚必要ですが、現在{total_count}枚です。"
-            }), 400
-        
-        # 処理タスクの作成
-        task_id = str(uuid.uuid4())
-        task = {
-            "type": "train_model",
-            "id": task_id,
-            "dataset_dir": app.config['DATASET_FOLDER']
-        }
-        
-        # 処理状態の初期化
-        processing_status[task_id] = {
-            "status": "queued", 
-            "message": "モデル訓練を待機中...",
-            "progress": 0
-        }
-        
-        # キューに追加
-        processing_queue.put(task)
-        
-        current_app.logger.info(f"モデル訓練開始: {task_id}")
-        
-        return jsonify({
-            "success": True, 
-            "task_id": task_id, 
-            "message": "モデル訓練を開始しました"
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f"モデル訓練開始エラー: {str(e)}")
-        traceback.print_exc()
-        return jsonify({"error": f"モデル訓練の開始に失敗しました: {str(e)}"}), 500
-
-@learning_bp.route('/start-evaluation', methods=['POST'])
-def start_model_evaluation():
-    """
-    モデル評価を開始
-    
-    Returns:
-    - JSON: 評価タスクの情報
-    """
-    import uuid
-    from app import processing_queue, processing_status, app
-    from config import MODELS_DIR
-    
-    try:
-        # モデルファイルの確認
-        model_path = os.path.join(MODELS_DIR, 'saved', 'sea_urchin_rf_model.pkl')
-        if not os.path.exists(model_path):
-            return jsonify({
-                "error": "評価するモデルが見つかりません。先にモデル訓練を実行してください。"
-            }), 404
-        
-        # 処理タスクの作成
-        task_id = str(uuid.uuid4())
-        task = {
-            "type": "evaluate_model",
-            "id": task_id,
-            "model_path": model_path,
-            "dataset_dir": app.config['DATASET_FOLDER']
-        }
-        
-        # 処理状態の初期化
-        processing_status[task_id] = {
-            "status": "queued", 
-            "message": "モデル評価を待機中...",
-            "progress": 0
-        }
-        
-        # キューに追加
-        processing_queue.put(task)
-        
-        current_app.logger.info(f"モデル評価開始: {task_id}")
-        
-        return jsonify({
-            "success": True, 
-            "task_id": task_id, 
-            "message": "モデル評価を開始しました"
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f"モデル評価開始エラー: {str(e)}")
-        traceback.print_exc()
-        return jsonify({"error": f"モデル評価の開始に失敗しました: {str(e)}"}), 500
-
-@learning_bp.route('/start-annotation-analysis', methods=['POST'])
-def start_annotation_analysis():
-    """
-    アノテーション効果分析を開始
-    
-    Returns:
-    - JSON: 分析タスクの情報
-    """
-    import uuid
-    from app import processing_queue, processing_status, app
-    from config import MODELS_DIR
-    
-    try:
-        # モデルファイルの確認
-        model_path = os.path.join(MODELS_DIR, 'saved', 'sea_urchin_rf_model.pkl')
-        if not os.path.exists(model_path):
-            return jsonify({
-                "error": "分析するモデルが見つかりません。先にモデル訓練を実行してください。"
-            }), 404
-        
-        # 処理タスクの作成
-        task_id = str(uuid.uuid4())
-        task = {
-            "type": "analyze_annotation",
-            "id": task_id,
-            "model_path": model_path,
-            "dataset_dir": app.config['DATASET_FOLDER']
-        }
-        
-        # 処理状態の初期化
-        processing_status[task_id] = {
-            "status": "queued", 
-            "message": "アノテーション効果分析を待機中...",
-            "progress": 0
-        }
-        
-        # キューに追加
-        processing_queue.put(task)
-        
-        current_app.logger.info(f"アノテーション効果分析開始: {task_id}")
-        
-        return jsonify({
-            "success": True, 
-            "task_id": task_id, 
-            "message": "アノテーション効果分析を開始しました"
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f"アノテーション効果分析開始エラー: {str(e)}")
-        traceback.print_exc()
-        return jsonify({"error": f"アノテーション効果分析の開始に失敗しました: {str(e)}"}), 500
-
 @learning_bp.route('/start-unified-training', methods=['POST'])
 def start_unified_training():
     """
@@ -712,31 +540,6 @@ def validate_dataset_for_training_fixed():
 # タスク状態管理 (旧api_routes.pyから統合)
 # ================================
 
-@learning_bp.route('/task-status')
-def get_task_status():
-    """
-    タスクの状態を取得
-    
-    Query Parameters:
-    - task_id: 処理タスクのID
-    
-    Returns:
-    - JSON: タスクの処理状態
-    """
-    from app import processing_status
-    
-    task_id = request.args.get('task_id')
-    
-    if not task_id:
-        return jsonify({"error": "task_id is required"}), 400
-    
-    # 状態の取得
-    if task_id in processing_status:
-        status = processing_status.get(task_id)
-        return jsonify({"status": status})
-    else:
-        return jsonify({"status": {"status": "unknown", "message": "タスクが見つかりません"}})
-
 @learning_bp.route('/task-status/<task_id>')
 def get_task_status_by_id(task_id):
     """
@@ -806,26 +609,6 @@ def cancel_task(task_id):
         "task_id": task_id
     })
 
-@learning_bp.route('/all-tasks')
-def get_all_tasks():
-    """
-    すべてのタスク状態を取得
-    
-    Returns:
-    - JSON: すべてのタスクの処理状態
-    """
-    from app import processing_status
-    
-    # APIキーによる認証（オプション）
-    api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
-    if not api_key or api_key != current_app.config.get('API_KEY', 'dev_key'):
-        return jsonify({"error": "認証が必要です"}), 401
-    
-    # 全タスクのステータスを返す
-    return jsonify({
-        "tasks": processing_status,
-        "count": len(processing_status)
-    })
 
 @learning_bp.route('/unified-status/<task_id>')
 def get_unified_status(task_id):
@@ -953,22 +736,6 @@ def get_learning_history():
 # ================================
 # データセット準備度評価
 # ================================
-
-@learning_bp.route('/dataset-validation')
-def dataset_validation():
-    """
-    データセットの検証と準備完了度チェック
-    
-    Returns:
-    - JSON: データセット検証結果
-    """
-    try:
-        validation_result = validate_dataset_for_training()
-        return jsonify(validation_result)
-        
-    except Exception as e:
-        current_app.logger.error(f"データセット検証エラー: {str(e)}")
-        return jsonify({"error": "データセット検証に失敗しました"}), 500
 
 @learning_bp.route('/readiness-check')
 def readiness_check():

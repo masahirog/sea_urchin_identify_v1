@@ -10,6 +10,8 @@ from werkzeug.utils import secure_filename
 import cv2
 import numpy as np
 from PIL import Image
+import uuid
+from datetime import datetime
 
 # カスタムモジュール
 from core.YoloDetector import YoloDetector

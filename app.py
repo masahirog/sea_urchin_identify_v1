@@ -45,15 +45,6 @@ app.config.update({
 
 # 必要なディレクトリの作成
 ensure_directories()
-migrate_legacy_directories()
-
-# モデルファイル確認・生成
-model_path = os.path.join(app.config['MODEL_FOLDER'], 'sea_urchin_rf_model.pkl')
-if not os.path.exists(model_path):
-    logger.info("モデルファイルが見つかりません。テストモデルを生成します。")
-    from utils.create_test_model import create_test_model
-    create_test_model(app.config['MODEL_FOLDER'])
-    logger.info(f"テストモデル生成完了: {model_path}")
 
 # グローバル変数の一元化
 processing_queue = queue.Queue()
@@ -207,9 +198,3 @@ if __name__ == '__main__':
     
     logger.info("アプリケーションを起動します")
     app.run(host='0.0.0.0', port=8080, debug=DEBUG)
-
-# YOLOの結果ディレクトリを静的ファイルとして公開
-@app.route('/static/runs/<path:path>')
-def serve_yolo_results(path):
-    """YOLOの学習結果ファイルを配信"""
-    return send_from_directory('yolov5/runs', path)
