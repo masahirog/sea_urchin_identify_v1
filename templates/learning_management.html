@@ -337,10 +337,448 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- YoloAnnotatorをインポート -->
 <script type="module">
-// 新しいワークフロー用のJavaScriptを追加
 import { YoloAnnotator } from '/static/js/learning/YoloAnnotator.js';
 
-// ここに新しいワークフロー制御のJavaScriptを実装
+document.addEventListener('DOMContentLoaded', function() {
+    // ワークフロー要素
+    const uploadForm = document.getElementById('imageUploadForm');
+    const fileInput = document.getElementById('imageFiles');
+    const uploadedCountEl = document.getElementById('uploadedCount');
+    
+    // アノテーション要素
+    const annotationArea = document.getElementById('annotationArea');
+    const annotationCanvas = document.getElementById('annotationCanvas');
+    const currentImageNameEl = document.getElementById('currentImageName');
+    const maleAnnotationsEl = document.getElementById('maleAnnotations');
+    const femaleAnnotationsEl = document.getElementById('femaleAnnotations');
+    
+    // ボタン要素
+    const clearAnnotationsBtn = document.getElementById('clearAnnotations');
+    const saveAnnotationsBtn = document.getElementById('saveAnnotations');
+    const skipImageBtn = document.getElementById('skipImage');
+    
+    // トレーニング要素
+    const trainingConfigEl = document.getElementById('trainingConfig');
+    const startTrainingBtn = document.getElementById('startTraining');
+    const trainingProgressEl = document.getElementById('trainingProgress');
+    const trainingResultsEl = document.getElementById('trainingResults');
+    
+    // 状態管理
+    let currentStep = 1;
+    let uploadedImages = [];
+    let currentImageIndex = 0;
+    let annotations = {};
+    let annotator = null;
+    
+    // フォームの送信イベント
+    if (uploadForm) {
+        uploadForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            await handleImageUpload();
+        });
+    }
+    
+    // 画像アップロード処理
+    async function handleImageUpload() {
+        const files = fileInput.files;
+        
+        if (files.length === 0) {
+            alert('画像を選択してください');
+            return;
+        }
+        
+        const formData = new FormData();
+        for (let file of files) {
+            formData.append('images', file);
+        }
+        formData.append('gender', 'unknown');
+        
+        try {
+            // ローディング表示
+            if (window.showLoading) {
+                window.showLoading('画像をアップロード中...');
+            }
+            
+            const response = await fetch('/learning/upload-data', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (window.hideLoading) {
+                window.hideLoading();
+            }
+            
+            if (data.error) {
+                alert('エラー: ' + data.error);
+                return;
+            }
+            
+            // アップロードされた画像情報を保存
+            uploadedImages = data.uploaded_files || [];
+            uploadedCountEl.textContent = uploadedImages.length;
+            
+            if (window.showSuccessMessage) {
+                window.showSuccessMessage(`${uploadedImages.length}枚の画像をアップロードしました`);
+            } else {
+                alert(`${uploadedImages.length}枚の画像をアップロードしました`);
+            }
+            
+            // ステップ2へ移行
+            moveToStep(2);
+            startAnnotation();
+            
+        } catch (error) {
+            if (window.hideLoading) {
+                window.hideLoading();
+            }
+            alert('アップロードエラー: ' + error.message);
+        }
+    }
+    
+    // アノテーション開始
+    function startAnnotation() {
+        if (uploadedImages.length === 0) return;
+        
+        currentImageIndex = 0;
+        showAnnotationArea();
+        loadImageForAnnotation(uploadedImages[currentImageIndex]);
+        updateAnnotationProgress();
+    }
+    
+    // 画像をアノテーション用に読み込み
+    function loadImageForAnnotation(imageInfo) {
+        const img = new Image();
+        
+        img.onload = function() {
+            // キャンバスのサイズを設定
+            annotationCanvas.width = img.width;
+            annotationCanvas.height = img.height;
+            
+            // YoloAnnotatorを初期化
+            annotator = new YoloAnnotator(annotationCanvas, img);
+            annotator.setMode('create');
+            
+            // 初期クラスを設定
+            const selectedClass = document.querySelector('input[name="classType"]:checked')?.value || 'male';
+            annotator.setCurrentClass(selectedClass === 'male' ? 0 : 1);
+            
+            // 既存のアノテーションを読み込み
+            if (annotations[imageInfo.path]) {
+                annotator.loadAnnotations(annotations[imageInfo.path]);
+            }
+            
+            // アノテーション変更時のコールバック
+            annotator.onAnnotationsChanged = updateAnnotationStats;
+            
+            // 画像名表示
+            currentImageNameEl.textContent = imageInfo.filename;
+            
+            // 統計を更新
+            updateAnnotationStats();
+        };
+        
+        img.src = `/sample/${imageInfo.path}`;
+    }
+    
+    // クラス変更時の処理
+    document.querySelectorAll('input[name="classType"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            if (annotator) {
+                const selectedClass = radio.value;
+                annotator.setCurrentClass(selectedClass === 'male' ? 0 : 1);
+            }
+        });
+    });
+    
+    // アノテーション統計を更新
+    function updateAnnotationStats() {
+        if (!annotator) return;
+        
+        let maleCount = 0;
+        let femaleCount = 0;
+        
+        annotator.annotations.forEach(ann => {
+            if (ann.class === 0) maleCount++;  // 0 = male
+            else if (ann.class === 1) femaleCount++;  // 1 = female
+        });
+        
+        maleAnnotationsEl.textContent = maleCount;
+        femaleAnnotationsEl.textContent = femaleCount;
+    }
+    
+    // アノテーションエリアを表示
+    function showAnnotationArea() {
+        annotationArea.classList.remove('d-none');
+        document.getElementById('annotationControls')?.classList.remove('d-none');
+    }
+    
+    // アノテーション進捗を更新
+    function updateAnnotationProgress() {
+        const progress = document.getElementById('annotationProgress');
+        const progressBar = progress?.querySelector('.progress-bar');
+        const progressText = progress?.querySelector('.progress-text');
+        
+        if (progress) {
+            progress.classList.remove('d-none');
+            
+            const percentage = ((currentImageIndex + 1) / uploadedImages.length) * 100;
+            if (progressBar) {
+                progressBar.style.width = percentage + '%';
+            }
+            if (progressText) {
+                progressText.textContent = `${currentImageIndex + 1}/${uploadedImages.length}`;
+            }
+        }
+    }
+    
+    // ボタンイベント
+    if (clearAnnotationsBtn) {
+        clearAnnotationsBtn.addEventListener('click', function() {
+            if (annotator) {
+                annotator.clearAnnotations();
+            }
+        });
+    }
+    
+    if (saveAnnotationsBtn) {
+        saveAnnotationsBtn.addEventListener('click', async function() {
+            if (!annotator || annotator.annotations.length === 0) {
+                alert('アノテーションを追加してください');
+                return;
+            }
+            
+            // 現在のアノテーションを保存
+            const currentImage = uploadedImages[currentImageIndex];
+            annotations[currentImage.path] = annotator.annotations;
+            
+            // YOLO形式で保存
+            const yoloData = annotator.exportToYoloFormat();
+            
+            try {
+                const response = await fetch('/yolo/save-annotation', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        image_path: currentImage.path,
+                        yolo_data: yoloData
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status !== 'success') {
+                    console.error('アノテーション保存エラー:', data.message);
+                }
+            } catch (error) {
+                console.error('YOLOアノテーション保存エラー:', error);
+            }
+            
+            // 次の画像へ
+            currentImageIndex++;
+            
+            if (currentImageIndex < uploadedImages.length) {
+                loadImageForAnnotation(uploadedImages[currentImageIndex]);
+                updateAnnotationProgress();
+            } else {
+                alert('全ての画像のアノテーションが完了しました');
+                moveToStep(3);
+            }
+        });
+    }
+    
+    if (skipImageBtn) {
+        skipImageBtn.addEventListener('click', function() {
+            currentImageIndex++;
+            
+            if (currentImageIndex < uploadedImages.length) {
+                loadImageForAnnotation(uploadedImages[currentImageIndex]);
+                updateAnnotationProgress();
+            } else {
+                moveToStep(3);
+            }
+        });
+    }
+    
+    // トレーニング開始
+    if (startTrainingBtn) {
+        startTrainingBtn.addEventListener('click', async function() {
+            const params = {
+                epochs: parseInt(document.getElementById('epochs')?.value) || 100,
+                batch_size: parseInt(document.getElementById('batchSize')?.value) || 16,
+                weights: document.getElementById('modelSize')?.value || 'yolov5s.pt'
+            };
+            
+            try {
+                if (window.showLoading) {
+                    window.showLoading('YOLOトレーニングを開始中...');
+                }
+                
+                // データセット準備
+                let response = await fetch('/yolo/prepare-dataset', {
+                    method: 'POST'
+                });
+                
+                let data = await response.json();
+                
+                if (data.status !== 'success') {
+                    throw new Error(data.message || 'データセット準備に失敗しました');
+                }
+                
+                // トレーニング開始
+                response = await fetch('/yolo/training/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(params)
+                });
+                
+                data = await response.json();
+                
+                if (window.hideLoading) {
+                    window.hideLoading();
+                }
+                
+                if (data.status === 'success') {
+                    if (window.showSuccessMessage) {
+                        window.showSuccessMessage('トレーニングを開始しました');
+                    }
+                    moveToStep(4);
+                    trainingProgressEl.classList.remove('d-none');
+                    startTrainingMonitoring();
+                } else {
+                    alert('エラー: ' + data.message);
+                }
+                
+            } catch (error) {
+                if (window.hideLoading) {
+                    window.hideLoading();
+                }
+                alert('トレーニング開始エラー: ' + error.message);
+            }
+        });
+    }
+    
+    // トレーニング状態監視
+    let trainingInterval = null;
+    
+    function startTrainingMonitoring() {
+        trainingInterval = setInterval(async function() {
+            try {
+                const response = await fetch('/yolo/training/status');
+                const status = await response.json();
+                
+                updateTrainingStatus(status);
+                
+                if (['completed', 'failed', 'stopped'].includes(status.status)) {
+                    clearInterval(trainingInterval);
+                    
+                    if (status.status === 'completed') {
+                        showTrainingResults();
+                    }
+                }
+            } catch (error) {
+                console.error('ステータス取得エラー:', error);
+            }
+        }, 2000);
+    }
+    
+    // トレーニング状態更新
+    function updateTrainingStatus(status) {
+        const progressBar = document.querySelector('#trainingProgress .progress-bar');
+        const statusText = document.getElementById('trainingStatus');
+        
+        if (progressBar) {
+            const progress = (status.progress || 0) * 100;
+            progressBar.style.width = progress + '%';
+            progressBar.textContent = Math.round(progress) + '%';
+        }
+        
+        if (statusText) {
+            statusText.textContent = status.message || 'トレーニング中...';
+        }
+    }
+    
+    // トレーニング結果表示
+    async function showTrainingResults() {
+        trainingResultsEl.classList.remove('d-none');
+        
+        try {
+            const response = await fetch('/yolo/training/results');
+            const results = await response.json();
+            
+            document.getElementById('accuracy').textContent = 
+                results.accuracy ? (results.accuracy * 100).toFixed(1) + '%' : '-';
+            document.getElementById('mAP').textContent = 
+                results.mAP ? results.mAP.toFixed(3) : '-';
+            document.getElementById('totalImages').textContent = 
+                uploadedImages.length;
+            document.getElementById('trainingTime').textContent = 
+                results.training_time || '-';
+                
+        } catch (error) {
+            console.error('結果取得エラー:', error);
+        }
+    }
+    
+    // ステップ移動
+    function moveToStep(stepNumber) {
+        currentStep = stepNumber;
+        updateWorkflowUI();
+    }
+    
+    // ワークフローUI更新
+    function updateWorkflowUI() {
+        // 全ステップをリセット
+        for (let i = 1; i <= 4; i++) {
+            const stepEl = document.getElementById(`step-${i}`);
+            if (stepEl) {
+                stepEl.classList.remove('active', 'completed');
+            }
+        }
+        
+        // 完了したステップにマーク
+        for (let i = 1; i < currentStep; i++) {
+            const stepEl = document.getElementById(`step-${i}`);
+            if (stepEl) {
+                stepEl.classList.add('completed');
+            }
+        }
+        
+        // 現在のステップをアクティブに
+        const currentStepEl = document.getElementById(`step-${currentStep}`);
+        if (currentStepEl) {
+            currentStepEl.classList.add('active');
+        }
+        
+        // ステップ別の表示制御
+        if (currentStep >= 3) {
+            trainingConfigEl.classList.remove('d-none');
+        }
+    }
+    
+    // 新しい学習を開始
+    const newTrainingBtn = document.getElementById('newTraining');
+    if (newTrainingBtn) {
+        newTrainingBtn.addEventListener('click', function() {
+            location.reload();
+        });
+    }
+    
+    // ダウンロードボタン
+    const downloadModelBtn = document.getElementById('downloadModel');
+    if (downloadModelBtn) {
+        downloadModelBtn.addEventListener('click', function() {
+            // YOLOモデルのダウンロード処理
+            window.location.href = '/yolo/download-model';
+        });
+    }
+});
 </script>
 {% endblock %}

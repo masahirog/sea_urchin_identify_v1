@@ -68,6 +68,10 @@ YOLO_TRAIN_LABELS_DIR = os.path.join(YOLO_LABELS_DIR, 'train')
 YOLO_VAL_IMAGES_DIR = os.path.join(YOLO_IMAGES_DIR, 'val')
 YOLO_VAL_LABELS_DIR = os.path.join(YOLO_LABELS_DIR, 'val')
 
+UPLOAD_FOLDER = 'data/uploads'
+STATIC_FOLDER = 'static'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp'}
+STATIC_SAMPLES_DIR = os.path.join(STATIC_FOLDER, 'images/samples')
 
 def ensure_directories():
     """必要なディレクトリを作成"""

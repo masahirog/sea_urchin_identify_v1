@@ -1,15 +1,21 @@
 # routes/yolo.py
 
+# ファイル先頭のインポートを整理
 from flask import Blueprint, request, jsonify, render_template, current_app
 import os
 import json
+import csv
+import shutil
 from werkzeug.utils import secure_filename
 import cv2
 import numpy as np
-# 修正部分: YoloDetectorをインポート
+from PIL import Image
+
+# カスタムモジュール
 from core.YoloDetector import YoloDetector
-# YoloTrainerは別ファイルから
 from core.YoloTrainer import YoloTrainer
+from core.dataset_manager import DatasetManager
+from utils.file_handlers import find_image_path, handle_multiple_image_upload
 
 # Blueprintの作成
 yolo_bp = Blueprint('yolo', __name__, url_prefix='/yolo')
@@ -255,83 +261,7 @@ def get_images():
         'images': images
     })
 
-@yolo_bp.route('/api/annotations/<image_id>', methods=['GET', 'POST'])
-def handle_annotations(image_id):
-    """画像のアノテーション情報を取得・保存"""
-    annotation_dir = os.path.join(current_app.config['STATIC_FOLDER'], 'annotations/yolo')
-    os.makedirs(annotation_dir, exist_ok=True)
-    
-    annotation_file = os.path.join(annotation_dir, f'{image_id}.json')
-    
-    if request.method == 'GET':
-        if os.path.exists(annotation_file):
-            with open(annotation_file, 'r') as f:
-                return jsonify(json.load(f))
-        return jsonify({'annotations': []})
-    
-    elif request.method == 'POST':
-        data = request.json
-        
-        # アノテーションを保存
-        with open(annotation_file, 'w') as f:
-            json.dump(data, f)
-        
-        # YOLO形式に変換して保存
-        # 画像ファイルを検索
-        image_dirs = [
-            os.path.join(current_app.config['STATIC_FOLDER'], 'images/samples/papillae/male'),
-            os.path.join(current_app.config['STATIC_FOLDER'], 'images/samples/papillae/female')
-        ]
-        
-        image_path = None
-        for img_dir in image_dirs:
-            possible_path = os.path.join(img_dir, image_id)
-            if os.path.exists(possible_path):
-                image_path = possible_path
-                break
-        
-        if image_path and 'annotations' in data:
-            from PIL import Image
-            img = Image.open(image_path)
-            img_width, img_height = img.size
-            
-            # YOLO形式（クラスID, 中心x, 中心y, 幅, 高さ）に変換
-            yolo_annotations = []
-            for ann in data['annotations']:
-                # 座標の取得と正規化
-                x1, y1, x2, y2 = ann['x1'], ann['y1'], ann['x2'], ann['y2']
-                center_x = (x1 + x2) / 2 / img_width
-                center_y = (y1 + y2) / 2 / img_height
-                width = (x2 - x1) / img_width
-                height = (y2 - y1) / img_height
-                
-                # クラスIDの設定（デフォルトは0=生殖乳頭）
-                class_id = 0
-                
-                yolo_annotations.append(f"{class_id} {center_x} {center_y} {width} {height}")
-            
-            # YOLOデータセットディレクトリの設定
-            yolo_dataset_dir = 'data/yolo_dataset'
-            yolo_images_dir = os.path.join(yolo_dataset_dir, 'images/train')
-            yolo_labels_dir = os.path.join(yolo_dataset_dir, 'labels/train')
-            
-            os.makedirs(yolo_images_dir, exist_ok=True)
-            os.makedirs(yolo_labels_dir, exist_ok=True)
-            
-            # 画像をYOLOデータセットにコピー
-            import shutil
-            img_copy_path = os.path.join(yolo_images_dir, image_id)
-            shutil.copy(image_path, img_copy_path)
-            
-            # アノテーションをYOLO形式で保存
-            label_file = os.path.join(yolo_labels_dir, os.path.splitext(image_id)[0] + '.txt')
-            with open(label_file, 'w') as f:
-                f.write('\n'.join(yolo_annotations))
-        
-        return jsonify({
-            'status': 'success',
-            'message': 'アノテーションを保存しました'
-        })
+
 
 @yolo_bp.route('/training/save', methods=['POST'])
 def save_training_results():
@@ -344,4 +274,168 @@ def save_training_results():
         return jsonify({
             'status': 'error',
             'message': f'結果保存エラー: {str(e)}'
+        }), 500
+
+
+@yolo_bp.route('/prepare-dataset', methods=['POST'])
+def prepare_dataset():
+    """YOLOデータセットを準備"""
+    try:
+        result = DatasetManager.prepare_yolo_dataset()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'データセットの準備が完了しました',
+            **result
+        })
+    except Exception as e:
+        current_app.logger.error(f'データセット準備エラー: {str(e)}')
+        return jsonify({
+            'status': 'error',
+            'message': f'データセット準備エラー: {str(e)}'
+        }), 500
+
+# データセット状態確認エンドポイントを追加
+@yolo_bp.route('/dataset-status', methods=['GET'])
+def dataset_status():
+    """YOLOデータセットの状態を確認"""
+    try:
+        stats = DatasetManager.get_dataset_stats()
+        
+        return jsonify({
+            'status': 'success',
+            'exists': stats['total_images'] > 0,
+            'stats': stats
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+
+
+
+# save_yolo_annotationでfind_image_pathを使用
+@yolo_bp.route('/save-annotation', methods=['POST'])
+def save_yolo_annotation():
+    """YOLOアノテーションを保存（改良版）"""
+    try:
+        data = request.json
+        image_path = data.get('image_path')
+        yolo_data = data.get('yolo_data')
+        
+        if not image_path or yolo_data is None:
+            return jsonify({
+                'status': 'error',
+                'message': '必要なパラメータが不足しています'
+            }), 400
+        
+        filename = os.path.basename(image_path)
+        label_name = os.path.splitext(filename)[0] + '.txt'
+        
+        # YOLOフォーマットで保存
+        label_dir = os.path.join('data/yolo_dataset/labels/train')
+        os.makedirs(label_dir, exist_ok=True)
+        label_path = os.path.join(label_dir, label_name)
+        
+        with open(label_path, 'w') as f:
+            f.write(yolo_data)
+        
+        # データセットに画像をコピー（必要な場合）
+        if not os.path.exists(os.path.join('data/yolo_dataset/images/train', filename)):
+            # find_image_pathを使用して画像を検索
+            source_image = find_image_path(filename)
+            
+            if source_image:
+                import shutil
+                dst_path = os.path.join('data/yolo_dataset/images/train', filename)
+                shutil.copy2(source_image, dst_path)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'アノテーションを保存しました',
+            'label_path': label_path
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'アノテーション保存エラー: {str(e)}')
+        return jsonify({
+            'status': 'error',
+            'message': f'保存エラー: {str(e)}'
+        }), 500
+
+
+# handle_annotationsのPOST部分を簡略化
+@yolo_bp.route('/api/annotations/<image_id>', methods=['GET', 'POST'])
+def handle_annotations(image_id):
+    """画像のアノテーション情報を取得・保存"""
+    if request.method == 'GET':
+        # GET処理はそのまま
+        annotation_dir = os.path.join(current_app.config['STATIC_FOLDER'], 'annotations/yolo')
+        annotation_file = os.path.join(annotation_dir, f'{image_id}.json')
+        
+        if os.path.exists(annotation_file):
+            with open(annotation_file, 'r') as f:
+                return jsonify(json.load(f))
+        return jsonify({'annotations': []})
+    
+    elif request.method == 'POST':
+        # save_yolo_annotationを呼び出す
+        data = request.json
+        data['image_path'] = image_id
+        data['save_json'] = True
+        return save_yolo_annotation()
+
+@yolo_bp.route('/training/results', methods=['GET'])
+def get_training_results():
+    """トレーニング結果を取得"""
+    try:
+        # 最新の実験結果を探す
+        runs_dir = 'yolov5/runs/train'
+        if not os.path.exists(runs_dir):
+            return jsonify({
+                'status': 'error',
+                'message': 'トレーニング結果が見つかりません'
+            }), 404
+        
+        # 最新のexpディレクトリを取得
+        exp_dirs = [d for d in os.listdir(runs_dir) if d.startswith('exp')]
+        if not exp_dirs:
+            return jsonify({
+                'status': 'error',
+                'message': 'トレーニング結果が見つかりません'
+            }), 404
+        
+        latest_exp = sorted(exp_dirs)[-1]
+        exp_path = os.path.join(runs_dir, latest_exp)
+        
+        # results.csvから結果を読み取り
+        results_csv = os.path.join(exp_path, 'results.csv')
+        results = {}
+        
+        if os.path.exists(results_csv):
+            import csv
+            with open(results_csv, 'r') as f:
+                reader = csv.DictReader(f)
+                rows = list(reader)
+                if rows:
+                    last_row = rows[-1]
+                    results['mAP'] = float(last_row.get('metrics/mAP_0.5', 0))
+                    results['precision'] = float(last_row.get('metrics/precision', 0))
+                    results['recall'] = float(last_row.get('metrics/recall', 0))
+        
+        # トレーニング時間を計算（簡易版）
+        results['training_time'] = '計測中'
+        
+        # 精度はmAPから推定
+        results['accuracy'] = results.get('mAP', 0)
+        
+        return jsonify(results)
+        
+    except Exception as e:
+        current_app.logger.error(f'結果取得エラー: {str(e)}')
+        return jsonify({
+            'status': 'error',
+            'message': f'結果取得エラー: {str(e)}'
         }), 500

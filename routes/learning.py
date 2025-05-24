@@ -1,11 +1,6 @@
 """
 routes/learning.py - 統合学習ルート
 
-統合対象:
-- routes/learning_routes.py (既存機能)
-- routes/api_routes.py (評価・タスク管理部分)
-→ 統合学習システムの完全版
-
 機能:
 - 学習データ管理
 - モデル訓練・評価
@@ -22,6 +17,8 @@ import uuid
 import traceback
 import base64
 from datetime import datetime
+from utils.file_handlers import handle_multiple_image_upload
+
 
 learning_bp = Blueprint('learning', __name__)
 
@@ -50,18 +47,8 @@ def unified_management_page():
 
 @learning_bp.route('/upload-data', methods=['POST'])
 def upload_learning_data():
-    """
-    学習データ用の画像をアップロード
-    
-    Request:
-    - images: アップロードする画像ファイル（複数可）
-    - gender: 性別カテゴリ ('male', 'female', 'unknown')
-    
-    Returns:
-    - JSON: アップロード結果
-    """
+    """学習データ用の画像をアップロード（改良版）"""
     from app import app
-    from utils.file_handlers import allowed_file, is_image_file
     from config import STATIC_SAMPLES_DIR
     
     if 'images' not in request.files:
@@ -73,47 +60,23 @@ def upload_learning_data():
     if not files or all(f.filename == '' for f in files):
         return jsonify({"error": "ファイルが選択されていません"}), 400
     
-    uploaded_files = []
-    errors = []
-    
     # 保存先ディレクトリの決定
     if gender in ['male', 'female']:
         target_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', gender)
     else:
         target_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'unknown')
     
-    # ディレクトリが存在しない場合は作成
-    os.makedirs(target_dir, exist_ok=True)
+    # 共通関数を使用
+    uploaded_files, errors = handle_multiple_image_upload(
+        files, 
+        target_dir, 
+        app.config.get('ALLOWED_EXTENSIONS')
+    )
     
-    for file in files:
-        if file and file.filename != '':
-            if allowed_file(file.filename, app.config['ALLOWED_EXTENSIONS']) and is_image_file(file.filename):
-                try:
-                    # 安全なファイル名に変換
-                    filename = secure_filename(file.filename)
-                    
-                    # 同名ファイルが既に存在する場合はユニークな名前に変更
-                    target_path = os.path.join(target_dir, filename)
-                    if os.path.exists(target_path):
-                        name, ext = os.path.splitext(filename)
-                        unique_suffix = uuid.uuid4().hex[:8]
-                        filename = f"{name}_{unique_suffix}{ext}"
-                        target_path = os.path.join(target_dir, filename)
-                    
-                    # ファイルを保存
-                    file.save(target_path)
-                    uploaded_files.append({
-                        'filename': filename,
-                        'path': f'papillae/{gender}/{filename}',
-                        'gender': gender
-                    })
-                    current_app.logger.info(f"学習データアップロード: {gender}/{filename}")
-                    
-                except Exception as e:
-                    current_app.logger.error(f"ファイル保存エラー {file.filename}: {str(e)}")
-                    errors.append(f"{file.filename}: {str(e)}")
-            else:
-                errors.append(f"{file.filename}: 無効なファイル形式です")
+    # パスの調整（gender情報を追加）
+    for file_info in uploaded_files:
+        file_info['gender'] = gender
+        file_info['path'] = f'papillae/{gender}/{file_info["filename"]}'
     
     result = {
         "success": len(uploaded_files) > 0,
@@ -127,6 +90,7 @@ def upload_learning_data():
     
     if len(uploaded_files) > 0:
         result["message"] = f"{len(uploaded_files)}個のファイルをアップロードしました"
+        current_app.logger.info(f"学習データアップロード: {len(uploaded_files)}ファイル ({gender})")
     else:
         result["message"] = "アップロードに失敗しました"
         
