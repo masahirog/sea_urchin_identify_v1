@@ -460,3 +460,38 @@ def check_dataset():
         'valid_labels': len(valid_labels),
         'empty_label_files': empty_labels
     })
+
+# トレーニングセッション管理
+training_sessions = {}
+
+@yolo_bp.route('/training/session', methods=['POST'])
+def create_training_session():
+    """トレーニングセッションを作成"""
+    session_id = str(uuid.uuid4())
+    training_sessions[session_id] = {
+        'created_at': datetime.now(),
+        'status': 'initialized',
+        'uploaded_images': request.json.get('uploaded_images', []),
+        'current_step': request.json.get('current_step', 1)
+    }
+    
+    # セッションIDをクッキーに保存
+    response = jsonify({'session_id': session_id})
+    response.set_cookie('yolo_training_session', session_id, max_age=3600)
+    return response
+
+@yolo_bp.route('/training/session/status', methods=['GET'])
+def get_training_session_status():
+    """セッション状態を取得"""
+    session_id = request.cookies.get('yolo_training_session')
+    
+    if not session_id or session_id not in training_sessions:
+        return jsonify({'error': 'セッションが見つかりません'}), 404
+    
+    session = training_sessions[session_id]
+    
+    # 実際のトレーニング状態も確認
+    training_status = trainer.get_training_status()
+    session['training_status'] = training_status
+    
+    return jsonify(session)

@@ -31,6 +31,7 @@ class YoloTrainer:
         self.log_file = None
         self.current_epoch = 0
         self.total_epochs = 0
+        self.training_id = None
         self.metrics = {
             'box_loss': [],
             'obj_loss': [],
@@ -42,7 +43,8 @@ class YoloTrainer:
         }
     
     def start_training(self, weights='yolov5s.pt', batch_size=4, epochs=50, img_size=640,
-                       device='', workers=4, name='exp', exist_ok=False):
+                       device='', workers=4, name='exp', exist_ok=False, **kwargs):
+
         """
         トレーニングを開始する
         
@@ -59,6 +61,8 @@ class YoloTrainer:
         Returns:
             bool: トレーニングが開始されたかどうか
         """
+        self.training_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+
         if self.is_training:
             logger.warning("既にトレーニングが実行中です")
             return False
@@ -241,7 +245,18 @@ class YoloTrainer:
             self.is_training = False
             self.training_process = None
             logger.info("トレーニングプロセス終了処理完了")
-
+    
+    @staticmethod
+    def get_latest_training():
+        """最新のトレーニング状態を取得"""
+        import glob
+        state_files = glob.glob('logs/training_state_*.json')
+        if not state_files:
+            return None
+            
+        latest_file = max(state_files, key=os.path.getctime)
+        with open(latest_file, 'r') as f:
+            return json.load(f)
 
     def get_training_status(self):
         """現在のトレーニング状況を取得する（改善版）"""

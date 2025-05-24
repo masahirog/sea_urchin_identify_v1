@@ -211,9 +211,6 @@
                                                 <button class="btn btn-success" id="saveAnnotations">
                                                     <i class="fas fa-save"></i> 保存して次へ
                                                 </button>
-                                                <button class="btn btn-secondary" id="skipImage">
-                                                    <i class="fas fa-forward"></i> スキップ
-                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -236,8 +233,12 @@
                             <div class="col-md-3">
                                 <label class="form-label">
                                     エポック数 
-                                    <i class="fas fa-info-circle" data-bs-toggle="tooltip" 
-                                       title="学習を繰り返す回数。多いほど精度向上しますが時間がかかります"></i>
+                                    <a href="#" class="text-decoration-none" data-bs-toggle="popover" 
+                                       data-bs-trigger="hover focus"
+                                       data-bs-title="エポック数とは" 
+                                       data-bs-content="全データを何回繰り返して学習するかの設定です。多いほど精度が向上しますが、過学習のリスクもあります。データが少ない場合は200-300、多い場合は50-100が目安です。">
+                                        <i class="fas fa-question-circle text-info"></i>
+                                    </a>
                                 </label>
                                 <input type="number" class="form-control" id="epochs" value="100" min="10" max="1000">
                                 <small class="text-muted">推奨: 100-200</small>
@@ -246,8 +247,12 @@
                             <div class="col-md-3">
                                 <label class="form-label">
                                     バッチサイズ
-                                    <i class="fas fa-info-circle" data-bs-toggle="tooltip" 
-                                       title="一度に処理する画像数。PCの性能に応じて調整してください"></i>
+                                    <a href="#" class="text-decoration-none" data-bs-toggle="popover" 
+                                       data-bs-trigger="hover focus"
+                                       data-bs-title="バッチサイズとは" 
+                                       data-bs-content="一度に処理する画像の枚数です。大きいほど学習が安定しますが、メモリを多く使用します。PCのスペックに応じて4〜32の間で調整してください。">
+                                        <i class="fas fa-question-circle text-info"></i>
+                                    </a>
                                 </label>
                                 <select class="form-select" id="batchSize">
                                     <option value="4">4 (低スペック)</option>
@@ -260,8 +265,12 @@
                             <div class="col-md-3">
                                 <label class="form-label">
                                     モデルサイズ
-                                    <i class="fas fa-info-circle" data-bs-toggle="tooltip" 
-                                       title="モデルの複雑さ。大きいほど高精度ですが処理が重くなります"></i>
+                                    <a href="#" class="text-decoration-none" data-bs-toggle="popover" 
+                                       data-bs-trigger="hover focus"
+                                       data-bs-title="モデルサイズとは" 
+                                       data-bs-content="YOLOモデルの複雑さです。Nanoは最速ですが精度は低め、Mediumは高精度ですが処理が重くなります。通常はSmallがバランスが良く推奨されます。">
+                                        <i class="fas fa-question-circle text-info"></i>
+                                    </a>
                                 </label>
                                 <select class="form-select" id="modelSize">
                                     <option value="yolov5n.pt">Nano (最速・低精度)</option>
@@ -341,6 +350,14 @@
     </div>
 </div>
 
+<div id="resumeTrainingAlert" class="alert alert-info d-none">
+    <h5><i class="fas fa-info-circle"></i> トレーニングが実行中です</h5>
+    <p>前回開始したトレーニングが継続中です。</p>
+    <button class="btn btn-primary" onclick="resumeTrainingMonitoring()">
+        <i class="fas fa-sync"></i> 進捗を確認
+    </button>
+</div>
+
 <!-- アノテーション操作ガイド -->
 <div class="annotation-controls d-none" id="annotationControls">
     <h6>操作方法</h6>
@@ -356,39 +373,127 @@
 <!-- YoloAnnotatorをインポート -->
 <script type="module">
 import { YoloAnnotator } from '/static/js/learning/YoloAnnotator.js';
+import { showLoading, hideLoading, showSuccessMessage, showErrorMessage } from '/static/js/utilities.js';
 
+// Bootstrap Tooltip と Popover の初期化
 document.addEventListener('DOMContentLoaded', function() {
-    // ワークフロー要素
-    const uploadForm = document.getElementById('imageUploadForm');
-    const fileInput = document.getElementById('imageFiles');
-    const uploadedCountEl = document.getElementById('uploadedCount');
+    // Tooltip初期化
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
     
-    // アノテーション要素
-    const annotationArea = document.getElementById('annotationArea');
-    const annotationCanvas = document.getElementById('annotationCanvas');
-    const currentImageNameEl = document.getElementById('currentImageName');
-    const maleAnnotationsEl = document.getElementById('maleAnnotations');
-    const femaleAnnotationsEl = document.getElementById('femaleAnnotations');
+    // Popover初期化
+    var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+    var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+        return new bootstrap.Popover(popoverTriggerEl);
+    });
+});
+
+// ==========================================
+// グローバル変数と状態管理
+// ==========================================
+let currentStep = 1;
+let uploadedImages = [];
+let currentImageIndex = 0;
+let annotations = {};
+let annotator = null;
+let trainingInterval = null;
+
+// 状態管理オブジェクト
+const WorkflowState = {
+    // 状態を保存
+    save() {
+        const state = {
+            currentStep: currentStep,
+            uploadedImages: uploadedImages,
+            currentImageIndex: currentImageIndex,
+            annotations: annotations,
+            trainingStarted: !!trainingInterval,
+            trainingParams: {
+                epochs: document.getElementById('epochs')?.value,
+                batch_size: document.getElementById('batchSize')?.value,
+                weights: document.getElementById('modelSize')?.value
+            }
+        };
+        sessionStorage.setItem('yolo_workflow_state', JSON.stringify(state));
+    },
     
-    // ボタン要素
-    const clearAnnotationsBtn = document.getElementById('clearAnnotations');
-    const saveAnnotationsBtn = document.getElementById('saveAnnotations');
-    const skipImageBtn = document.getElementById('skipImage');
+    // 状態を復元
+    restore() {
+        const saved = sessionStorage.getItem('yolo_workflow_state');
+        if (saved) {
+            try {
+                const state = JSON.parse(saved);
+                currentStep = state.currentStep || 1;
+                uploadedImages = state.uploadedImages || [];
+                currentImageIndex = state.currentImageIndex || 0;
+                annotations = state.annotations || {};
+                
+                // UIを復元
+                moveToStep(currentStep);
+                
+                // アップロード数を表示
+                document.getElementById('uploadedCount').textContent = uploadedImages.length;
+                
+                // トレーニング中だった場合は監視を再開
+                if (state.trainingStarted && currentStep === 4) {
+                    checkAndResumeTraining();
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('状態復元エラー:', error);
+                this.clear();
+            }
+        }
+        return false;
+    },
     
-    // トレーニング要素
-    const trainingConfigEl = document.getElementById('trainingConfig');
-    const startTrainingBtn = document.getElementById('startTraining');
-    const trainingProgressEl = document.getElementById('trainingProgress');
-    const trainingResultsEl = document.getElementById('trainingResults');
+    // 状態をクリア
+    clear() {
+        sessionStorage.removeItem('yolo_workflow_state');
+    }
+};
+
+// ==========================================
+// 初期化処理
+// ==========================================
+document.addEventListener('DOMContentLoaded', async function() {
+    // 既存のトレーニングをチェック
+    const hasExistingTraining = await checkExistingTraining();
     
-    // 状態管理
-    let currentStep = 1;
-    let uploadedImages = [];
-    let currentImageIndex = 0;
-    let annotations = {};
-    let annotator = null;
+    if (hasExistingTraining) {
+        // トレーニング実行中の場合
+        moveToStep(4);
+        startTrainingMonitoring();
+    } else {
+        // 保存された状態を復元
+        const restored = WorkflowState.restore();
+        if (restored) {
+            console.log('ワークフロー状態を復元しました');
+            
+            // 現在のステップに応じた処理
+            if (currentStep === 2 && uploadedImages.length > 0) {
+                showAnnotationArea();
+                if (currentImageIndex < uploadedImages.length) {
+                    loadImageForAnnotation(uploadedImages[currentImageIndex]);
+                    updateAnnotationProgress();
+                }
+            }
+        }
+    }
     
+    // イベントリスナーの設定
+    setupEventListeners();
+});
+
+// ==========================================
+// イベントリスナー設定
+// ==========================================
+function setupEventListeners() {
     // フォームの送信イベント
+    const uploadForm = document.getElementById('imageUploadForm');
     if (uploadForm) {
         uploadForm.addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -396,493 +501,472 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // 画像アップロード処理
-    async function handleImageUpload() {
-        const files = fileInput.files;
-        
-        if (files.length === 0) {
-            alert('画像を選択してください');
-            return;
-        }
-        
-        const formData = new FormData();
-        for (let file of files) {
-            formData.append('images', file);
-        }
-        formData.append('gender', 'unknown');
-        
-        try {
-            // ローディング表示
-            if (window.showLoading) {
-                window.showLoading('画像をアップロード中...');
-            }
-            
-            const response = await fetch('/learning/upload-data', {
-                method: 'POST',
-                body: formData
-            });
-            
-            const data = await response.json();
-            
-            if (window.hideLoading) {
-                window.hideLoading();
-            }
-            
-            if (data.error) {
-                alert('エラー: ' + data.error);
-                return;
-            }
-            
-            // アップロードされた画像情報を保存
-            uploadedImages = data.uploaded_files || [];
-            uploadedCountEl.textContent = uploadedImages.length;
-            
-            if (window.showSuccessMessage) {
-                window.showSuccessMessage(`${uploadedImages.length}枚の画像をアップロードしました`);
-            } else {
-                alert(`${uploadedImages.length}枚の画像をアップロードしました`);
-            }
-            
-            // ステップ2へ移行
-            moveToStep(2);
-            startAnnotation();
-            
-        } catch (error) {
-            if (window.hideLoading) {
-                window.hideLoading();
-            }
-            alert('アップロードエラー: ' + error.message);
-        }
+    // アノテーションボタン
+    const clearAnnotationsBtn = document.getElementById('clearAnnotations');
+    if (clearAnnotationsBtn) {
+        clearAnnotationsBtn.addEventListener('click', clearCurrentAnnotations);
     }
     
-    // アノテーション開始
-    function startAnnotation() {
-        if (uploadedImages.length === 0) return;
-        
-        currentImageIndex = 0;
-        showAnnotationArea();
-        loadImageForAnnotation(uploadedImages[currentImageIndex]);
-        updateAnnotationProgress();
+    const saveAnnotationsBtn = document.getElementById('saveAnnotations');
+    if (saveAnnotationsBtn) {
+        saveAnnotationsBtn.addEventListener('click', saveAndNext);
     }
     
-    // 画像をアノテーション用に読み込み
-    function loadImageForAnnotation(imageInfo) {
-        const img = new Image();
-        
-        img.onload = function() {
-            // キャンバスのサイズを設定
-            annotationCanvas.width = img.width;
-            annotationCanvas.height = img.height;
-            
-            // YoloAnnotatorを初期化
-            annotator = new YoloAnnotator(annotationCanvas, img);
-            annotator.setMode('create');
-            
-            // 初期クラスを設定
-            const selectedClass = document.querySelector('input[name="classType"]:checked')?.value || 'male';
-            annotator.setCurrentClass(selectedClass === 'male' ? 0 : 1);
-            
-            // 既存のアノテーションを読み込み
-            if (annotations[imageInfo.path]) {
-                annotator.loadAnnotations(annotations[imageInfo.path]);
-            }
-            
-            // アノテーション変更時のコールバック
-            annotator.onAnnotationsChanged = updateAnnotationStats;
-            
-            // 画像名表示
-            currentImageNameEl.textContent = imageInfo.filename;
-            
-            // 統計を更新
-            updateAnnotationStats();
-        };
-        
-        img.src = `/sample/${imageInfo.path}`;
-    }
-    
-    // クラス変更時の処理
+    // クラス変更
     document.querySelectorAll('input[name="classType"]').forEach(radio => {
-        radio.addEventListener('change', () => {
-            if (annotator) {
-                const selectedClass = radio.value;
-                annotator.setCurrentClass(selectedClass === 'male' ? 0 : 1);
-            }
-        });
+        radio.addEventListener('change', updateCurrentClass);
     });
     
-    // アノテーション統計を更新
-    function updateAnnotationStats() {
-        if (!annotator) return;
-        
-        let maleCount = 0;
-        let femaleCount = 0;
-        
-        annotator.annotations.forEach(ann => {
-            if (ann.class === 0) maleCount++;  // 0 = male
-            else if (ann.class === 1) femaleCount++;  // 1 = female
-        });
-        
-        maleAnnotationsEl.textContent = maleCount;
-        femaleAnnotationsEl.textContent = femaleCount;
-    }
-    
-    // アノテーションエリアを表示
-    function showAnnotationArea() {
-        annotationArea.classList.remove('d-none');
-        document.getElementById('annotationControls')?.classList.remove('d-none');
-    }
-    
-    // アノテーション進捗を更新
-    function updateAnnotationProgress() {
-        const progress = document.getElementById('annotationProgress');
-        const progressBar = progress?.querySelector('.progress-bar');
-        const progressText = progress?.querySelector('.progress-text');
-        
-        if (progress) {
-            progress.classList.remove('d-none');
-            
-            const percentage = ((currentImageIndex + 1) / uploadedImages.length) * 100;
-            if (progressBar) {
-                progressBar.style.width = percentage + '%';
-            }
-            if (progressText) {
-                progressText.textContent = `${currentImageIndex + 1}/${uploadedImages.length}`;
-            }
-        }
-    }
-    
-    // ボタンイベント
-    if (clearAnnotationsBtn) {
-        clearAnnotationsBtn.addEventListener('click', function() {
-            if (annotator) {
-                annotator.clearAnnotations();
-            }
-        });
-    }
-    
-    if (saveAnnotationsBtn) {
-        saveAnnotationsBtn.addEventListener('click', async function() {
-            if (!annotator || annotator.annotations.length === 0) {
-                alert('アノテーションを追加してください');
-                return;
-            }
-            
-            // 現在のアノテーションを保存
-            const currentImage = uploadedImages[currentImageIndex];
-            annotations[currentImage.path] = annotator.annotations;
-            
-            // YOLO形式で保存
-            const yoloData = annotator.exportToYoloFormat();
-            
-            try {
-                const response = await fetch('/yolo/save-annotation', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        image_path: currentImage.path,
-                        yolo_data: yoloData
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.status !== 'success') {
-                    console.error('アノテーション保存エラー:', data.message);
-                }
-            } catch (error) {
-                console.error('YOLOアノテーション保存エラー:', error);
-            }
-            
-            // 次の画像へ
-            currentImageIndex++;
-            
-            if (currentImageIndex < uploadedImages.length) {
-                loadImageForAnnotation(uploadedImages[currentImageIndex]);
-                updateAnnotationProgress();
-            } else {
-                alert('全ての画像のアノテーションが完了しました');
-                moveToStep(3);
-            }
-        });
-    }
-    
-    if (skipImageBtn) {
-        skipImageBtn.addEventListener('click', function() {
-            currentImageIndex++;
-            
-            if (currentImageIndex < uploadedImages.length) {
-                loadImageForAnnotation(uploadedImages[currentImageIndex]);
-                updateAnnotationProgress();
-            } else {
-                moveToStep(3);
-            }
-        });
-    }
-    
     // トレーニング開始
+    const startTrainingBtn = document.getElementById('startTraining');
     if (startTrainingBtn) {
-        startTrainingBtn.addEventListener('click', async function() {
-            const params = {
-                epochs: parseInt(document.getElementById('epochs')?.value) || 100,
-                batch_size: parseInt(document.getElementById('batchSize')?.value) || 16,
-                weights: document.getElementById('modelSize')?.value || 'yolov5s.pt'
-            };
-            
-            try {
-                if (window.showLoading) {
-                    window.showLoading('YOLOトレーニングを開始中...');
-                }
-                
-                // データセット準備
-                let response = await fetch('/yolo/prepare-dataset', {
-                    method: 'POST'
-                });
-                
-                let data = await response.json();
-                
-                if (data.status !== 'success') {
-                    throw new Error(data.message || 'データセット準備に失敗しました');
-                }
-                
-                // トレーニング開始
-                response = await fetch('/yolo/training/start', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(params)
-                });
-                
-                data = await response.json();
-                
-                if (window.hideLoading) {
-                    window.hideLoading();
-                }
-                
-                if (data.status === 'success') {
-                    if (window.showSuccessMessage) {
-                        window.showSuccessMessage('トレーニングを開始しました');
-                    }
-                    moveToStep(4);
-                    trainingProgressEl.classList.remove('d-none');
-                    startTrainingMonitoring();
-                } else {
-                    alert('エラー: ' + data.message);
-                }
-                
-            } catch (error) {
-                if (window.hideLoading) {
-                    window.hideLoading();
-                }
-                alert('トレーニング開始エラー: ' + error.message);
-            }
-        });
-    }
-    
-    // トレーニング状態監視
-    let trainingInterval = null;
-
-    function startTrainingMonitoring() {
-        let noProgressCount = 0;
-        let lastProgress = 0;
-        
-        trainingInterval = setInterval(async function() {
-            try {
-                const response = await fetch('/yolo/training/status');
-                const status = await response.json();
-                
-                console.log('Training status:', status); // デバッグ用
-                
-                updateTrainingStatus(status);
-                
-                // 進捗が変わらない場合のカウント
-                if (status.progress === lastProgress) {
-                    noProgressCount++;
-                } else {
-                    noProgressCount = 0;
-                    lastProgress = status.progress;
-                }
-                
-                // 60秒以上進捗がない場合は警告
-                if (noProgressCount > 30) {
-                    console.warn('トレーニングの進捗が停滞しています');
-                }
-                
-                // トレーニング完了の検出
-                if (status.status === 'completed' || 
-                    (status.current_epoch >= status.total_epochs && status.total_epochs > 0)) {
-                    clearInterval(trainingInterval);
-                    
-                    // 完了メッセージ
-                    if (window.showSuccessMessage) {
-                        window.showSuccessMessage('トレーニングが完了しました！');
-                    }
-                    
-                    // 結果表示
-                    showTrainingResults();
-                } else if (status.status === 'failed' || status.status === 'stopped') {
-                    clearInterval(trainingInterval);
-                    
-                    if (window.showErrorMessage) {
-                        window.showErrorMessage('トレーニングが中断されました');
-                    }
-                }
-            } catch (error) {
-                console.error('ステータス取得エラー:', error);
-            }
-        }, 2000); // 2秒ごとに更新
-    }
-
-    // トレーニング状態更新の改善版
-    function updateTrainingStatus(status) {
-        const progressBar = document.querySelector('#trainingProgress .progress-bar');
-        const statusText = document.getElementById('trainingStatus');
-        
-        if (progressBar) {
-            const progressPercent = (status.progress || 0) * 100;
-            progressBar.style.width = progressPercent + '%';
-            progressBar.textContent = Math.round(progressPercent) + '%';
-            
-            // エポック情報も表示
-            if (status.current_epoch !== undefined && status.total_epochs) {
-                progressBar.textContent = `${status.current_epoch}/${status.total_epochs} (${Math.round(progressPercent)}%)`;
-            }
-        }
-        
-        if (statusText) {
-            if (status.message) {
-                statusText.textContent = status.message;
-            } else if (status.current_epoch !== undefined && status.total_epochs) {
-                statusText.textContent = `エポック ${status.current_epoch}/${status.total_epochs} を実行中...`;
-            }
-            
-            // 経過時間も表示
-            if (status.elapsed_time) {
-                statusText.textContent += ` (経過時間: ${status.elapsed_time})`;
-            }
-        }
-        
-        // メトリクスの更新（もしあれば）
-        if (status.metrics && status.metrics.mAP50 && status.metrics.mAP50.length > 0) {
-            const latestMAP = status.metrics.mAP50[status.metrics.mAP50.length - 1];
-            const mapElement = document.getElementById('currentMAP');
-            if (mapElement) {
-                mapElement.textContent = latestMAP.toFixed(3);
-            }
-        }
-    }
-
-    // トレーニング結果表示の改善版
-    async function showTrainingResults() {
-        trainingResultsEl.classList.remove('d-none');
-        
-        try {
-            // まずトレーニング状態から結果を取得
-            let response = await fetch('/yolo/training/status');
-            let status = await response.json();
-            
-            // 結果画像があれば表示
-            if (status.result_images) {
-                // 結果グラフを表示するエリアを追加
-                const resultsContainer = document.getElementById('trainingResultsGraphs');
-                if (resultsContainer && status.result_images.results) {
-                    resultsContainer.innerHTML = `
-                        <div class="text-center mt-4">
-                            <h5>トレーニング結果グラフ</h5>
-                            <img src="${status.result_images.results}" class="img-fluid" alt="Training Results">
-                        </div>
-                    `;
-                }
-            }
-            
-            // results.csv から最終的なメトリクスを取得
-            if (status.latest_results) {
-                const results = status.latest_results;
-                
-                // mAP値を取得（カラム名の違いに対応）
-                const mAP = results['metrics/mAP_0.5'] || results['mAP_0.5'] || 
-                           results['metrics/mAP50'] || results['mAP50'] || 0;
-                
-                document.getElementById('accuracy').textContent = 
-                    mAP ? (parseFloat(mAP) * 100).toFixed(1) + '%' : '-';
-                document.getElementById('mAP').textContent = 
-                    mAP ? parseFloat(mAP).toFixed(3) : '-';
-            } else {
-                // フォールバック: /yolo/training/results を試す
-                response = await fetch('/yolo/training/results');
-                const results = await response.json();
-                
-                document.getElementById('accuracy').textContent = 
-                    results.accuracy ? (results.accuracy * 100).toFixed(1) + '%' : '-';
-                document.getElementById('mAP').textContent = 
-                    results.mAP ? results.mAP.toFixed(3) : '-';
-            }
-            
-            // その他のメトリクス
-            document.getElementById('totalImages').textContent = 
-                uploadedImages.length;
-            document.getElementById('trainingTime').textContent = 
-                status.elapsed_time || '-';
-                
-        } catch (error) {
-            console.error('結果取得エラー:', error);
-        }
-    }
-    
-    // ステップ移動
-    function moveToStep(stepNumber) {
-        currentStep = stepNumber;
-        updateWorkflowUI();
-    }
-    
-    // ワークフローUI更新
-    function updateWorkflowUI() {
-        // 全ステップをリセット
-        for (let i = 1; i <= 4; i++) {
-            const stepEl = document.getElementById(`step-${i}`);
-            if (stepEl) {
-                stepEl.classList.remove('active', 'completed');
-            }
-        }
-        
-        // 完了したステップにマーク
-        for (let i = 1; i < currentStep; i++) {
-            const stepEl = document.getElementById(`step-${i}`);
-            if (stepEl) {
-                stepEl.classList.add('completed');
-            }
-        }
-        
-        // 現在のステップをアクティブに
-        const currentStepEl = document.getElementById(`step-${currentStep}`);
-        if (currentStepEl) {
-            currentStepEl.classList.add('active');
-        }
-        
-        // ステップ別の表示制御
-        if (currentStep >= 3) {
-            trainingConfigEl.classList.remove('d-none');
-        }
+        startTrainingBtn.addEventListener('click', startWorkflowTraining);
     }
     
     // 新しい学習を開始
     const newTrainingBtn = document.getElementById('newTraining');
     if (newTrainingBtn) {
         newTrainingBtn.addEventListener('click', function() {
+            WorkflowState.clear();
             location.reload();
         });
     }
     
-    // ダウンロードボタン
+    // モデルダウンロード
     const downloadModelBtn = document.getElementById('downloadModel');
     if (downloadModelBtn) {
         downloadModelBtn.addEventListener('click', function() {
-            // YOLOモデルのダウンロード処理
             window.location.href = '/yolo/download-model';
         });
     }
+}
+
+// ==========================================
+// 画像アップロード処理
+// ==========================================
+async function handleImageUpload() {
+    const fileInput = document.getElementById('imageFiles');
+    const files = fileInput.files;
+    
+    if (files.length === 0) {
+        showErrorMessage('画像を選択してください');
+        return;
+    }
+    
+    const formData = new FormData();
+    for (let file of files) {
+        formData.append('images', file);
+    }
+    formData.append('gender', 'unknown');
+    
+    try {
+        showLoading('画像をアップロード中...');
+        
+        const response = await fetch('/learning/upload-data', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        hideLoading();
+        
+        if (data.error) {
+            showErrorMessage('エラー: ' + data.error);
+            return;
+        }
+        
+        // アップロードされた画像情報を保存
+        uploadedImages = data.uploaded_files || [];
+        document.getElementById('uploadedCount').textContent = uploadedImages.length;
+        
+        showSuccessMessage(`${uploadedImages.length}枚の画像をアップロードしました`);
+        
+        // 状態を保存
+        WorkflowState.save();
+        
+        // ステップ2へ移行
+        moveToStep(2);
+        startAnnotation();
+        
+    } catch (error) {
+        hideLoading();
+        showErrorMessage('アップロードエラー: ' + error.message);
+    }
+}
+
+// ==========================================
+// アノテーション関連
+// ==========================================
+function startAnnotation() {
+    if (uploadedImages.length === 0) return;
+    
+    currentImageIndex = 0;
+    showAnnotationArea();
+    loadImageForAnnotation(uploadedImages[currentImageIndex]);
+    updateAnnotationProgress();
+}
+
+function loadImageForAnnotation(imageInfo) {
+    const canvas = document.getElementById('annotationCanvas');
+    const img = new Image();
+    
+    img.onload = function() {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        
+        // YoloAnnotatorを初期化
+        annotator = new YoloAnnotator(canvas, img);
+        annotator.setMode('create');
+        
+        // 初期クラスを設定
+        updateCurrentClass();
+        
+        // 既存のアノテーションを読み込み
+        if (annotations[imageInfo.path]) {
+            annotator.loadAnnotations(annotations[imageInfo.path]);
+        }
+        
+        // 画像名表示
+        document.getElementById('currentImageName').textContent = imageInfo.filename;
+        
+        // 統計を更新
+        updateAnnotationStats();
+    };
+    
+    img.src = `/sample/${imageInfo.path}`;
+}
+
+function updateCurrentClass() {
+    const selectedClass = document.querySelector('input[name="classType"]:checked')?.value || 'male';
+    if (annotator) {
+        annotator.setCurrentClass(selectedClass === 'male' ? 0 : 1);
+    }
+}
+
+function updateAnnotationStats() {
+    if (!annotator) return;
+    
+    let maleCount = 0;
+    let femaleCount = 0;
+    
+    annotator.annotations.forEach(ann => {
+        if (ann.class === 0) maleCount++;
+        else if (ann.class === 1) femaleCount++;
+    });
+    
+    document.getElementById('maleAnnotations').textContent = maleCount;
+    document.getElementById('femaleAnnotations').textContent = femaleCount;
+}
+
+function clearCurrentAnnotations() {
+    if (annotator) {
+        annotator.clearAnnotations();
+        updateAnnotationStats();
+    }
+}
+
+async function saveAndNext() {
+    if (!annotator || annotator.annotations.length === 0) {
+        showErrorMessage('アノテーションを追加してください');
+        return;
+    }
+    
+    // 現在のアノテーションを保存
+    const currentImage = uploadedImages[currentImageIndex];
+    annotations[currentImage.path] = annotator.annotations;
+    
+    // YOLO形式で保存
+    const yoloData = annotator.exportToYoloFormat();
+    
+    try {
+        const response = await fetch('/yolo/save-annotation', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                image_path: currentImage.path,
+                yolo_data: yoloData
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status !== 'success') {
+            console.error('アノテーション保存エラー:', data.message);
+        }
+    } catch (error) {
+        console.error('YOLOアノテーション保存エラー:', error);
+    }
+    
+    // 次の画像へ
+    currentImageIndex++;
+    
+    // 状態を保存
+    WorkflowState.save();
+    
+    if (currentImageIndex < uploadedImages.length) {
+        loadImageForAnnotation(uploadedImages[currentImageIndex]);
+        updateAnnotationProgress();
+    } else {
+        showSuccessMessage('全ての画像のアノテーションが完了しました');
+        moveToStep(3);
+    }
+}
+
+function showAnnotationArea() {
+    document.getElementById('annotationArea')?.classList.remove('d-none');
+    document.getElementById('annotationControls')?.classList.remove('d-none');
+}
+
+function updateAnnotationProgress() {
+    const progress = document.getElementById('annotationProgress');
+    const progressBar = progress?.querySelector('.progress-bar');
+    const progressText = progress?.querySelector('.progress-text');
+    
+    if (progress) {
+        progress.classList.remove('d-none');
+        
+        const percentage = ((currentImageIndex + 1) / uploadedImages.length) * 100;
+        if (progressBar) {
+            progressBar.style.width = percentage + '%';
+        }
+        if (progressText) {
+            progressText.textContent = `${currentImageIndex + 1}/${uploadedImages.length}`;
+        }
+    }
+}
+
+// ==========================================
+// トレーニング関連
+// ==========================================
+async function startWorkflowTraining() {
+    const params = {
+        epochs: parseInt(document.getElementById('epochs')?.value) || 100,
+        batch_size: parseInt(document.getElementById('batchSize')?.value) || 16,
+        weights: document.getElementById('modelSize')?.value || 'yolov5s.pt'
+    };
+    
+    try {
+        showLoading('YOLOトレーニングを開始中...');
+        
+        // データセット準備
+        let response = await fetch('/yolo/prepare-dataset', {
+            method: 'POST'
+        });
+        
+        let data = await response.json();
+        
+        if (data.status !== 'success') {
+            throw new Error(data.message || 'データセット準備に失敗しました');
+        }
+        
+        // トレーニング開始
+        response = await fetch('/yolo/training/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(params)
+        });
+        
+        data = await response.json();
+        
+        hideLoading();
+        
+        if (data.status === 'success') {
+            showSuccessMessage('トレーニングを開始しました');
+            moveToStep(4);
+            document.getElementById('trainingProgress')?.classList.remove('d-none');
+            startTrainingMonitoring();
+            
+            // 状態を保存
+            WorkflowState.save();
+        } else {
+            showErrorMessage('エラー: ' + data.message);
+        }
+        
+    } catch (error) {
+        hideLoading();
+        showErrorMessage('トレーニング開始エラー: ' + error.message);
+    }
+}
+
+function startTrainingMonitoring() {
+    if (trainingInterval) {
+        clearInterval(trainingInterval);
+    }
+    
+    let noProgressCount = 0;
+    let lastProgress = 0;
+    
+    trainingInterval = setInterval(async function() {
+        try {
+            const response = await fetch('/yolo/training/status');
+            const status = await response.json();
+            
+            updateTrainingStatus(status);
+            
+            // 進捗チェック
+            if (status.progress === lastProgress) {
+                noProgressCount++;
+            } else {
+                noProgressCount = 0;
+                lastProgress = status.progress;
+            }
+            
+            // トレーニング完了の検出
+            if (status.status === 'completed' || 
+                (status.current_epoch >= status.total_epochs && status.total_epochs > 0)) {
+                clearInterval(trainingInterval);
+                trainingInterval = null;
+                
+                showSuccessMessage('トレーニングが完了しました！');
+                showTrainingResults();
+                
+                // 状態を保存
+                WorkflowState.save();
+            } else if (status.status === 'failed' || status.status === 'stopped') {
+                clearInterval(trainingInterval);
+                trainingInterval = null;
+                
+                showErrorMessage('トレーニングが中断されました');
+            }
+        } catch (error) {
+            console.error('ステータス取得エラー:', error);
+        }
+    }, 2000);
+}
+
+function updateTrainingStatus(status) {
+    const progressBar = document.querySelector('#trainingProgress .progress-bar');
+    const statusText = document.getElementById('trainingStatus');
+    
+    if (progressBar) {
+        const progressPercent = (status.progress || 0) * 100;
+        progressBar.style.width = progressPercent + '%';
+        
+        if (status.current_epoch !== undefined && status.total_epochs) {
+            progressBar.textContent = `${status.current_epoch}/${status.total_epochs} (${Math.round(progressPercent)}%)`;
+        } else {
+            progressBar.textContent = Math.round(progressPercent) + '%';
+        }
+    }
+    
+    if (statusText) {
+        if (status.message) {
+            statusText.textContent = status.message;
+        } else if (status.current_epoch !== undefined && status.total_epochs) {
+            statusText.textContent = `エポック ${status.current_epoch}/${status.total_epochs} を実行中...`;
+        }
+        
+        if (status.elapsed_time) {
+            statusText.textContent += ` (経過時間: ${status.elapsed_time})`;
+        }
+    }
+}
+
+async function showTrainingResults() {
+    document.getElementById('trainingResults')?.classList.remove('d-none');
+    
+    try {
+        let response = await fetch('/yolo/training/status');
+        let status = await response.json();
+        
+        // 結果表示
+        if (status.latest_results) {
+            const results = status.latest_results;
+            const mAP = results['metrics/mAP_0.5'] || results['mAP_0.5'] || 
+                       results['metrics/mAP50'] || results['mAP50'] || 0;
+            
+            document.getElementById('accuracy').textContent = 
+                mAP ? (parseFloat(mAP) * 100).toFixed(1) + '%' : '-';
+            document.getElementById('mAP').textContent = 
+                mAP ? parseFloat(mAP).toFixed(3) : '-';
+        }
+        
+        document.getElementById('totalImages').textContent = uploadedImages.length;
+        document.getElementById('trainingTime').textContent = status.elapsed_time || '-';
+        
+    } catch (error) {
+        console.error('結果取得エラー:', error);
+    }
+}
+
+// ==========================================
+// UI制御
+// ==========================================
+function moveToStep(stepNumber) {
+    currentStep = stepNumber;
+    updateWorkflowUI();
+    
+    // 状態を保存
+    WorkflowState.save();
+}
+
+function updateWorkflowUI() {
+    // 全ステップをリセット
+    for (let i = 1; i <= 4; i++) {
+        const stepEl = document.getElementById(`step-${i}`);
+        if (stepEl) {
+            stepEl.classList.remove('active', 'completed');
+        }
+    }
+    
+    // 完了したステップにマーク
+    for (let i = 1; i < currentStep; i++) {
+        const stepEl = document.getElementById(`step-${i}`);
+        if (stepEl) {
+            stepEl.classList.add('completed');
+        }
+    }
+    
+    // 現在のステップをアクティブに
+    const currentStepEl = document.getElementById(`step-${currentStep}`);
+    if (currentStepEl) {
+        currentStepEl.classList.add('active');
+    }
+    
+    // ステップ別の表示制御
+    if (currentStep >= 3) {
+        document.getElementById('trainingConfig')?.classList.remove('d-none');
+    }
+}
+
+// ==========================================
+// 既存トレーニングのチェックと再開
+// ==========================================
+async function checkExistingTraining() {
+    try {
+        const response = await fetch('/yolo/training/status');
+        const status = await response.json();
+        
+        if (status.status === 'running') {
+            return true;
+        }
+    } catch (error) {
+        console.error('既存トレーニング確認エラー:', error);
+    }
+    return false;
+}
+
+async function checkAndResumeTraining() {
+    const hasTraining = await checkExistingTraining();
+    if (hasTraining) {
+        startTrainingMonitoring();
+    }
+}
+
+// ==========================================
+// ページ離脱時の警告
+// ==========================================
+window.addEventListener('beforeunload', function(e) {
+    if (currentStep === 4 && trainingInterval) {
+        e.preventDefault();
+        e.returnValue = 'トレーニングが実行中です。ページを離れると進捗が見えなくなりますが、トレーニングは継続されます。';
+    }
 });
+
 </script>
 {% endblock %}
