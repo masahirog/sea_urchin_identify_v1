@@ -232,13 +232,7 @@ def get_learning_data():
 @learning_bp.route('/delete-data', methods=['POST'])
 def delete_learning_data():
     """
-    学習データを削除
-    
-    Request:
-    - path: 削除する画像のパス
-    
-    Returns:
-    - JSON: 削除結果
+    学習データを削除（シンプル版）
     """
     from config import STATIC_SAMPLES_DIR
     
@@ -249,40 +243,33 @@ def delete_learning_data():
         
         image_path = data['path']
         
-        # パスの検証
-        if '..' in image_path or not image_path.startswith('papillae/'):
+        # パスの検証（セキュリティ）
+        if '..' in image_path:
             return jsonify({"error": "不正なパスです"}), 400
         
-        # フルパスの構築
-        full_path = os.path.join(STATIC_SAMPLES_DIR, image_path)
+        # フルパスの構築（シンプルに）
+        if image_path.startswith('papillae/'):
+            full_path = os.path.join(STATIC_SAMPLES_DIR, image_path)
+        else:
+            # すでにフルパスの場合はそのまま使用
+            full_path = os.path.join(STATIC_SAMPLES_DIR, os.path.basename(image_path))
         
         if not os.path.exists(full_path):
             return jsonify({"error": "指定された画像が見つかりません"}), 404
         
-        # 画像の削除
+        # 画像ファイルを削除
         os.remove(full_path)
         
-        # アノテーションマッピングからも削除
-        mapping_file = os.path.join('static', 'annotation_mapping.json')
-        if os.path.exists(mapping_file):
-            try:
-                with open(mapping_file, 'r') as f:
-                    mapping = json.load(f)
-                
-                if image_path in mapping:
-                    # アノテーション画像も削除
-                    annotation_path = os.path.join('static', mapping[image_path])
-                    if os.path.exists(annotation_path):
-                        os.remove(annotation_path)
-                    
-                    # マッピングから削除
-                    del mapping[image_path]
-                    
-                    with open(mapping_file, 'w') as f:
-                        json.dump(mapping, f, indent=2)
-                
-            except Exception as e:
-                current_app.logger.error(f"アノテーション削除エラー: {str(e)}")
+        # 関連するYOLOアノテーションも削除
+        base_name = os.path.splitext(os.path.basename(full_path))[0]
+        yolo_paths = [
+            os.path.join('data/yolo_dataset/labels/train', f'{base_name}.txt'),
+            os.path.join('data/yolo_dataset/labels/val', f'{base_name}.txt')
+        ]
+        
+        for yolo_path in yolo_paths:
+            if os.path.exists(yolo_path):
+                os.remove(yolo_path)
         
         current_app.logger.info(f"学習データ削除: {image_path}")
         
@@ -293,9 +280,54 @@ def delete_learning_data():
         
     except Exception as e:
         current_app.logger.error(f"学習データ削除エラー: {str(e)}")
-        traceback.print_exc()
         return jsonify({"error": f"画像の削除に失敗しました: {str(e)}"}), 500
 
+@learning_bp.route('/delete-all-data', methods=['POST'])
+def delete_all_learning_data():
+    """
+    全ての学習データを削除
+    """
+    from config import STATIC_SAMPLES_DIR
+    
+    try:
+        # 各カテゴリのディレクトリ
+        categories = ['male', 'female', 'unknown']
+        deleted_count = 0
+        
+        for category in categories:
+            category_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', category)
+            if not os.path.exists(category_dir):
+                continue
+                
+            # 画像ファイルを削除
+            for filename in os.listdir(category_dir):
+                if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                    file_path = os.path.join(category_dir, filename)
+                    os.remove(file_path)
+                    deleted_count += 1
+                    
+                    # YOLOアノテーションも削除
+                    base_name = os.path.splitext(filename)[0]
+                    yolo_paths = [
+                        os.path.join('data/yolo_dataset/labels/train', f'{base_name}.txt'),
+                        os.path.join('data/yolo_dataset/labels/val', f'{base_name}.txt')
+                    ]
+                    
+                    for yolo_path in yolo_paths:
+                        if os.path.exists(yolo_path):
+                            os.remove(yolo_path)
+        
+        current_app.logger.info(f"全学習データ削除: {deleted_count}ファイル")
+        
+        return jsonify({
+            "success": True,
+            "message": f"{deleted_count}個の画像を削除しました",
+            "deleted_count": deleted_count
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"全データ削除エラー: {str(e)}")
+        return jsonify({"error": f"削除中にエラーが発生しました: {str(e)}"}), 500
 # ================================
 # アノテーション機能
 # ================================
@@ -1628,55 +1660,3 @@ def get_total_annotations():
     
     return total_annotations
 
-# @learning_bp.route('/delete-data', methods=['POST'])
-# def delete_learning_data():
-#     """学習データ（画像）を削除"""
-#     try:
-#         data = request.get_json()
-#         image_path = data.get('path')
-        
-#         if not image_path:
-#             return jsonify({'status': 'error', 'message': 'パスが指定されていません'}), 400
-        
-#         # セキュリティチェック（パストラバーサル対策）
-#         from werkzeug.utils import secure_filename
-#         import os
-        
-#         # 実際のファイルパスを構築
-#         from config import STATIC_SAMPLES_DIR
-        
-#         # パスから実際のファイル位置を特定
-#         if 'static/images/samples/' in image_path:
-#             file_path = os.path.join(current_app.root_path, image_path)
-#         else:
-#             # 相対パスの場合
-#             file_path = os.path.join(STATIC_SAMPLES_DIR, image_path.replace('static/images/samples/', ''))
-        
-#         # ファイルが存在し、許可されたディレクトリ内にあることを確認
-#         if os.path.exists(file_path) and STATIC_SAMPLES_DIR in os.path.abspath(file_path):
-#             try:
-#                 os.remove(file_path)
-                
-#                 # 対応するYOLOアノテーションファイルも削除
-#                 base_name = os.path.splitext(os.path.basename(file_path))[0]
-                
-#                 # YOLOラベルファイルのパスを確認
-#                 yolo_label_paths = [
-#                     os.path.join('data/yolo_dataset/labels/train', f'{base_name}.txt'),
-#                     os.path.join('data/yolo_dataset/labels/val', f'{base_name}.txt')
-#                 ]
-                
-#                 for label_path in yolo_label_paths:
-#                     if os.path.exists(label_path):
-#                         os.remove(label_path)
-                
-#                 return jsonify({'status': 'success', 'message': '画像を削除しました'})
-#             except Exception as e:
-#                 logger.error(f"ファイル削除エラー: {str(e)}")
-#                 return jsonify({'status': 'error', 'message': 'ファイルの削除に失敗しました'}), 500
-#         else:
-#             return jsonify({'status': 'error', 'message': 'ファイルが見つかりません'}), 404
-            
-#     except Exception as e:
-#         logger.error(f"削除処理エラー: {str(e)}")
-#         return jsonify({'status': 'error', 'message': str(e)}), 500

@@ -434,7 +434,6 @@ export class YoloTrainingManager {
         // アノテーション関連ボタン
         document.getElementById('clearAnnotations')?.addEventListener('click', () => this.clearCurrentAnnotations());
         document.getElementById('saveAnnotations')?.addEventListener('click', () => this.saveAndNext());
-        document.getElementById('skipImage')?.addEventListener('click', () => this.skipImage());
         
         // クラス選択
         document.querySelectorAll('input[name="classType"]').forEach(radio => {
@@ -612,20 +611,6 @@ export class YoloTrainingManager {
             
         } catch (error) {
             console.error('YOLOアノテーション保存エラー:', error);
-        }
-    }
-    
-    /**
-     * 画像をスキップ
-     */
-    skipImage() {
-        this.currentImageIndex++;
-        
-        if (this.currentImageIndex < this.uploadedImages.length) {
-            this.loadImageForAnnotation(this.uploadedImages[this.currentImageIndex]);
-            this.updateAnnotationProgress();
-        } else {
-            this.moveToStep(3);
         }
     }
     
