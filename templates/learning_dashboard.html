@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}学習ダッシュボード - ウニ生殖乳頭分析システム{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dashboard-card {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .metric-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    
+    .metric-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+    
+    .metric-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #007bff;
+    }
+    
+    .status-badge {
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+    
+    .status-active {
+        background: #28a745;
+        color: white;
+    }
+    
+    .status-inactive {
+        background: #6c757d;
+        color: white;
+    }
+    
+    .progress-indicator {
+        width: 100%;
+        height: 10px;
+        background: #e9ecef;
+        border-radius: 5px;
+        overflow: hidden;
+        margin-top: 10px;
+    }
+    
+    .progress-fill {
+        height: 100%;
+        background: #007bff;
+        transition: width 0.3s;
+    }
+    
+    .history-item {
+        border-left: 3px solid #007bff;
+        padding-left: 15px;
+        margin-bottom: 15px;
+    }
+    
+    .history-date {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2 class="text-center mb-4">
+        <i class="fas fa-tachometer-alt"></i> 学習ダッシュボード
+    </h2>
+    
+    <!-- 全体サマリー -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="dashboard-card text-center">
+                <i class="fas fa-brain fa-2x mb-2 text-primary"></i>
+                <div class="metric-value">{{ summary.total_trainings }}</div>
+                <div class="metric-label">総学習回数</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="dashboard-card text-center">
+                <i class="fas fa-images fa-2x mb-2 text-success"></i>
+                <div class="metric-value">{{ summary.total_images }}</div>
+                <div class="metric-label">学習画像総数</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="dashboard-card text-center">
+                <i class="fas fa-trophy fa-2x mb-2 text-warning"></i>
+                <div class="metric-value">{{ "%.1f"|format(summary.best_accuracy * 100) }}%</div>
+                <div class="metric-label">最高精度</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="dashboard-card text-center">
+                <i class="fas fa-database fa-2x mb-2 text-info"></i>
+                <div class="metric-value">{{ summary.total_annotations }}</div>
+                <div class="metric-label">アノテーション数</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 現在のモデル状態 -->
+    <div class="dashboard-card">
+        <h4><i class="fas fa-microchip"></i> 現在のモデル状態</h4>
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <div class="metric-row">
+                    <span class="metric-label">モデルタイプ:</span>
+                    <span>{{ current_model.type }}</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">最終更新:</span>
+                    <span>{{ current_model.last_update }}</span>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">状態:</span>
+                    <span class="status-badge {% if current_model.is_active %}status-active{% else %}status-inactive{% endif %}">
+                        {% if current_model.is_active %}稼働中{% else %}待機中{% endif %}
+                    </span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="metric-row">
+                    <span class="metric-label">検出精度:</span>
+                    <span class="metric-value">{{ "%.1f"|format(current_model.accuracy * 100) }}%</span>
+                </div>
+                <div class="progress-indicator">
+                    <div class="progress-fill" style="width: {{ current_model.accuracy * 100 }}%"></div>
+                </div>
+                <small class="text-muted">※ mAP@0.5での評価</small>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 学習履歴 -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="dashboard-card">
+                <h5><i class="fas fa-history"></i> 最近の学習履歴</h5>
+                <div class="mt-3">
+                    {% for history in recent_trainings %}
+                    <div class="history-item">
+                        <div class="history-date">{{ history.date }}</div>
+                        <div>
+                            <a href="{{ url_for('learning.view_results', exp=history.experiment) }}" class="text-decoration-none">
+                                <strong>{{ history.experiment }}</strong>
+                            </a>
+                            <span class="badge bg-secondary">{{ history.epochs }}エポック</span>
+                        </div>
+                        <div>
+                            精度: {{ "%.1f"|format(history.accuracy * 100) }}%
+                            {% if history.accuracy > 0.5 %}
+                            <i class="fas fa-check-circle text-success"></i>
+                            {% else %}
+                            <i class="fas fa-exclamation-circle text-warning"></i>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="dashboard-card">
+                <h5><i class="fas fa-chart-line"></i> 改善の推奨事項</h5>
+                <div class="mt-3">
+                    {% if recommendations %}
+                    {% for rec in recommendations %}
+                    <div class="alert alert-{{ rec.type }} py-2">
+                        <i class="fas fa-{{ rec.icon }}"></i> {{ rec.message }}
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <p class="text-muted">現在、特に推奨事項はありません。</p>
+                    {% endif %}
+                </div>
+                
+                <div class="d-grid gap-2 mt-3">
+                    <a href="{{ url_for('learning.learning_page') }}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> 新しい学習を開始
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

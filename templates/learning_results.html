@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}学習結果確認 - ウニ生殖乳頭分析システム{% endblock %}
+
+{% block extra_css %}
+<style>
+    .results-table {
+        font-size: 0.9rem;
+    }
+    
+    .metric-card {
+        text-align: center;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+    
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #007bff;
+    }
+    
+    .metric-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+        margin-top: 5px;
+    }
+    
+    .table-container {
+        max-height: 600px;
+        overflow-y: auto;
+    }
+    
+    .best-value {
+        background-color: #d4edda !important;
+        font-weight: bold;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2 class="text-center mb-4">
+        <i class="fas fa-chart-line"></i> YOLO学習結果
+    </h2>
+    
+    <!-- エラー表示 -->
+    {% if error %}
+    <div class="alert alert-warning">
+        <i class="fas fa-exclamation-triangle"></i> {{ error }}
+    </div>
+    {% endif %}
+    
+    {% if results %}
+    <!-- 現在の状態サマリー -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="metric-card">
+                <div class="metric-value">{{ results.summary.current_epoch }}/{{ results.summary.total_epochs }}</div>
+                <div class="metric-label">エポック</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card">
+                <div class="metric-value">{{ "%.1f"|format(results.summary.best_map50 * 100) }}%</div>
+                <div class="metric-label">最高mAP@0.5</div>
+                <small class="text-muted">エポック {{ results.summary.best_map50_epoch }}</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card">
+                <div class="metric-value">{{ "%.1f"|format(results.summary.current_map50 * 100) }}%</div>
+                <div class="metric-label">現在のmAP@0.5</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="metric-card">
+                <div class="metric-value">{{ "%.3f"|format(results.summary.current_loss) }}</div>
+                <div class="metric-label">現在の総損失</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 詳細データテーブル -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5><i class="fas fa-table"></i> エポック別詳細データ</h5>
+            <div>
+                <button class="btn btn-sm btn-outline-secondary" onclick="toggleCompactView()">
+                    <i class="fas fa-compress"></i> 表示切替
+                </button>
+                <a href="{{ url_for('learning.download_results_csv') }}" class="btn btn-sm btn-primary">
+                    <i class="fas fa-download"></i> CSVダウンロード
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-container">
+                <table class="table table-striped table-hover results-table" id="resultsTable">
+                    <thead class="sticky-top bg-white">
+                        <tr>
+                            <th>エポック</th>
+                            <th>Box Loss</th>
+                            <th>Obj Loss</th>
+                            <th>Cls Loss</th>
+                            <th>Precision</th>
+                            <th>Recall</th>
+                            <th>mAP@0.5</th>
+                            <th>mAP@0.5:0.95</th>
+                            <th>Val Loss</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in results.data %}
+                        <tr {% if row.epoch == results.summary.best_map50_epoch %}class="best-value"{% endif %}>
+                            <td>{{ row.epoch }}</td>
+                            <td>{{ "%.4f"|format(row.train_box_loss) }}</td>
+                            <td>{{ "%.4f"|format(row.train_obj_loss) }}</td>
+                            <td>{{ "%.4f"|format(row.train_cls_loss) }}</td>
+                            <td>{{ "%.3f"|format(row.precision) }}</td>
+                            <td>{{ "%.3f"|format(row.recall) }}</td>
+                            <td>{{ "%.3f"|format(row.map50) }}</td>
+                            <td>{{ "%.3f"|format(row.map50_95) }}</td>
+                            <td>{{ "%.4f"|format(row.val_box_loss + row.val_obj_loss + row.val_cls_loss) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 最新の評価情報 -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6><i class="fas fa-info-circle"></i> モデル情報</h6>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">モデルタイプ:</dt>
+                        <dd class="col-sm-7">{{ results.model_info.model_type }}</dd>
+                        
+                        <dt class="col-sm-5">学習開始時刻:</dt>
+                        <dd class="col-sm-7">{{ results.model_info.start_time }}</dd>
+                        
+                        <dt class="col-sm-5">最終更新:</dt>
+                        <dd class="col-sm-7">{{ results.model_info.last_update }}</dd>
+                        
+                        <dt class="col-sm-5">データセット:</dt>
+                        <dd class="col-sm-7">{{ results.model_info.dataset_path }}</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6><i class="fas fa-cogs"></i> 学習パラメータ</h6>
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">バッチサイズ:</dt>
+                        <dd class="col-sm-7">{{ results.training_params.batch_size }}</dd>
+                        
+                        <dt class="col-sm-5">画像サイズ:</dt>
+                        <dd class="col-sm-7">{{ results.training_params.img_size }}</dd>
+                        
+                        <dt class="col-sm-5">初期学習率:</dt>
+                        <dd class="col-sm-7">{{ "%.4f"|format(results.training_params.lr0) }}</dd>
+                        
+                        <dt class="col-sm-5">Weight Decay:</dt>
+                        <dd class="col-sm-7">{{ "%.4f"|format(results.training_params.weight_decay) }}</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    {% else %}
+    <!-- 学習結果がない場合 -->
+    <div class="text-center py-5">
+        <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted">学習結果がありません</h5>
+        <p class="text-muted">YOLOモデルの学習を実行すると、ここに結果が表示されます。</p>
+        <a href="{{ url_for('learning.learning_page') }}" class="btn btn-primary">
+            <i class="fas fa-graduation-cap"></i> 学習を開始
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// テーブル表示切替
+function toggleCompactView() {
+    const table = document.getElementById('resultsTable');
+    table.classList.toggle('table-sm');
+}
+
+// 自動更新（学習中の場合）
+{% if results and results.is_training %}
+setInterval(function() {
+    location.reload();
+}, 30000); // 30秒ごとに更新
+{% endif %}
+</script>
+{% endblock %}

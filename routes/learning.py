@@ -19,7 +19,6 @@ import base64
 from datetime import datetime
 from utils.file_handlers import handle_multiple_image_upload
 
-
 learning_bp = Blueprint('learning', __name__)
 
 # ================================
@@ -401,70 +400,70 @@ def save_annotation():
 # 学習・評価実行
 # ================================
 
-@learning_bp.route('/start-unified-training', methods=['POST'])
-def start_unified_training():
-    """
-    統合学習プロセスを開始
-    データ検証 → モデル訓練 → 基本評価 → 詳細分析を一括実行
+# @learning_bp.route('/start-unified-training', methods=['POST'])
+# def start_unified_training():
+#     """
+#     統合学習プロセスを開始
+#     データ検証 → モデル訓練 → 基本評価 → 詳細分析を一括実行
     
-    Returns:
-    - JSON: 統合処理タスクの情報
-    """
-    import uuid
-    from app import processing_queue, processing_status, app
+#     Returns:
+#     - JSON: 統合処理タスクの情報
+#     """
+#     import uuid
+#     from app import processing_queue, processing_status, app
     
-    try:
-        # 1. データセット検証（修正版）
-        validation_result = validate_dataset_for_training_fixed()
-        if not validation_result['valid']:
-            return jsonify({
-                "error": validation_result['message'],
-                "suggestions": validation_result.get('suggestions', [])
-            }), 400
+#     try:
+#         # 1. データセット検証（修正版）
+#         validation_result = validate_dataset_for_training_fixed()
+#         if not validation_result['valid']:
+#             return jsonify({
+#                 "error": validation_result['message'],
+#                 "suggestions": validation_result.get('suggestions', [])
+#             }), 400
         
-        # 2. 統合処理タスクの作成
-        task_id = str(uuid.uuid4())
-        unified_task = {
-            "type": "unified_training",
-            "id": task_id,
-            "dataset_dir": app.config['DATASET_FOLDER'],
-            "phases": [
-                "feature_extraction",
-                "model_training", 
-                "basic_evaluation",
-                "detailed_analysis",
-                "annotation_impact"
-            ],
-            "dataset_stats": validation_result['stats']
-        }
+#         # 2. 統合処理タスクの作成
+#         task_id = str(uuid.uuid4())
+#         unified_task = {
+#             "type": "unified_training",
+#             "id": task_id,
+#             "dataset_dir": app.config['DATASET_FOLDER'],
+#             "phases": [
+#                 "feature_extraction",
+#                 "model_training", 
+#                 "basic_evaluation",
+#                 "detailed_analysis",
+#                 "annotation_impact"
+#             ],
+#             "dataset_stats": validation_result['stats']
+#         }
         
-        # 3. 処理状態の初期化
-        processing_status[task_id] = {
-            "status": "queued",
-            "message": "統合学習プロセスを準備中...",
-            "progress": 0,
-            "current_phase": "preparation",
-            "phases_completed": [],
-            "dataset_stats": validation_result['stats']
-        }
+#         # 3. 処理状態の初期化
+#         processing_status[task_id] = {
+#             "status": "queued",
+#             "message": "統合学習プロセスを準備中...",
+#             "progress": 0,
+#             "current_phase": "preparation",
+#             "phases_completed": [],
+#             "dataset_stats": validation_result['stats']
+#         }
         
-        # 4. キューに追加
-        processing_queue.put(unified_task)
+#         # 4. キューに追加
+#         processing_queue.put(unified_task)
         
-        current_app.logger.info(f"統合学習開始: {task_id}")
+#         current_app.logger.info(f"統合学習開始: {task_id}")
         
-        return jsonify({
-            "success": True,
-            "task_id": task_id,
-            "message": "統合学習プロセスを開始しました",
-            "estimated_duration": estimate_training_duration(validation_result['stats']),
-            "phases": unified_task["phases"]
-        })
+#         return jsonify({
+#             "success": True,
+#             "task_id": task_id,
+#             "message": "統合学習プロセスを開始しました",
+#             "estimated_duration": estimate_training_duration(validation_result['stats']),
+#             "phases": unified_task["phases"]
+#         })
         
-    except Exception as e:
-        current_app.logger.error(f"統合学習開始エラー: {str(e)}")
-        traceback.print_exc()
-        return jsonify({"error": f"統合学習の開始に失敗しました: {str(e)}"}), 500
+#     except Exception as e:
+#         current_app.logger.error(f"統合学習開始エラー: {str(e)}")
+#         traceback.print_exc()
+#         return jsonify({"error": f"統合学習の開始に失敗しました: {str(e)}"}), 500
 
 
 def validate_dataset_for_training_fixed():
@@ -610,161 +609,161 @@ def cancel_task(task_id):
     })
 
 
-@learning_bp.route('/unified-status/<task_id>')
-def get_unified_status(task_id):
-    """
-    統合学習プロセスの詳細ステータスを取得
+# @learning_bp.route('/unified-status/<task_id>')
+# def get_unified_status(task_id):
+#     """
+#     統合学習プロセスの詳細ステータスを取得
     
-    Parameters:
-    - task_id: 統合処理タスクのID
+#     Parameters:
+#     - task_id: 統合処理タスクのID
     
-    Returns:
-    - JSON: 詳細なステータス情報
-    """
-    from app import processing_status
+#     Returns:
+#     - JSON: 詳細なステータス情報
+#     """
+#     from app import processing_status
     
-    try:
-        if task_id not in processing_status:
-            return jsonify({"error": "指定されたタスクが見つかりません"}), 404
+#     try:
+#         if task_id not in processing_status:
+#             return jsonify({"error": "指定されたタスクが見つかりません"}), 404
         
-        status = processing_status[task_id]
+#         status = processing_status[task_id]
         
-        # 統合プロセス専用の追加情報
-        enhanced_status = {
-            **status,
-            "phase_details": get_phase_details(status),
-            "estimated_remaining": estimate_remaining_time(status),
-            "next_phase": get_next_phase(status),
-            "completion_percentage": calculate_completion_percentage(status)
-        }
+#         # 統合プロセス専用の追加情報
+#         enhanced_status = {
+#             **status,
+#             "phase_details": get_phase_details(status),
+#             "estimated_remaining": estimate_remaining_time(status),
+#             "next_phase": get_next_phase(status),
+#             "completion_percentage": calculate_completion_percentage(status)
+#         }
         
-        return jsonify(enhanced_status)
+#         return jsonify(enhanced_status)
         
-    except Exception as e:
-        current_app.logger.error(f"統合ステータス取得エラー: {str(e)}")
-        return jsonify({"error": "ステータス取得に失敗しました"}), 500
+#     except Exception as e:
+#         current_app.logger.error(f"統合ステータス取得エラー: {str(e)}")
+#         return jsonify({"error": "ステータス取得に失敗しました"}), 500
 
 # ================================
 # 評価履歴 (旧api_routes.pyから統合)
 # ================================
 
-@learning_bp.route('/learning-history')
-def get_learning_history():
-    """
-    学習・評価履歴を取得（修正版）
+# @learning_bp.route('/learning-history')
+# def get_learning_history():
+#     """
+#     学習・評価履歴を取得（修正版）
     
-    Returns:
-    - JSON: 学習・評価履歴
-    """
-    try:
-        from core.evaluator import UnifiedEvaluator
+#     Returns:
+#     - JSON: 学習・評価履歴
+#     """
+#     try:
+#         from core.evaluator import UnifiedEvaluator
         
-        # デバッグログ追加
-        current_app.logger.info("履歴データ取得開始")
+#         # デバッグログ追加
+#         current_app.logger.info("履歴データ取得開始")
         
-        # 評価履歴を取得
-        evaluator = UnifiedEvaluator()
-        evaluation_history = evaluator.get_evaluation_history()
+#         # 評価履歴を取得
+#         evaluator = UnifiedEvaluator()
+#         evaluation_history = evaluator.get_evaluation_history()
         
-        # デバッグ出力
-        current_app.logger.info(f"取得した履歴数: {len(evaluation_history)}")
-        if evaluation_history:
-            for i, item in enumerate(evaluation_history[:3]):  # 最初の3件だけログ出力
-                current_app.logger.info(f"履歴{i}: タイプ={item.get('type', '不明')}, タイムスタンプ={item.get('timestamp', 'なし')}")
+#         # デバッグ出力
+#         current_app.logger.info(f"取得した履歴数: {len(evaluation_history)}")
+#         if evaluation_history:
+#             for i, item in enumerate(evaluation_history[:3]):  # 最初の3件だけログ出力
+#                 current_app.logger.info(f"履歴{i}: タイプ={item.get('type', '不明')}, タイムスタンプ={item.get('timestamp', 'なし')}")
         
-        # 学習履歴も含める（将来の拡張用）
-        combined_history = []
+#         # 学習履歴も含める（将来の拡張用）
+#         combined_history = []
         
-        # 評価履歴を追加
-        for item in evaluation_history:
-            # 日付フォーマットの標準化（ISOフォーマットをYYYYMMDD_HHMMSSに変換）
-            timestamp = item.get("timestamp", "")
-            normalized_timestamp = timestamp
+#         # 評価履歴を追加
+#         for item in evaluation_history:
+#             # 日付フォーマットの標準化（ISOフォーマットをYYYYMMDD_HHMMSSに変換）
+#             timestamp = item.get("timestamp", "")
+#             normalized_timestamp = timestamp
             
-            # ISO形式の場合は変換
-            if timestamp and 'T' in timestamp:
-                try:
-                    dt = datetime.fromisoformat(timestamp.split('.')[0])
-                    normalized_timestamp = dt.strftime("%Y%m%d_%H%M%S")
-                except:
-                    pass
+#             # ISO形式の場合は変換
+#             if timestamp and 'T' in timestamp:
+#                 try:
+#                     dt = datetime.fromisoformat(timestamp.split('.')[0])
+#                     normalized_timestamp = dt.strftime("%Y%m%d_%H%M%S")
+#                 except:
+#                     pass
             
-            # タイプを明示的に設定
-            if 'type' not in item:
-                if 'annotation' in str(item).lower():
-                    item_type = 'annotation'
-                else:
-                    item_type = 'evaluation'
-            else:
-                item_type = item.get('type', 'evaluation')
+#             # タイプを明示的に設定
+#             if 'type' not in item:
+#                 if 'annotation' in str(item).lower():
+#                     item_type = 'annotation'
+#                 else:
+#                     item_type = 'evaluation'
+#             else:
+#                 item_type = item.get('type', 'evaluation')
             
-            # 精度値の取得（cv_mean優先、なければaccuracy）
-            if 'cv_mean' in item:
-                accuracy = item['cv_mean']
-            elif 'accuracy' in item:
-                accuracy = item['accuracy']
-            else:
-                accuracy = 0
+#             # 精度値の取得（cv_mean優先、なければaccuracy）
+#             if 'cv_mean' in item:
+#                 accuracy = item['cv_mean']
+#             elif 'accuracy' in item:
+#                 accuracy = item['accuracy']
+#             else:
+#                 accuracy = 0
                 
-            combined_history.append({
-                "id": normalized_timestamp,
-                "type": item_type,
-                "timestamp": normalized_timestamp,
-                "date": format_timestamp_to_date(timestamp),
-                "accuracy": accuracy,
-                "details": item
-            })
+#             combined_history.append({
+#                 "id": normalized_timestamp,
+#                 "type": item_type,
+#                 "timestamp": normalized_timestamp,
+#                 "date": format_timestamp_to_date(timestamp),
+#                 "accuracy": accuracy,
+#                 "details": item
+#             })
         
-        # 日付でソート（新しい順）
-        combined_history.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+#         # 日付でソート（新しい順）
+#         combined_history.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
         
-        current_app.logger.info(f"返却する履歴データ: {len(combined_history)}件")
-        if combined_history:
-            for i, item in enumerate(combined_history[:3]):  # 最初の3件だけログ出力
-                current_app.logger.info(f"結果{i}: タイプ={item.get('type')}, タイムスタンプ={item.get('timestamp')}")
+#         current_app.logger.info(f"返却する履歴データ: {len(combined_history)}件")
+#         if combined_history:
+#             for i, item in enumerate(combined_history[:3]):  # 最初の3件だけログ出力
+#                 current_app.logger.info(f"結果{i}: タイプ={item.get('type')}, タイムスタンプ={item.get('timestamp')}")
         
-        return jsonify({
-            "history": combined_history,
-            "count": len(combined_history)
-        })
+#         return jsonify({
+#             "history": combined_history,
+#             "count": len(combined_history)
+#         })
         
-    except Exception as e:
-        current_app.logger.error(f"学習履歴取得エラー: {str(e)}")
-        traceback.print_exc()
-        return jsonify({"error": "学習履歴の取得に失敗しました"}), 500
+#     except Exception as e:
+#         current_app.logger.error(f"学習履歴取得エラー: {str(e)}")
+#         traceback.print_exc()
+#         return jsonify({"error": "学習履歴の取得に失敗しました"}), 500
 
 # ================================
 # データセット準備度評価
 # ================================
 
-@learning_bp.route('/readiness-check')
-def readiness_check():
-    """
-    学習開始の準備完了度をチェック
+# @learning_bp.route('/readiness-check')
+# def readiness_check():
+#     """
+#     学習開始の準備完了度をチェック
     
-    Returns:
-    - JSON: 準備完了状況と推奨アクション
-    """
-    try:
-        # データセット統計取得
-        stats_response = get_dataset_stats()
-        stats_data = stats_response.get_json()
+#     Returns:
+#     - JSON: 準備完了状況と推奨アクション
+#     """
+#     try:
+#         # データセット統計取得
+#         stats_response = get_dataset_stats()
+#         stats_data = stats_response.get_json()
         
-        # 準備完了度の計算
-        readiness = calculate_readiness_score(stats_data)
+#         # 準備完了度の計算
+#         readiness = calculate_readiness_score(stats_data)
         
-        return jsonify({
-            "readiness_score": readiness['score'],
-            "readiness_percentage": readiness['percentage'],
-            "status": readiness['status'],
-            "message": readiness['message'],
-            "requirements": readiness['requirements'],
-            "suggestions": readiness['suggestions']
-        })
+#         return jsonify({
+#             "readiness_score": readiness['score'],
+#             "readiness_percentage": readiness['percentage'],
+#             "status": readiness['status'],
+#             "message": readiness['message'],
+#             "requirements": readiness['requirements'],
+#             "suggestions": readiness['suggestions']
+#         })
         
-    except Exception as e:
-        current_app.logger.error(f"準備完了度チェックエラー: {str(e)}")
-        return jsonify({"error": "準備完了度の確認に失敗しました"}), 500
+#     except Exception as e:
+#         current_app.logger.error(f"準備完了度チェックエラー: {str(e)}")
+#         return jsonify({"error": "準備完了度の確認に失敗しました"}), 500
 
 # ================================
 # ヘルパー関数
@@ -1331,3 +1330,353 @@ def get_annotation_info(image_path):
     except Exception as e:
         current_app.logger.error(f"アノテーション情報取得エラー: {str(e)}")
         return jsonify({"error": "アノテーション情報の取得に失敗しました"}), 500
+
+
+@learning_bp.route('/results')
+@learning_bp.route('/results/<exp>')
+def view_results(exp=None):
+    """学習結果を表示（特定の実験または最新）"""
+    try:
+        import pandas as pd
+        import os
+        from datetime import datetime
+        
+        # YOLOv5の学習結果ディレクトリを確認
+        train_dir = 'yolov5/runs/train'
+        results_data = None
+        
+        if os.path.exists(train_dir):
+            # 実験ディレクトリを決定
+            if exp and os.path.exists(os.path.join(train_dir, exp)):
+                target_exp = exp
+            else:
+                # 最新の実験ディレクトリを取得
+                exp_dirs = sorted([d for d in os.listdir(train_dir) if d.startswith('exp')])
+                if not exp_dirs:
+                    return render_template('learning_results.html', error='学習結果が見つかりません')
+                target_exp = exp_dirs[-1]
+            
+            results_csv_path = os.path.join(train_dir, target_exp, 'results.csv')
+            
+            if os.path.exists(results_csv_path):
+                # CSVファイルを読み込み
+                df = pd.read_csv(results_csv_path)
+                
+                # データを整形（列名の空白を削除）
+                df.columns = df.columns.str.strip()
+                
+                data = []
+                for _, row in df.iterrows():
+                    data.append({
+                        'epoch': int(row['epoch']),
+                        'train_box_loss': float(row['train/box_loss']),
+                        'train_obj_loss': float(row['train/obj_loss']),
+                        'train_cls_loss': float(row['train/cls_loss']),
+                        'precision': float(row['metrics/precision']),
+                        'recall': float(row['metrics/recall']),
+                        'map50': float(row['metrics/mAP_0.5']),
+                        'map50_95': float(row['metrics/mAP_0.5:0.95']),
+                        'val_box_loss': float(row['val/box_loss']),
+                        'val_obj_loss': float(row['val/obj_loss']),
+                        'val_cls_loss': float(row['val/cls_loss']),
+                        'lr0': float(row['x/lr0']),
+                        'lr1': float(row['x/lr1']),
+                        'lr2': float(row['x/lr2'])
+                    })
+                
+                # 最新のデータ
+                latest = data[-1] if data else None
+                
+                # 最高mAP@0.5を持つエポックを見つける
+                best_map50_epoch = 0
+                best_map50 = 0
+                for d in data:
+                    if d['map50'] > best_map50:
+                        best_map50 = d['map50']
+                        best_map50_epoch = d['epoch']
+                
+                # 学習中かどうかを判定（requestsを使わない方法）
+                is_training = False
+                try:
+                    # YoloTrainerのステータスを直接確認
+                    from core.YoloTrainer import YoloTrainer
+                    trainer_status = YoloTrainer.get_latest_training()
+                    if trainer_status and trainer_status.get('is_training'):
+                        is_training = True
+                except:
+                    pass
+                
+                # モデル情報を取得
+                opt_yaml_path = os.path.join(train_dir, target_exp, 'opt.yaml')
+                training_params = {
+                    'batch_size': 16,
+                    'img_size': 640,
+                    'lr0': 0.01,
+                    'weight_decay': 0.0005
+                }
+                
+                if os.path.exists(opt_yaml_path):
+                    try:
+                        import yaml
+                        with open(opt_yaml_path, 'r') as f:
+                            opt_data = yaml.safe_load(f)
+                            training_params['batch_size'] = opt_data.get('batch_size', 16)
+                            training_params['img_size'] = opt_data.get('imgsz', 640)
+                            training_params['lr0'] = opt_data.get('lr0', 0.01)
+                            training_params['weight_decay'] = opt_data.get('weight_decay', 0.0005)
+                    except:
+                        pass
+                
+                results_data = {
+                    'data': data,
+                    'summary': {
+                        'current_epoch': latest['epoch'] if latest else 0,
+                        'total_epochs': len(data),
+                        'best_map50': best_map50,
+                        'best_map50_epoch': best_map50_epoch,
+                        'current_map50': latest['map50'] if latest else 0,
+                        'current_loss': (latest['train_box_loss'] + latest['train_obj_loss'] + latest['train_cls_loss']) if latest else 0
+                    },
+                    'is_training': is_training,
+                    'model_info': {
+                        'model_type': 'YOLOv5',
+                        'experiment': target_exp,
+                        'start_time': datetime.fromtimestamp(os.path.getctime(os.path.join(train_dir, target_exp))).strftime('%Y-%m-%d %H:%M:%S'),
+                        'last_update': datetime.fromtimestamp(os.path.getmtime(results_csv_path)).strftime('%Y-%m-%d %H:%M:%S'),
+                        'dataset_path': 'data/yolo_dataset'
+                    },
+                    'training_params': training_params
+                }
+        
+        return render_template('learning_results.html', results=results_data)
+        
+    except Exception as e:
+        print(f"学習結果表示エラー: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return render_template('learning_results.html', error=f"結果の読み込みに失敗しました: {str(e)}")
+
+@learning_bp.route('/download-results-csv')
+def download_results_csv():
+    """学習結果CSVをダウンロード"""
+    try:
+        import os
+        from flask import send_file
+        
+        train_dir = 'yolov5/runs/train'
+        
+        if os.path.exists(train_dir):
+            exp_dirs = sorted([d for d in os.listdir(train_dir) if d.startswith('exp')])
+            
+            if exp_dirs:
+                latest_exp = exp_dirs[-1]
+                results_csv_path = os.path.join(train_dir, latest_exp, 'results.csv')
+                
+                if os.path.exists(results_csv_path):
+                    return send_file(results_csv_path, as_attachment=True, download_name=f'yolo_results_{latest_exp}.csv')
+        
+        return jsonify({'error': 'CSVファイルが見つかりません'}), 404
+        
+    except Exception as e:
+        print(f"CSVダウンロードエラー: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# routes/learning.py に追加
+
+@learning_bp.route('/dashboard')
+def learning_dashboard():
+    """学習全体のダッシュボード表示"""
+    try:
+        import os
+        from datetime import datetime
+        import glob
+        
+        # 全学習履歴を収集
+        train_dir = 'yolov5/runs/train'
+        all_trainings = []
+        total_images = 0
+        best_accuracy = 0
+        total_epochs = 0
+        
+        if os.path.exists(train_dir):
+            exp_dirs = sorted([d for d in os.listdir(train_dir) if d.startswith('exp')])
+            
+            for exp_dir in exp_dirs:
+                results_csv = os.path.join(train_dir, exp_dir, 'results.csv')
+                if os.path.exists(results_csv):
+                    try:
+                        import pandas as pd
+                        df = pd.read_csv(results_csv)
+                        df.columns = df.columns.str.strip()
+                        
+                        # 最高精度を取得
+                        max_map = df['metrics/mAP_0.5'].max()
+                        best_accuracy = max(best_accuracy, max_map)
+                        
+                        # エポック数
+                        epochs = len(df)
+                        total_epochs += epochs
+                        
+                        # 画像数を推定（データセットから）
+                        dataset_info = get_dataset_info()
+                        total_images += dataset_info['total']
+                        
+                        all_trainings.append({
+                            'experiment': exp_dir,
+                            'date': datetime.fromtimestamp(os.path.getctime(os.path.join(train_dir, exp_dir))).strftime('%Y-%m-%d %H:%M'),
+                            'epochs': epochs,
+                            'accuracy': max_map,
+                            'final_accuracy': df['metrics/mAP_0.5'].iloc[-1] if len(df) > 0 else 0
+                        })
+                    except:
+                        pass
+        
+        # 現在のモデル情報
+        current_model = {
+            'type': 'YOLOv5',
+            'accuracy': best_accuracy,
+            'is_active': True,
+            'last_update': all_trainings[-1]['date'] if all_trainings else '未学習'
+        }
+        
+        # サマリー情報
+        summary = {
+            'total_trainings': len(all_trainings),
+            'total_images': total_images,
+            'best_accuracy': best_accuracy,
+            'total_annotations': get_total_annotations()  # アノテーション数を取得
+        }
+        
+        # 最近の学習（最新5件）
+        recent_trainings = all_trainings[-5:][::-1] if all_trainings else []
+        
+        # 改善の推奨事項
+        recommendations = []
+        
+        if best_accuracy < 0.5:
+            recommendations.append({
+                'type': 'warning',
+                'icon': 'exclamation-triangle',
+                'message': '精度が低いです。より多くの学習データを追加することを推奨します。'
+            })
+        
+        if total_images < 100:
+            recommendations.append({
+                'type': 'info',
+                'icon': 'info-circle',
+                'message': f'現在の学習画像数は{total_images}枚です。100枚以上を推奨します。'
+            })
+        
+        if len(all_trainings) > 0 and all_trainings[-1]['final_accuracy'] < all_trainings[-1]['accuracy'] * 0.8:
+            recommendations.append({
+                'type': 'warning',
+                'icon': 'chart-line',
+                'message': '最新の学習で過学習の兆候があります。エポック数を調整してください。'
+            })
+        
+        return render_template('learning_dashboard.html',
+                             summary=summary,
+                             current_model=current_model,
+                             recent_trainings=recent_trainings,
+                             recommendations=recommendations)
+        
+    except Exception as e:
+        print(f"ダッシュボード表示エラー: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return render_template('learning_dashboard.html',
+                             summary={'total_trainings': 0, 'total_images': 0, 'best_accuracy': 0, 'total_annotations': 0},
+                             current_model={'type': 'YOLOv5', 'accuracy': 0, 'is_active': False, 'last_update': '未学習'},
+                             recent_trainings=[],
+                             recommendations=[{'type': 'info', 'icon': 'info-circle', 'message': 'データの読み込みに失敗しました。'}])
+
+
+def get_dataset_info():
+    """データセット情報を取得"""
+    from config import STATIC_SAMPLES_DIR
+    import os
+    
+    male_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'male')
+    female_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'female')
+    
+    male_count = len([f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(male_dir) else 0
+    female_count = len([f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(female_dir) else 0
+    
+    return {
+        'male': male_count,
+        'female': female_count,
+        'total': male_count + female_count
+    }
+
+
+def get_total_annotations():
+    """総アノテーション数を取得"""
+    import os
+    
+    # YOLOデータセットのラベルファイルをカウント
+    label_dirs = [
+        'data/yolo_dataset/labels/train',
+        'data/yolo_dataset/labels/val'
+    ]
+    
+    total_annotations = 0
+    for label_dir in label_dirs:
+        if os.path.exists(label_dir):
+            # .txtファイルの数をカウント
+            txt_files = [f for f in os.listdir(label_dir) if f.endswith('.txt')]
+            total_annotations += len(txt_files)
+    
+    return total_annotations
+
+# @learning_bp.route('/delete-data', methods=['POST'])
+# def delete_learning_data():
+#     """学習データ（画像）を削除"""
+#     try:
+#         data = request.get_json()
+#         image_path = data.get('path')
+        
+#         if not image_path:
+#             return jsonify({'status': 'error', 'message': 'パスが指定されていません'}), 400
+        
+#         # セキュリティチェック（パストラバーサル対策）
+#         from werkzeug.utils import secure_filename
+#         import os
+        
+#         # 実際のファイルパスを構築
+#         from config import STATIC_SAMPLES_DIR
+        
+#         # パスから実際のファイル位置を特定
+#         if 'static/images/samples/' in image_path:
+#             file_path = os.path.join(current_app.root_path, image_path)
+#         else:
+#             # 相対パスの場合
+#             file_path = os.path.join(STATIC_SAMPLES_DIR, image_path.replace('static/images/samples/', ''))
+        
+#         # ファイルが存在し、許可されたディレクトリ内にあることを確認
+#         if os.path.exists(file_path) and STATIC_SAMPLES_DIR in os.path.abspath(file_path):
+#             try:
+#                 os.remove(file_path)
+                
+#                 # 対応するYOLOアノテーションファイルも削除
+#                 base_name = os.path.splitext(os.path.basename(file_path))[0]
+                
+#                 # YOLOラベルファイルのパスを確認
+#                 yolo_label_paths = [
+#                     os.path.join('data/yolo_dataset/labels/train', f'{base_name}.txt'),
+#                     os.path.join('data/yolo_dataset/labels/val', f'{base_name}.txt')
+#                 ]
+                
+#                 for label_path in yolo_label_paths:
+#                     if os.path.exists(label_path):
+#                         os.remove(label_path)
+                
+#                 return jsonify({'status': 'success', 'message': '画像を削除しました'})
+#             except Exception as e:
+#                 logger.error(f"ファイル削除エラー: {str(e)}")
+#                 return jsonify({'status': 'error', 'message': 'ファイルの削除に失敗しました'}), 500
+#         else:
+#             return jsonify({'status': 'error', 'message': 'ファイルが見つかりません'}), 404
+            
+#     except Exception as e:
+#         logger.error(f"削除処理エラー: {str(e)}")
+#         return jsonify({'status': 'error', 'message': str(e)}), 500

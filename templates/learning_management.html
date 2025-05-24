@@ -109,6 +109,39 @@
         font-size: 0.9rem;
         color: #6c757d;
     }
+    .image-thumb-container {
+        position: relative;
+        margin-bottom: 10px;
+    }
+
+    .image-thumb {
+        width: 100%;
+        height: 100px;
+        object-fit: cover;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+
+    .delete-image-btn {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background: rgba(220, 53, 69, 0.9);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 25px;
+        height: 25px;
+        font-size: 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .delete-image-btn:hover {
+        background: rgba(220, 53, 69, 1);
+    }
 </style>
 {% endblock %}
 
@@ -138,9 +171,21 @@
                                 <i class="fas fa-upload"></i> アップロード
                             </button>
                         </form>
-                        
+
                         <div class="mt-3">
-                            <span class="badge bg-secondary">アップロード済み: <span id="uploadedCount">0</span>枚</span>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="badge bg-secondary">アップロード済み: <span id="uploadedCount">0</span>枚</span>
+                                <button class="btn btn-sm btn-danger d-none" id="clearAllImages">
+                                    <i class="fas fa-trash"></i> 全削除
+                                </button>
+                            </div>
+                            
+                            <!-- アップロード済み画像一覧 -->
+                            <div id="uploadedImagesList" class="mt-2 d-none">
+                                <div class="row g-2" id="imageGallery">
+                                    <!-- 動的に画像が追加される -->
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -298,46 +343,23 @@
                 </div>
             </div>
             
-            <!-- ステップ4: 学習結果 -->
-            <div class="workflow-step" id="step-4">
+            <!-- ステップ4: 学習完了 -->
+            <div class="workflow-step d-none" id="step-4">
                 <div class="d-flex align-items-center">
                     <div class="step-number">4</div>
                     <div class="flex-grow-1">
-                        <h4>学習結果・精度確認</h4>
-                        <p class="mb-2">学習の成果と現在のモデル精度を確認できます</p>
+                        <h4>学習完了</h4>
+                        <p class="mb-2">学習が完了しました</p>
                         
                         <div id="trainingResults" class="d-none">
-                            <div class="row">
-                                <div class="col-md-3">
-                                    <div class="training-metric">
-                                        <div class="metric-value" id="accuracy">-</div>
-                                        <div class="metric-label">精度</div>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="training-metric">
-                                        <div class="metric-value" id="mAP">-</div>
-                                        <div class="metric-label">mAP</div>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="training-metric">
-                                        <div class="metric-value" id="totalImages">-</div>
-                                        <div class="metric-label">学習画像数</div>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="training-metric">
-                                        <div class="metric-value" id="trainingTime">-</div>
-                                        <div class="metric-label">学習時間</div>
-                                    </div>
-                                </div>
+                            <div class="alert alert-success">
+                                <i class="fas fa-check-circle"></i> 学習が正常に完了しました！
                             </div>
                             
-                            <div class="mt-3 text-center">
-                                <button class="btn btn-primary" id="downloadModel">
-                                    <i class="fas fa-download"></i> モデルをダウンロード
-                                </button>
+                            <div class="d-grid gap-2">
+                                <a href="#" id="viewResultsLink" class="btn btn-primary">
+                                    <i class="fas fa-chart-line"></i> 学習結果を確認
+                                </a>
                                 <button class="btn btn-secondary" id="newTraining">
                                     <i class="fas fa-redo"></i> 新しい学習を開始
                                 </button>
@@ -370,7 +392,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- YoloAnnotatorをインポート -->
+
 <script type="module">
 import { YoloAnnotator } from '/static/js/learning/YoloAnnotator.js';
 import { showLoading, hideLoading, showSuccessMessage, showErrorMessage } from '/static/js/utilities.js';
@@ -399,10 +421,11 @@ let currentImageIndex = 0;
 let annotations = {};
 let annotator = null;
 let trainingInterval = null;
+let isTraining = false;
+let latestExperiment = null;
 
 // 状態管理オブジェクト
 const WorkflowState = {
-    // 状態を保存
     save() {
         const state = {
             currentStep: currentStep,
@@ -410,6 +433,8 @@ const WorkflowState = {
             currentImageIndex: currentImageIndex,
             annotations: annotations,
             trainingStarted: !!trainingInterval,
+            isTraining: isTraining,
+            latestExperiment: latestExperiment,
             trainingParams: {
                 epochs: document.getElementById('epochs')?.value,
                 batch_size: document.getElementById('batchSize')?.value,
@@ -419,7 +444,6 @@ const WorkflowState = {
         sessionStorage.setItem('yolo_workflow_state', JSON.stringify(state));
     },
     
-    // 状態を復元
     restore() {
         const saved = sessionStorage.getItem('yolo_workflow_state');
         if (saved) {
@@ -429,14 +453,27 @@ const WorkflowState = {
                 uploadedImages = state.uploadedImages || [];
                 currentImageIndex = state.currentImageIndex || 0;
                 annotations = state.annotations || {};
+                isTraining = state.isTraining || false;
+                latestExperiment = state.latestExperiment || null;
                 
-                // UIを復元
+                // 削除された画像を除外
+                uploadedImages = uploadedImages.filter(img => {
+                    // 実際に存在するかチェック（簡易的）
+                    return img && img.path && img.filename;
+                });
+                
+                // インデックスの調整
+                if (currentImageIndex >= uploadedImages.length) {
+                    currentImageIndex = Math.max(0, uploadedImages.length - 1);
+                }
+                
                 moveToStep(currentStep);
-                
-                // アップロード数を表示
                 document.getElementById('uploadedCount').textContent = uploadedImages.length;
                 
-                // トレーニング中だった場合は監視を再開
+                if (isTraining) {
+                    disableUI();
+                }
+                
                 if (state.trainingStarted && currentStep === 4) {
                     checkAndResumeTraining();
                 }
@@ -450,7 +487,6 @@ const WorkflowState = {
         return false;
     },
     
-    // 状態をクリア
     clear() {
         sessionStorage.removeItem('yolo_workflow_state');
     }
@@ -460,31 +496,34 @@ const WorkflowState = {
 // 初期化処理
 // ==========================================
 document.addEventListener('DOMContentLoaded', async function() {
-    // 既存のトレーニングをチェック
     const hasExistingTraining = await checkExistingTraining();
     
     if (hasExistingTraining) {
-        // トレーニング実行中の場合
         moveToStep(4);
         startTrainingMonitoring();
     } else {
-        // 保存された状態を復元
         const restored = WorkflowState.restore();
         if (restored) {
             console.log('ワークフロー状態を復元しました');
             
-            // 現在のステップに応じた処理
+            // 画像ギャラリーを更新（重要！）
+            if (uploadedImages.length > 0) {
+                updateImageGallery();
+            }
+            
             if (currentStep === 2 && uploadedImages.length > 0) {
                 showAnnotationArea();
                 if (currentImageIndex < uploadedImages.length) {
                     loadImageForAnnotation(uploadedImages[currentImageIndex]);
                     updateAnnotationProgress();
                 }
+            } else if (uploadedImages.length === 0) {
+                // 画像がない場合はステップ1に戻る
+                moveToStep(1);
             }
         }
     }
     
-    // イベントリスナーの設定
     setupEventListeners();
 });
 
@@ -492,7 +531,6 @@ document.addEventListener('DOMContentLoaded', async function() {
 // イベントリスナー設定
 // ==========================================
 function setupEventListeners() {
-    // フォームの送信イベント
     const uploadForm = document.getElementById('imageUploadForm');
     if (uploadForm) {
         uploadForm.addEventListener('submit', async function(e) {
@@ -501,7 +539,6 @@ function setupEventListeners() {
         });
     }
     
-    // アノテーションボタン
     const clearAnnotationsBtn = document.getElementById('clearAnnotations');
     if (clearAnnotationsBtn) {
         clearAnnotationsBtn.addEventListener('click', clearCurrentAnnotations);
@@ -512,32 +549,28 @@ function setupEventListeners() {
         saveAnnotationsBtn.addEventListener('click', saveAndNext);
     }
     
-    // クラス変更
     document.querySelectorAll('input[name="classType"]').forEach(radio => {
         radio.addEventListener('change', updateCurrentClass);
     });
     
-    // トレーニング開始
     const startTrainingBtn = document.getElementById('startTraining');
     if (startTrainingBtn) {
         startTrainingBtn.addEventListener('click', startWorkflowTraining);
     }
     
-    // 新しい学習を開始
     const newTrainingBtn = document.getElementById('newTraining');
     if (newTrainingBtn) {
         newTrainingBtn.addEventListener('click', function() {
+            isTraining = false;
             WorkflowState.clear();
             location.reload();
         });
     }
     
-    // モデルダウンロード
-    const downloadModelBtn = document.getElementById('downloadModel');
-    if (downloadModelBtn) {
-        downloadModelBtn.addEventListener('click', function() {
-            window.location.href = '/yolo/download-model';
-        });
+    // 全画像削除ボタン
+    const clearAllImagesBtn = document.getElementById('clearAllImages');
+    if (clearAllImagesBtn) {
+        clearAllImagesBtn.addEventListener('click', clearAllImages);
     }
 }
 
@@ -545,6 +578,11 @@ function setupEventListeners() {
 // 画像アップロード処理
 // ==========================================
 async function handleImageUpload() {
+    if (isTraining) {
+        showErrorMessage('学習中は新しい画像をアップロードできません');
+        return;
+    }
+    
     const fileInput = document.getElementById('imageFiles');
     const files = fileInput.files;
     
@@ -576,16 +614,16 @@ async function handleImageUpload() {
             return;
         }
         
-        // アップロードされた画像情報を保存
         uploadedImages = data.uploaded_files || [];
         document.getElementById('uploadedCount').textContent = uploadedImages.length;
         
+        // 画像一覧を更新
+        updateImageGallery();
+        
         showSuccessMessage(`${uploadedImages.length}枚の画像をアップロードしました`);
         
-        // 状態を保存
         WorkflowState.save();
         
-        // ステップ2へ移行
         moveToStep(2);
         startAnnotation();
         
@@ -607,34 +645,79 @@ function startAnnotation() {
     updateAnnotationProgress();
 }
 
+// 画像パスを正規化する関数
+function normalizeImagePath(imageInfo) {
+    // パスが既に完全な場合はそのまま返す
+    if (imageInfo.path.startsWith('/static/')) {
+        return imageInfo.path;
+    }
+    
+    // images/samples/で始まる場合
+    if (imageInfo.path.startsWith('images/samples/')) {
+        return '/static/' + imageInfo.path;
+    }
+    
+    // samples/で始まる場合
+    if (imageInfo.path.startsWith('samples/')) {
+        return '/static/images/' + imageInfo.path;
+    }
+    
+    // papillae/で始まる場合（static/images/samples/が省略されている）
+    if (imageInfo.path.startsWith('papillae/')) {
+        return '/static/images/samples/' + imageInfo.path;
+    }
+    
+    // その他の場合
+    return '/static/images/samples/' + imageInfo.path;
+}
+
 function loadImageForAnnotation(imageInfo) {
     const canvas = document.getElementById('annotationCanvas');
     const img = new Image();
+    
+    // エラーハンドリングフラグ
+    let errorHandled = false;
     
     img.onload = function() {
         canvas.width = img.width;
         canvas.height = img.height;
         
-        // YoloAnnotatorを初期化
         annotator = new YoloAnnotator(canvas, img);
         annotator.setMode('create');
         
-        // 初期クラスを設定
         updateCurrentClass();
         
-        // 既存のアノテーションを読み込み
         if (annotations[imageInfo.path]) {
             annotator.loadAnnotations(annotations[imageInfo.path]);
         }
         
-        // 画像名表示
         document.getElementById('currentImageName').textContent = imageInfo.filename;
         
-        // 統計を更新
         updateAnnotationStats();
     };
     
-    img.src = `/sample/${imageInfo.path}`;
+    // エラー時の処理（一度だけ実行）
+    img.onerror = function() {
+        if (!errorHandled) {
+            errorHandled = true;
+            console.error('画像読み込みエラー:', imageInfo.path);
+            showErrorMessage('画像を読み込めませんでした: ' + imageInfo.filename);
+            
+            // 次の画像に進む
+            if (currentImageIndex < uploadedImages.length - 1) {
+                currentImageIndex++;
+                loadImageForAnnotation(uploadedImages[currentImageIndex]);
+                updateAnnotationProgress();
+            } else {
+                showErrorMessage('すべての画像の読み込みに失敗しました');
+                moveToStep(1);
+            }
+        }
+    };
+    
+    // パスを正規化して設定
+    const imageSrc = normalizeImagePath(imageInfo);
+    img.src = imageSrc;
 }
 
 function updateCurrentClass() {
@@ -672,11 +755,9 @@ async function saveAndNext() {
         return;
     }
     
-    // 現在のアノテーションを保存
     const currentImage = uploadedImages[currentImageIndex];
     annotations[currentImage.path] = annotator.annotations;
     
-    // YOLO形式で保存
     const yoloData = annotator.exportToYoloFormat();
     
     try {
@@ -700,10 +781,8 @@ async function saveAndNext() {
         console.error('YOLOアノテーション保存エラー:', error);
     }
     
-    // 次の画像へ
     currentImageIndex++;
     
-    // 状態を保存
     WorkflowState.save();
     
     if (currentImageIndex < uploadedImages.length) {
@@ -742,6 +821,11 @@ function updateAnnotationProgress() {
 // トレーニング関連
 // ==========================================
 async function startWorkflowTraining() {
+    if (isTraining) {
+        showErrorMessage('既に学習が実行中です');
+        return;
+    }
+    
     const params = {
         epochs: parseInt(document.getElementById('epochs')?.value) || 100,
         batch_size: parseInt(document.getElementById('batchSize')?.value) || 16,
@@ -751,7 +835,9 @@ async function startWorkflowTraining() {
     try {
         showLoading('YOLOトレーニングを開始中...');
         
-        // データセット準備
+        isTraining = true;
+        disableUI();
+        
         let response = await fetch('/yolo/prepare-dataset', {
             method: 'POST'
         });
@@ -759,10 +845,11 @@ async function startWorkflowTraining() {
         let data = await response.json();
         
         if (data.status !== 'success') {
+            isTraining = false;
+            enableUI();
             throw new Error(data.message || 'データセット準備に失敗しました');
         }
         
-        // トレーニング開始
         response = await fetch('/yolo/training/start', {
             method: 'POST',
             headers: {
@@ -781,14 +868,17 @@ async function startWorkflowTraining() {
             document.getElementById('trainingProgress')?.classList.remove('d-none');
             startTrainingMonitoring();
             
-            // 状態を保存
             WorkflowState.save();
         } else {
+            isTraining = false;
+            enableUI();
             showErrorMessage('エラー: ' + data.message);
         }
         
     } catch (error) {
         hideLoading();
+        isTraining = false;
+        enableUI();
         showErrorMessage('トレーニング開始エラー: ' + error.message);
     }
 }
@@ -808,7 +898,6 @@ function startTrainingMonitoring() {
             
             updateTrainingStatus(status);
             
-            // 進捗チェック
             if (status.progress === lastProgress) {
                 noProgressCount++;
             } else {
@@ -816,20 +905,22 @@ function startTrainingMonitoring() {
                 lastProgress = status.progress;
             }
             
-            // トレーニング完了の検出
             if (status.status === 'completed' || 
                 (status.current_epoch >= status.total_epochs && status.total_epochs > 0)) {
                 clearInterval(trainingInterval);
                 trainingInterval = null;
+                isTraining = false;
+                enableUI();
                 
                 showSuccessMessage('トレーニングが完了しました！');
                 showTrainingResults();
                 
-                // 状態を保存
                 WorkflowState.save();
             } else if (status.status === 'failed' || status.status === 'stopped') {
                 clearInterval(trainingInterval);
                 trainingInterval = null;
+                isTraining = false;
+                enableUI();
                 
                 showErrorMessage('トレーニングが中断されました');
             }
@@ -871,23 +962,20 @@ async function showTrainingResults() {
     document.getElementById('trainingResults')?.classList.remove('d-none');
     
     try {
-        let response = await fetch('/yolo/training/status');
-        let status = await response.json();
+        const response = await fetch('/yolo/training/status');
+        const status = await response.json();
         
-        // 結果表示
-        if (status.latest_results) {
-            const results = status.latest_results;
-            const mAP = results['metrics/mAP_0.5'] || results['mAP_0.5'] || 
-                       results['metrics/mAP50'] || results['mAP50'] || 0;
-            
-            document.getElementById('accuracy').textContent = 
-                mAP ? (parseFloat(mAP) * 100).toFixed(1) + '%' : '-';
-            document.getElementById('mAP').textContent = 
-                mAP ? parseFloat(mAP).toFixed(3) : '-';
+        if (status.result_images && status.result_images.results) {
+            const match = status.result_images.results.match(/train\/([^\/]+)\//);
+            if (match) {
+                latestExperiment = match[1];
+                
+                const viewResultsLink = document.getElementById('viewResultsLink');
+                if (viewResultsLink) {
+                    viewResultsLink.href = `/learning/results/${latestExperiment}`;
+                }
+            }
         }
-        
-        document.getElementById('totalImages').textContent = uploadedImages.length;
-        document.getElementById('trainingTime').textContent = status.elapsed_time || '-';
         
     } catch (error) {
         console.error('結果取得エラー:', error);
@@ -901,20 +989,23 @@ function moveToStep(stepNumber) {
     currentStep = stepNumber;
     updateWorkflowUI();
     
-    // 状態を保存
     WorkflowState.save();
 }
 
 function updateWorkflowUI() {
-    // 全ステップをリセット
     for (let i = 1; i <= 4; i++) {
         const stepEl = document.getElementById(`step-${i}`);
         if (stepEl) {
             stepEl.classList.remove('active', 'completed');
+            // ステップ4は初期状態で非表示
+            if (i === 4 && currentStep < 4) {
+                stepEl.classList.add('d-none');
+            } else {
+                stepEl.classList.remove('d-none');
+            }
         }
     }
     
-    // 完了したステップにマーク
     for (let i = 1; i < currentStep; i++) {
         const stepEl = document.getElementById(`step-${i}`);
         if (stepEl) {
@@ -922,16 +1013,245 @@ function updateWorkflowUI() {
         }
     }
     
-    // 現在のステップをアクティブに
     const currentStepEl = document.getElementById(`step-${currentStep}`);
     if (currentStepEl) {
         currentStepEl.classList.add('active');
     }
     
-    // ステップ別の表示制御
     if (currentStep >= 3) {
         document.getElementById('trainingConfig')?.classList.remove('d-none');
     }
+}
+
+// 画像ギャラリーを更新
+function updateImageGallery() {
+    const gallery = document.getElementById('imageGallery');
+    const uploadedImagesList = document.getElementById('uploadedImagesList');
+    const clearAllBtn = document.getElementById('clearAllImages');
+    
+    if (!gallery) return;
+    
+    gallery.innerHTML = '';
+    
+    if (uploadedImages.length === 0) {
+        uploadedImagesList.classList.add('d-none');
+        clearAllBtn.classList.add('d-none');
+        return;
+    }
+    
+    uploadedImagesList.classList.remove('d-none');
+    clearAllBtn.classList.remove('d-none');
+    
+    uploadedImages.forEach((image, index) => {
+        const col = document.createElement('div');
+        col.className = 'col-3';
+        
+        const container = document.createElement('div');
+        container.className = 'image-thumb-container';
+        
+        const img = document.createElement('img');
+        
+        // パスを正規化して設定
+        const imageSrc = normalizeImagePath(image);
+        
+        img.src = imageSrc;
+        img.className = 'image-thumb';
+        img.alt = image.filename;
+        img.title = image.filename;
+        
+        // エラー時の処理（プレースホルダー表示）
+        img.onerror = function() {
+            console.error('画像読み込みエラー:', imageSrc);
+            // プレースホルダー画像を表示
+            this.style.display = 'none';
+            const placeholder = document.createElement('div');
+            placeholder.className = 'image-placeholder';
+            placeholder.innerHTML = '<i class="fas fa-image"></i><br>読み込みエラー';
+            placeholder.style.cssText = 'width: 100%; height: 80px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f0f0f0; color: #999;';
+            container.insertBefore(placeholder, container.firstChild);
+        };
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-image-btn';
+        deleteBtn.innerHTML = '<i class="fas fa-times"></i>';
+        deleteBtn.onclick = () => deleteImage(index);
+        
+        container.appendChild(img);
+        container.appendChild(deleteBtn);
+        col.appendChild(container);
+        gallery.appendChild(col);
+    });
+}
+
+// 個別の画像を削除
+async function deleteImage(index) {
+    if (isTraining) {
+        showErrorMessage('学習中は画像を削除できません');
+        return;
+    }
+    
+    if (!confirm('この画像を削除しますか？')) {
+        return;
+    }
+    
+    const imageToDelete = uploadedImages[index];
+    
+    try {
+        // サーバーに削除リクエストを送信
+        const response = await fetch('/learning/delete-data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                path: imageToDelete.path
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            // 配列から削除
+            uploadedImages.splice(index, 1);
+            
+            // アノテーションも削除
+            if (annotations[imageToDelete.path]) {
+                delete annotations[imageToDelete.path];
+            }
+            
+            // UIを更新
+            document.getElementById('uploadedCount').textContent = uploadedImages.length;
+            updateImageGallery();
+            
+            // 現在のインデックスを調整
+            if (currentImageIndex >= uploadedImages.length) {
+                currentImageIndex = uploadedImages.length - 1;
+            }
+            
+            // 画像がなくなったらステップ1に戻る
+            if (uploadedImages.length === 0) {
+                moveToStep(1);
+                // アノテーションエリアを非表示
+                document.getElementById('annotationArea')?.classList.add('d-none');
+                document.getElementById('annotationControls')?.classList.add('d-none');
+                // セッションをクリア
+                WorkflowState.clear();
+            } else if (currentStep === 2) {
+                // アノテーション中の場合、現在の画像を再読み込み
+                if (currentImageIndex >= uploadedImages.length) {
+                    currentImageIndex = uploadedImages.length - 1;
+                }
+                if (currentImageIndex >= 0) {
+                    loadImageForAnnotation(uploadedImages[currentImageIndex]);
+                    updateAnnotationProgress();
+                }
+            }
+            
+            WorkflowState.save();
+            showSuccessMessage('画像を削除しました');
+        } else {
+            showErrorMessage('削除に失敗しました: ' + (data.message || ''));
+        }
+    } catch (error) {
+        showErrorMessage('削除エラー: ' + error.message);
+    }
+}
+
+// 全画像を削除
+async function clearAllImages() {
+    if (isTraining) {
+        showErrorMessage('学習中は画像を削除できません');
+        return;
+    }
+    
+    if (!confirm('すべての画像を削除しますか？この操作は取り消せません。')) {
+        return;
+    }
+    
+    try {
+        showLoading('画像を削除中...');
+        
+        // 各画像を削除
+        for (const image of uploadedImages) {
+            await fetch('/learning/delete-data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    path: image.path
+                })
+            });
+        }
+        
+        // 配列をクリア
+        uploadedImages = [];
+        annotations = {};
+        currentImageIndex = 0;
+        
+        // UIを更新
+        document.getElementById('uploadedCount').textContent = '0';
+        updateImageGallery();
+        
+        // アノテーションエリアを非表示
+        document.getElementById('annotationArea')?.classList.add('d-none');
+        document.getElementById('annotationControls')?.classList.add('d-none');
+        
+        // ステップ1に戻る
+        moveToStep(1);
+        
+        // セッションストレージをクリア
+        WorkflowState.clear();
+        
+        hideLoading();
+        showSuccessMessage('すべての画像を削除しました');
+        
+    } catch (error) {
+        hideLoading();
+        showErrorMessage('削除エラー: ' + error.message);
+    }
+}
+
+function disableUI() {
+    const fileInput = document.getElementById('imageFiles');
+    if (fileInput) fileInput.disabled = true;
+    
+    const uploadBtn = document.querySelector('#imageUploadForm button[type="submit"]');
+    if (uploadBtn) uploadBtn.disabled = true;
+    
+    const startTrainingBtn = document.getElementById('startTraining');
+    if (startTrainingBtn) startTrainingBtn.disabled = true;
+    
+    const saveAnnotationsBtn = document.getElementById('saveAnnotations');
+    if (saveAnnotationsBtn) saveAnnotationsBtn.disabled = true;
+    
+    const step1 = document.getElementById('step-1');
+    if (step1) {
+        const existingMsg = step1.querySelector('.training-in-progress-msg');
+        if (!existingMsg) {
+            const msg = document.createElement('div');
+            msg.className = 'alert alert-info mt-2 training-in-progress-msg';
+            msg.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 学習が実行中です。完了までお待ちください。';
+            step1.querySelector('.flex-grow-1').appendChild(msg);
+        }
+    }
+}
+
+function enableUI() {
+    const fileInput = document.getElementById('imageFiles');
+    if (fileInput) fileInput.disabled = false;
+    
+    const uploadBtn = document.querySelector('#imageUploadForm button[type="submit"]');
+    if (uploadBtn) uploadBtn.disabled = false;
+    
+    const startTrainingBtn = document.getElementById('startTraining');
+    if (startTrainingBtn) startTrainingBtn.disabled = false;
+    
+    const saveAnnotationsBtn = document.getElementById('saveAnnotations');
+    if (saveAnnotationsBtn) saveAnnotationsBtn.disabled = false;
+    
+    const trainingMsg = document.querySelector('.training-in-progress-msg');
+    if (trainingMsg) trainingMsg.remove();
 }
 
 // ==========================================
@@ -943,6 +1263,8 @@ async function checkExistingTraining() {
         const status = await response.json();
         
         if (status.status === 'running') {
+            isTraining = true;
+            disableUI();
             return true;
         }
     } catch (error) {

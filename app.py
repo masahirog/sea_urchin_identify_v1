@@ -185,6 +185,13 @@ def internal_error(error):
 def too_large(error):
     return jsonify({'error': 'ファイルサイズが大きすぎます'}), 413
 
+
+
+@app.route('/images/samples/<path:filename>')
+def serve_sample_images(filename):
+    return send_from_directory(STATIC_SAMPLES_DIR, filename)
+
+
 # アプリケーション起動
 if __name__ == '__main__':
     logger.info("登録されているルート:")
