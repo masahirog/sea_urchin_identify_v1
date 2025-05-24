@@ -23,15 +23,6 @@ yolo_bp = Blueprint('yolo', __name__, url_prefix='/yolo')
 # YOLOトレーナーのインスタンス
 trainer = YoloTrainer()
 
-@yolo_bp.route('/', methods=['GET'])
-def yolo_management():
-    """YOLO管理ページの表示"""
-    return render_template('yolo_management.html')
-
-@yolo_bp.route('/annotate', methods=['GET'])
-def annotate_page():
-    """アノテーションページの表示"""
-    return render_template('yolo_annotate.html')
 
 @yolo_bp.route('/training/start', methods=['POST'])
 def start_training():
