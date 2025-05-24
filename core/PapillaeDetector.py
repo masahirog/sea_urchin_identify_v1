@@ -88,12 +88,8 @@ class PapillaeDetector:
         - annotated_image: 検出結果を描画した画像（draw_results=Trueの場合）
         """
         if self.model is None:
-            logger.warning("モデルがロードされていません。再ロードを試みます。")
-            try:
-                self._load_model()
-            except Exception as e:
-                logger.error(f"モデル再ロード失敗: {e}")
-                return [], image
+            logger.error("モデルがロードされていません。")
+            raise Exception("YOLOモデルが利用できません。処理を中止します。")
         
         # BGR -> RGB変換（YOLOは RGB形式を想定）
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -148,6 +144,7 @@ class PapillaeDetector:
         except Exception as e:
             logger.error(f"推論中にエラーが発生: {e}")
             return [], image
+
     
     def extract_papillae_features(self, image, detections):
         """

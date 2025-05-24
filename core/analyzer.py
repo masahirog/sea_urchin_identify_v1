@@ -22,13 +22,12 @@ class UnifiedAnalyzer:
     
     def __init__(self):
         # パラメータ設定
-        self.min_contour_area = 500
         self.similarity_threshold = 0.85
         self.frame_interval = 15
         self.min_frames_between_captures = 30
         self.focus_measure_threshold = 100.0
         self.last_capture_frame = -self.min_frames_between_captures
-        
+
         # モデル関連
         self.rf_model = None
         self.scaler = None
@@ -40,8 +39,9 @@ class UnifiedAnalyzer:
             print("YOLOv5ベースの生殖乳頭検出器を初期化しました")
         except Exception as e:
             print(f"生殖乳頭検出器の初期化エラー: {e}")
-            # 検出器の初期化に失敗しても処理は続行（従来手法にフォールバック）
             self.papillae_detector = None
+            # エラーでも処理を継続しない（YOLO必須）
+            raise Exception("YOLOv5検出器の初期化に失敗しました。処理を中止します。")
 
     # ================================
     # メイン機能: 雌雄判定
@@ -416,7 +416,7 @@ class UnifiedAnalyzer:
     
     def _detect_papillae_improved(self, frame, min_area=500, max_area=5000, circularity_threshold=0.3):
         """
-        改良された生殖乳頭検出（YOLOv5ベース）
+        改良された生殖乳頭検出（YOLOv5ベース専用）
         """
         # YOLOv5検出器を使用
         if self.papillae_detector is not None:
@@ -444,55 +444,11 @@ class UnifiedAnalyzer:
                 
             except Exception as e:
                 print(f"YOLOv5検出エラー: {str(e)}")
-                # エラー時は従来の手法にフォールバック
-        
-        # 従来の生殖乳頭検出手法（フォールバック）
-        # 画像前処理
-        processed = self._enhance_sea_urchin_image(frame)
-        
-        # 適応的二値化
-        binary = cv2.adaptiveThreshold(
-            processed, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-            cv2.THRESH_BINARY_INV, 11, 2
-        )
-        
-        # ノイズ除去
-        kernel = np.ones((3, 3), np.uint8)
-        clean = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
-        
-        # 輪郭検出とフィルタリング
-        contours, _ = cv2.findContours(clean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
-        papillae_contours = []
-        for cnt in contours:
-            area = cv2.contourArea(cnt)
-            if min_area < area < max_area:
-                perimeter = cv2.arcLength(cnt, True)
-                if perimeter > 0:
-                    circularity = 4 * np.pi * area / (perimeter * perimeter)
-                    if circularity_threshold < circularity < 0.9:
-                        # アスペクト比チェック
-                        x, y, w, h = cv2.boundingRect(cnt)
-                        aspect_ratio = float(w) / h
-                        if 0.5 < aspect_ratio < 2.0:
-                            papillae_contours.append(cnt)
-        
-        return papillae_contours, processed
-
-    def _enhance_sea_urchin_image(self, image):
-        """ウニ画像の前処理"""
-        # グレースケール変換
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
-        
-        # CLAHE適用
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        enhanced = clahe.apply(gray)
-        
-        # エッジ強調
-        blur = cv2.GaussianBlur(enhanced, (0, 0), 3)
-        sharp = cv2.addWeighted(enhanced, 1.5, blur, -0.5, 0)
-        
-        return sharp
+                # エラー時は空の結果を返す
+                return [], frame
+        else:
+            print("警告: YOLOv5検出器が初期化されていません")
+            return [], frame
 
     def _variance_of_laplacian(self, image):
         """ピント測定（ラプラシアン分散）"""

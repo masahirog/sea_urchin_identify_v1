@@ -20,6 +20,7 @@ import os
 import base64
 import uuid
 import traceback
+import cv2
 from datetime import datetime
 
 main_bp = Blueprint('main', __name__)
@@ -51,7 +52,7 @@ def classify_image():
     from app import app
     from utils.file_handlers import allowed_file, is_image_file
     from core.analyzer import UnifiedAnalyzer
-    from core.processor import UnifiedProcessor
+    from core.YoloDetector import YoloDetector
     
     if 'image' not in request.files:
         return jsonify({"error": "画像ファイルがありません"}), 400
@@ -90,15 +91,19 @@ def classify_image():
             result["image_url"] = url_for('main.get_uploaded_file', filename=filename, _external=True)
             result["filename"] = filename
             
-            # 検出画像を生成
-            processor = UnifiedProcessor()
-            detection_result = processor.detect_papillae(file_path, app.config)
-            
-            if detection_result and "image_path" in detection_result:
-                marked_image_name = os.path.basename(detection_result["image_path"])
-                result["marked_image_url"] = url_for('main.get_uploaded_file', filename=marked_image_name, _external=True)
-                result["papillae_count"] = detection_result["papillae_count"]
-                result["papillae_details"] = detection_result.get("papillae_details", [])
+            # YOLOで検出画像を生成
+            detector = YoloDetector()
+            detection_result = detector.detect(file_path)
+
+            if detection_result and "annotated_image" in detection_result:
+                # 検出結果画像を保存
+                marked_filename = f"marked_{filename}"
+                marked_path = os.path.join(app.config['UPLOAD_FOLDER'], marked_filename)
+                cv2.imwrite(marked_path, detection_result["annotated_image"])
+                
+                result["marked_image_url"] = url_for('main.get_uploaded_file', filename=marked_filename, _external=True)
+                result["papillae_count"] = detection_result["count"]
+                result["papillae_details"] = detection_result.get("detections", [])
             
             # 判定履歴に記録
             record_classification_history(filename, result)

@@ -1,530 +1,346 @@
 {% extends "base.html" %}
 
-{% block title %}統合学習システム - ウニ生殖乳頭分析システム{% endblock %}
+{% block title %}YOLO学習システム - ウニ生殖乳頭分析{% endblock %}
 
 {% block extra_css %}
-
+<style>
+    .annotation-canvas {
+        max-width: 100%;
+        border: 2px solid #dee2e6;
+        cursor: crosshair;
+    }
+    
+    .image-preview-container {
+        position: relative;
+        display: inline-block;
+        margin: 10px;
+    }
+    
+    .gender-badge {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        z-index: 10;
+    }
+    
+    .annotation-status {
+        position: absolute;
+        bottom: 5px;
+        left: 5px;
+        font-size: 0.8rem;
+    }
+    
+    .workflow-step {
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        background: #f8f9fa;
+        border: 2px solid transparent;
+        transition: all 0.3s;
+    }
+    
+    .workflow-step.active {
+        border-color: #007bff;
+        background: #e7f3ff;
+    }
+    
+    .workflow-step.completed {
+        border-color: #28a745;
+        background: #d4edda;
+    }
+    
+    .step-number {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #6c757d;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 1.2rem;
+        margin-right: 15px;
+    }
+    
+    .workflow-step.active .step-number {
+        background: #007bff;
+    }
+    
+    .workflow-step.completed .step-number {
+        background: #28a745;
+    }
+    
+    .annotation-controls {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: white;
+        padding: 15px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        z-index: 1000;
+    }
+    
+    .class-selector {
+        margin-bottom: 10px;
+    }
+    
+    .class-btn {
+        width: 100%;
+        margin: 5px 0;
+    }
+    
+    .training-metric {
+        text-align: center;
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 5px;
+        margin: 5px;
+    }
+    
+    .metric-value {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #007bff;
+    }
+    
+    .metric-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
-<!-- 統合学習システムのメインコンテナ -->
 <div class="container">
-    <!-- フェーズインジケーター -->
+    <h2 class="text-center mb-4">
+        <i class="fas fa-robot"></i> YOLO学習システム
+    </h2>
+    
+    <!-- ワークフロー -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <h4 class="card-title text-center mb-4">
-                        <i class="fas fa-graduation-cap me-2"></i>統合学習システム
-                    </h4>
-                    
-                    <!-- フェーズステップ表示（修正版） -->
-                    <div class="row text-center">
-                        <div class="col-md-4">
-                            <div id="phase-preparation" class="phase-indicator active clickable-phase">
-                                <div class="phase-icon">
-                                    <i class="fas fa-database fa-2x"></i>
-                                </div>
-                                <h6 class="mt-2">データ準備</h6>
-                                <small class="text-muted">アップロード・アノテーション</small>
-                                <!-- 進捗ドット追加 -->
-                                <div class="phase-progress mt-2">
-                                    <span class="progress-dot active"></span>
-                                </div>
+            <!-- ステップ1: 画像アップロード -->
+            <div class="workflow-step active" id="step-1">
+                <div class="d-flex align-items-center">
+                    <div class="step-number">1</div>
+                    <div class="flex-grow-1">
+                        <h4>画像アップロード</h4>
+                        <p class="mb-2">ウニの生殖乳頭画像をアップロードしてください（複数選択可能）</p>
+                        
+                        <form id="imageUploadForm" class="d-flex gap-3 align-items-end">
+                            <div class="flex-grow-1">
+                                <input type="file" class="form-control" id="imageFiles" 
+                                       accept="image/*" multiple required>
                             </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div id="phase-training" class="phase-indicator clickable-phase">
-                                <div class="phase-icon">
-                                    <i class="fas fa-brain fa-2x"></i>
-                                </div>
-                                <h6 class="mt-2">AI学習</h6>
-                                <small class="text-muted">モデル訓練・基本評価</small>
-                                <!-- 進捗ドット追加 -->
-                                <div class="phase-progress mt-2">
-                                    <span class="progress-dot"></span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div id="phase-analysis" class="phase-indicator clickable-phase">
-                                <div class="phase-icon">
-                                    <i class="fas fa-chart-line fa-2x"></i>
-                                </div>
-                                <h6 class="mt-2">結果分析</h6>
-                                <small class="text-muted">詳細評価・改善提案</small>
-                                <!-- 進捗ドット追加 -->
-                                <div class="phase-progress mt-2">
-                                    <span class="progress-dot"></span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 統合ステータス表示 -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div id="unified-status" class="alert alert-secondary d-none" role="alert">
-                準備完了
-            </div>
-            <div id="unified-progress" class="d-none">
-                <div class="progress mb-3">
-                    <div id="unified-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
-                         role="progressbar" style="width: 0%">0%</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- フェーズ1: データ準備セクション -->
-    <div id="data-preparation-section" class="phase-section">
-        <div class="row">
-            <!-- データアップロード -->
-            <div class="col-md-4">
-                <div class="card dataset-stat-card">
-                    <div class="card-header">
-                        <h5><i class="fas fa-cloud-upload-alt me-2"></i>データアップロード</h5>
-                    </div>
-                    <div class="card-body">
-                        <form id="unifiedDataUploadForm">
-                            <div class="mb-3">
-                                <label for="dataFiles" class="form-label">画像ファイル</label>
-                                <input type="file" id="dataFiles" name="images" accept="image/*" 
-                                       class="form-control" multiple>
-                                <div class="form-text">生殖乳頭の画像を選択（複数選択可能）</div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="dataGender" class="form-label">性別</label>
-                                <select id="dataGender" name="gender" class="form-select">
-                                    <option value="male">オス</option>
-                                    <option value="female">メス</option>
-                                    <option value="unknown">不明（後で分類）</option>
-                                </select>
-                            </div>
-                            
-                            <button type="submit" class="btn btn-primary w-100">
-                                <i class="fas fa-upload me-1"></i>アップロード
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-upload"></i> アップロード
                             </button>
                         </form>
-                        
-                        <!-- アップロード進捗 -->
-                        <div id="upload-progress" class="mt-3 d-none">
-                            <div class="progress">
-                                <div id="upload-progress-bar" class="progress-bar" style="width: 0%"></div>
-                            </div>
-                            <small id="upload-status" class="text-muted">アップロード中...</small>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- データセット統計 -->
-                <div class="card dataset-stat-card">
-                    <div class="card-header">
-                        <h6><i class="fas fa-chart-pie me-2"></i>データセット状況</h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="row text-center mb-3">
-                            <div class="col-3">
-                                <div class="stat-number text-primary" id="dataset-male-count">0</div>
-                                <div class="stat-label">オス</div>
-                            </div>
-                            <div class="col-3">
-                                <div class="stat-number text-danger" id="dataset-female-count">0</div>
-                                <div class="stat-label">メス</div>
-                            </div>
-                            <div class="col-3">
-                                <div class="stat-number text-success" id="dataset-annotated-count">0</div>
-                                <div class="stat-label">アノテーション済み</div>
-                            </div>
-                            <div class="col-3">
-                                <div class="stat-number text-info" id="dataset-readiness">0%</div>
-                                <div class="stat-label">準備完了度</div>
-                            </div>
-                        </div>
-                        
-                        <!-- 準備完了チェック -->
-                        <div id="readiness-check" class="alert alert-warning">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            <span id="readiness-message">データ準備中...</span>
-                        </div>
-                        
-                        <button class="btn btn-outline-secondary btn-sm w-100" id="refresh-dataset-btn">
-                            <i class="fas fa-sync-alt me-1"></i>状況更新
-                        </button>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- データ一覧・アノテーション -->
-            <div class="col-md-8">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5><i class="fas fa-images me-2"></i>学習データ一覧</h5>
-                        <div class="btn-group btn-group-sm" role="group">
-                            <input type="radio" class="btn-check" name="dataFilter" id="filter-all" value="all" checked>
-                            <label class="btn btn-outline-secondary" for="filter-all">全て</label>
-                            
-                            <input type="radio" class="btn-check" name="dataFilter" id="filter-male" value="male">
-                            <label class="btn btn-outline-primary" for="filter-male">オス</label>
-                            
-                            <input type="radio" class="btn-check" name="dataFilter" id="filter-female" value="female">
-                            <label class="btn btn-outline-danger" for="filter-female">メス</label>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div id="learning-data-container" class="image-container">
-                            <div class="text-center text-muted py-5">
-                                <i class="fas fa-database fa-3x mb-3"></i>
-                                <p>学習データをアップロードすると、ここに表示されます</p>
-                                <small class="text-muted">画像をクリックしてアノテーションを作成できます</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- アノテーション管理 -->
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h6><i class="fas fa-object-group me-2"></i>アノテーション管理</h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle me-2"></i>
-                            <strong>アノテーションについて:</strong>
-                            <p class="mb-0">画像内の生殖乳頭を囲むアノテーション（バウンディングボックス）は学習精度を向上させます。</p>
-                        </div>
-                        
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <div class="card">
-                                    <div class="card-body text-center">
-                                        <i class="fas fa-pen-square fa-3x mb-3 text-primary"></i>
-                                        <h5>手動アノテーション</h5>
-                                        <p class="small">画像一覧から個別に生殖乳頭を囲み、アノテーションを作成します。</p>
-                                        <a href="/yolo/annotate" class="btn btn-primary" target="_blank">
-                                            <i class="fas fa-external-link-alt me-1"></i> アノテーションツールを開く
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="card">
-                                    <div class="card-body text-center">
-                                        <i class="fas fa-magic fa-3x mb-3 text-success"></i>
-                                        <h5>データセット準備</h5>
-                                        <p class="small">アノテーション済み画像をYOLO用のデータセットに変換します。</p>
-                                        <button id="prepare-dataset-btn" class="btn btn-success">
-                                            <i class="fas fa-cogs me-1"></i> データセット準備
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- データ準備完了時のアクション -->
-        <div class="row mt-4">
-            <div class="col-12 text-center">
-                <button id="start-unified-training-btn" class="btn btn-success btn-lg d-none">
-                    <i class="fas fa-play me-2"></i>統合学習を開始
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- フェーズ2: 学習実行セクション（非表示状態で開始） -->
-    <div id="training-section" class="phase-section d-none">
-        <div class="row">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="fas fa-brain me-2"></i>AI学習実行中</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="training-details">
-                            <p><strong>学習データ:</strong></p>
-                            <ul>
-                                <li>オス画像: <span id="training-male-count">0</span>枚</li>
-                                <li>メス画像: <span id="training-female-count">0</span>枚</li>
-                                <li>アノテーション済み: <span id="training-annotated-count">0</span>枚</li>
-                            </ul>
-                        </div>
-                        
-                        <div id="training-progress-detail" class="mt-3">
-                            <div class="progress mb-2">
-                                <div id="training-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
-                                     style="width: 0%">0%</div>
-                            </div>
-                            <small id="training-status-text" class="text-muted">待機中...</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h6><i class="fas fa-info-circle me-2"></i>学習の流れ</h6>
-                    </div>
-                    <div class="card-body">
-                        <div id="training-steps">
-                            <div class="training-step" id="step-feature-extraction">
-                                <i class="fas fa-circle-notch text-muted me-2"></i>
-                                <span>特徴量抽出</span>
-                            </div>
-                            <div class="training-step" id="step-model-training">
-                                <i class="fas fa-circle-notch text-muted me-2"></i>
-                                <span>モデル訓練</span>
-                            </div>
-                            <div class="training-step" id="step-basic-evaluation">
-                                <i class="fas fa-circle-notch text-muted me-2"></i>
-                                <span>基本評価</span>
-                            </div>
-                            <div class="training-step" id="step-detailed-analysis">
-                                <i class="fas fa-circle-notch text-muted me-2"></i>
-                                <span>詳細分析</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- YOLOトレーニングセクション -->
-        <div class="row mt-4">
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="fas fa-cog me-2"></i>YOLOトレーニング設定</h5>
-                    </div>
-                    <div class="card-body">
-                        <form id="yolo-training-form">
-                            <div class="mb-3">
-                                <label for="yolo-weights" class="form-label">初期重み</label>
-                                <select class="form-select" id="yolo-weights" name="weights">
-                                    <option value="yolov5s.pt" selected>YOLOv5s (小)</option>
-                                    <option value="yolov5m.pt">YOLOv5m (中)</option>
-                                    <option value="yolov5l.pt">YOLOv5l (大)</option>
-                                    <option value="yolov5n.pt">YOLOv5n (極小)</option>
-                                </select>
-                                <div class="form-text">モデルサイズと精度のバランスを選択します。</div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="yolo-batch-size" class="form-label">バッチサイズ</label>
-                                <input type="number" class="form-control" id="yolo-batch-size" name="batch_size" value="16" min="1" max="64">
-                                <div class="form-text">大きいほど学習が速くなりますが、メモリ消費が増えます。</div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="yolo-epochs" class="form-label">エポック数</label>
-                                <input type="number" class="form-control" id="yolo-epochs" name="epochs" value="100" min="1" max="1000">
-                                <div class="form-text">多いほど精度が向上しますが、時間がかかります。</div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="yolo-img-size" class="form-label">画像サイズ</label>
-                                <select class="form-select" id="yolo-img-size" name="img_size">
-                                    <option value="416">416x416</option>
-                                    <option value="512">512x512</option>
-                                    <option value="640" selected>640x640</option>
-                                    <option value="1280">1280x1280</option>
-                                </select>
-                                <div class="form-text">大きいほど精度が向上しますが、学習に時間がかかります。</div>
-                            </div>
-                            
-                            <div class="d-grid">
-                                <button type="button" id="start-yolo-training-btn" class="btn btn-primary">
-                                    <i class="fas fa-play me-1"></i> YOLOトレーニング開始
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5><i class="fas fa-chart-line me-2"></i>トレーニング進捗</h5>
-                        <button type="button" id="stop-yolo-training-btn" class="btn btn-sm btn-danger">
-                            <i class="fas fa-stop me-1"></i> 停止
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <div id="yolo-training-status" class="alert alert-secondary">
-                            トレーニングはまだ開始されていません
-                        </div>
-                        
-                        <div id="yolo-progress-container" class="mb-3" style="display: none;">
-                            <div class="progress mb-2">
-                                <div id="yolo-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
-                                    role="progressbar" style="width: 0%">0%</div>
-                            </div>
-                            <small id="yolo-status-text" class="text-muted">準備中...</small>
-                        </div>
-                        
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <div class="mb-1">
-                                    <strong>経過時間:</strong> <span id="yolo-elapsed-time">-</span>
-                                </div>
-                                <div class="mb-1">
-                                    <strong>現在のエポック:</strong> <span id="yolo-current-epoch">-</span> / <span id="yolo-total-epochs">-</span>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-1">
-                                    <strong>Box Loss:</strong> <span id="yolo-box-loss">-</span>
-                                </div>
-                                <div class="mb-1">
-                                    <strong>Obj Loss:</strong> <span id="yolo-obj-loss">-</span>
-                                </div>
-                                <div class="mb-1">
-                                    <strong>mAP50:</strong> <span id="yolo-map50">-</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div id="yolo-training-images" class="mt-3">
-                            <!-- トレーニング画像がここに表示されます -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- フェーズ3: 結果分析セクション（非表示状態で開始） -->
-    <div id="analysis-section" class="phase-section d-none">
-        <div class="row">
-            <!-- 統合結果サマリー -->
-            <div class="col-12">
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5><i class="fas fa-trophy me-2"></i>学習結果サマリー</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row text-center">
-                            <div class="col-md-3">
-                                <div class="metric-card bg-primary text-white">
-                                    <div class="metric-value" id="final-accuracy">0%</div>
-                                    <div class="metric-label">総合精度</div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="metric-card bg-info text-white">
-                                    <div class="metric-value" id="final-precision">0%</div>
-                                    <div class="metric-label">適合率</div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="metric-card bg-success text-white">
-                                    <div class="metric-value" id="final-recall">0%</div>
-                                    <div class="metric-label">再現率</div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="metric-card bg-warning text-white">
-                                    <div class="metric-value" id="annotation-count">
-                                        ♂:<span id="male-annotation-count">0</span> ♀:<span id="female-annotation-count">0</span>
-                                    </div>
-                                    <div class="metric-label">
-                                        アノテーション枚数
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 詳細結果 -->
-            <div class="col-md-8">
-                <div class="card">
-                    <div class="card-header">
-                        <h6><i class="fas fa-chart-line me-2"></i>詳細分析結果</h6>
-                    </div>
-                    <div class="card-body">
-                        <div id="unified-results-content">
-                            <!-- 評価グラフがここに動的に挿入される -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 改善提案 -->
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-header">
-                        <h6><i class="fas fa-lightbulb me-2"></i>改善提案</h6>
-                    </div>
-                    <div class="card-body">
-                        <div id="improvement-suggestions">
-                            <!-- 改善提案がここに動的に挿入される -->
-                        </div>
                         
                         <div class="mt-3">
-                            <button id="start-new-iteration-btn" class="btn btn-primary w-100">
-                                <i class="fas fa-redo me-1"></i>新しい学習を開始
-                            </button>
+                            <span class="badge bg-secondary">アップロード済み: <span id="uploadedCount">0</span>枚</span>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-        
-        <!-- 学習履歴 -->
-        <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="fas fa-history me-2"></i>学習履歴
-                </h5>
-            </div>
-            <div class="card-body p-0">
-                <div id="unified-learning-history">
-                    <!-- ここに統合された履歴が表示されます -->
-                    <div class="text-center p-3">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">読み込み中...</span>
+            
+            <!-- ステップ2: アノテーション -->
+            <div class="workflow-step" id="step-2">
+                <div class="d-flex align-items-center">
+                    <div class="step-number">2</div>
+                    <div class="flex-grow-1">
+                        <h4>バウンディングボックスでアノテーション</h4>
+                        <p class="mb-2">各画像の生殖乳頭を囲んで、雄・雌を指定してください</p>
+                        
+                        <div id="annotationProgress" class="d-none">
+                            <div class="progress mb-2">
+                                <div class="progress-bar" role="progressbar" style="width: 0%">
+                                    <span class="progress-text">0/0</span>
+                                </div>
+                            </div>
                         </div>
-                        <p class="mt-2">履歴を読み込んでいます...</p>
+                        
+                        <div id="imageList" class="d-flex flex-wrap"></div>
+                        
+                        <!-- アノテーションエリア -->
+                        <div id="annotationArea" class="d-none">
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <canvas id="annotationCanvas" class="annotation-canvas"></canvas>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <h5>アノテーション設定</h5>
+                                            <div class="mb-3">
+                                                <label class="form-label">現在の画像</label>
+                                                <p id="currentImageName" class="text-muted">-</p>
+                                            </div>
+                                            
+                                            <div class="mb-3">
+                                                <label class="form-label">クラス選択</label>
+                                                <div class="btn-group-vertical w-100" role="group">
+                                                    <input type="radio" class="btn-check" name="classType" 
+                                                           id="class-male" value="male" checked>
+                                                    <label class="btn btn-outline-primary" for="class-male">
+                                                        <i class="fas fa-mars"></i> 生殖乳頭（雄）
+                                                    </label>
+                                                    
+                                                    <input type="radio" class="btn-check" name="classType" 
+                                                           id="class-female" value="female">
+                                                    <label class="btn btn-outline-danger" for="class-female">
+                                                        <i class="fas fa-venus"></i> 生殖乳頭（雌）
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="mb-3">
+                                                <label class="form-label">アノテーション数</label>
+                                                <div id="annotationStats">
+                                                    <div>雄: <span id="maleAnnotations">0</span>個</div>
+                                                    <div>雌: <span id="femaleAnnotations">0</span>個</div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="d-grid gap-2">
+                                                <button class="btn btn-warning" id="clearAnnotations">
+                                                    <i class="fas fa-eraser"></i> クリア
+                                                </button>
+                                                <button class="btn btn-success" id="saveAnnotations">
+                                                    <i class="fas fa-save"></i> 保存して次へ
+                                                </button>
+                                                <button class="btn btn-secondary" id="skipImage">
+                                                    <i class="fas fa-forward"></i> スキップ
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- ステップ3: YOLO学習 -->
+            <div class="workflow-step" id="step-3">
+                <div class="d-flex align-items-center">
+                    <div class="step-number">3</div>
+                    <div class="flex-grow-1">
+                        <h4>YOLO学習実行</h4>
+                        <p class="mb-2">アノテーションデータを使用してYOLOモデルを学習します</p>
+                        
+                        <div id="trainingConfig" class="row mb-3 d-none">
+                            <div class="col-md-3">
+                                <label class="form-label">エポック数</label>
+                                <input type="number" class="form-control" id="epochs" value="100" min="10" max="1000">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">バッチサイズ</label>
+                                <select class="form-select" id="batchSize">
+                                    <option value="8">8</option>
+                                    <option value="16" selected>16</option>
+                                    <option value="32">32</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">モデルサイズ</label>
+                                <select class="form-select" id="modelSize">
+                                    <option value="yolov5n.pt">Nano (最速)</option>
+                                    <option value="yolov5s.pt" selected>Small (バランス)</option>
+                                    <option value="yolov5m.pt">Medium (高精度)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <button class="btn btn-success w-100" id="startTraining">
+                                    <i class="fas fa-play"></i> 学習開始
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="trainingProgress" class="d-none">
+                            <div class="progress mb-3">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" style="width: 0%">0%</div>
+                            </div>
+                            <div class="text-center">
+                                <p id="trainingStatus">準備中...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- ステップ4: 学習結果 -->
+            <div class="workflow-step" id="step-4">
+                <div class="d-flex align-items-center">
+                    <div class="step-number">4</div>
+                    <div class="flex-grow-1">
+                        <h4>学習結果・精度確認</h4>
+                        <p class="mb-2">学習の成果と現在のモデル精度を確認できます</p>
+                        
+                        <div id="trainingResults" class="d-none">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="training-metric">
+                                        <div class="metric-value" id="accuracy">-</div>
+                                        <div class="metric-label">精度</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="training-metric">
+                                        <div class="metric-value" id="mAP">-</div>
+                                        <div class="metric-label">mAP</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="training-metric">
+                                        <div class="metric-value" id="totalImages">-</div>
+                                        <div class="metric-label">学習画像数</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="training-metric">
+                                        <div class="metric-value" id="trainingTime">-</div>
+                                        <div class="metric-label">学習時間</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-3 text-center">
+                                <button class="btn btn-primary" id="downloadModel">
+                                    <i class="fas fa-download"></i> モデルをダウンロード
+                                </button>
+                                <button class="btn btn-secondary" id="newTraining">
+                                    <i class="fas fa-redo"></i> 新しい学習を開始
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
-    <!-- 結果プレースホルダー（初期表示） -->
-    <div id="results-placeholder" class="text-center py-5">
-        <i class="fas fa-rocket fa-3x mb-3 text-muted"></i>
-        <h5 class="text-muted">統合学習システム</h5>
-        <p class="text-muted">データをアップロードして学習を開始しましょう</p>
-    </div>
+<!-- アノテーション操作ガイド -->
+<div class="annotation-controls d-none" id="annotationControls">
+    <h6>操作方法</h6>
+    <small>
+        <div><i class="fas fa-mouse"></i> マウスドラッグで囲む</div>
+        <div><i class="fas fa-keyboard"></i> Delete: 選択削除</div>
+        <div><i class="fas fa-undo"></i> Ctrl+Z: 元に戻す</div>
+    </small>
 </div>
 {% endblock %}
 
-{% block modals %}
-<!-- アノテーションモーダルはannotation_tools.jsから動的生成 -->
-{% endblock %}
-
 {% block extra_js %}
-<!-- Chart.js CDN -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script type="module">
+// 新しいワークフロー用のJavaScriptを追加
+import { YoloAnnotator } from '/static/js/learning/YoloAnnotator.js';
 
-<!-- メインエントリポイント -->
-<script type="module" src="{{ url_for('static', filename='js/learning/index.js') }}"></script>
-
+// ここに新しいワークフロー制御のJavaScriptを実装
+</script>
 {% endblock %}
