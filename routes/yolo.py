@@ -430,3 +430,33 @@ def get_training_results():
             'status': 'error',
             'message': f'結果取得エラー: {str(e)}'
         }), 500
+
+@yolo_bp.route('/dataset-check', methods=['GET'])
+def check_dataset():
+    """データセットの詳細チェック"""
+    dataset_dir = 'data/yolo_dataset'
+    
+    # 画像とラベルの対応チェック
+    train_images = os.listdir(os.path.join(dataset_dir, 'images/train'))
+    train_labels = os.listdir(os.path.join(dataset_dir, 'labels/train'))
+    
+    # ラベルファイルの内容確認
+    empty_labels = []
+    valid_labels = []
+    
+    for label_file in train_labels:
+        label_path = os.path.join(dataset_dir, 'labels/train', label_file)
+        with open(label_path, 'r') as f:
+            content = f.read().strip()
+            if not content:
+                empty_labels.append(label_file)
+            else:
+                valid_labels.append(label_file)
+    
+    return jsonify({
+        'train_images': len(train_images),
+        'train_labels': len(train_labels),
+        'empty_labels': len(empty_labels),
+        'valid_labels': len(valid_labels),
+        'empty_label_files': empty_labels
+    })

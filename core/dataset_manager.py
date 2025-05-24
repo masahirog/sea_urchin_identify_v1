@@ -9,6 +9,42 @@ class DatasetManager:
     """データセット管理の共通クラス"""
     
     @staticmethod
+    def validate_annotations(dataset_dir):
+        """アノテーションの検証"""
+        issues = []
+        
+        # 各ラベルファイルをチェック
+        label_dir = os.path.join(dataset_dir, 'labels/train')
+        for label_file in os.listdir(label_dir):
+            label_path = os.path.join(label_dir, label_file)
+            with open(label_path, 'r') as f:
+                lines = f.readlines()
+                
+            if not lines:
+                issues.append(f"空のラベルファイル: {label_file}")
+                continue
+                
+            # YOLOフォーマットの検証
+            for i, line in enumerate(lines):
+                parts = line.strip().split()
+                if len(parts) != 5:
+                    issues.append(f"不正なフォーマット {label_file}:{i+1}")
+                    continue
+                    
+                try:
+                    class_id = int(parts[0])
+                    x, y, w, h = map(float, parts[1:5])
+                    
+                    # 値の範囲チェック
+                    if not all(0 <= v <= 1 for v in [x, y, w, h]):
+                        issues.append(f"座標が範囲外 {label_file}:{i+1}")
+                        
+                except ValueError:
+                    issues.append(f"数値変換エラー {label_file}:{i+1}")
+        
+        return issues
+    
+    @staticmethod
     def prepare_yolo_dataset(source_dirs=None):
         """YOLOデータセットを準備"""
         if source_dirs is None:

@@ -220,13 +220,19 @@ class YoloTrainer:
                     if "epochs completed in" in line:
                         logger.info("トレーニングが完了しました")
                         self.current_epoch = self.total_epochs
-                
                 # プロセスの終了を待つ
                 return_code = self.training_process.wait()
                 logger.info(f"トレーニングプロセス終了: 返り値={return_code}")
                 
                 if return_code != 0:
                     logger.error(f"トレーニングが異常終了しました: 返り値={return_code}")
+                if "Class" in line and "Images" in line and "Instances" in line:
+                    # 次の行も読み込んで詳細を確認
+                    logger.info(f"検証結果詳細: {line}")
+                    
+                # 警告の検出
+                if "WARNING" in line or "No labels found" in line:
+                    logger.warning(f"YOLO警告: {line.strip()}")
         
         except Exception as e:
             logger.error(f"トレーニングエラー: {e}", exc_info=True)
