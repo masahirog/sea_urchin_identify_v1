@@ -274,20 +274,42 @@ def save_training_results():
 def prepare_dataset():
     """YOLOデータセットを準備"""
     try:
+        # データセット準備前の状態確認
+        pre_check = DatasetManager.get_dataset_stats()
+        print(f"データセット準備前: {pre_check}")
+        
         result = DatasetManager.prepare_yolo_dataset()
         
-        return jsonify({
+        # データセット準備後の検証
+        validation_issues = DatasetManager.validate_annotations('data/yolo_dataset')
+        
+        # 最終的な統計情報
+        final_stats = DatasetManager.get_dataset_stats()
+        
+        response = {
             'status': 'success',
             'message': 'データセットの準備が完了しました',
-            **result
-        })
+            'pre_stats': pre_check,
+            'result': result,
+            'final_stats': final_stats,
+            'validation_issues': validation_issues,
+            'ready_for_training': len(validation_issues) == 0 and final_stats['train_images'] > 0
+        }
+        
+        if not response['ready_for_training']:
+            response['status'] = 'warning'
+            response['message'] = 'データセットに問題があります。詳細を確認してください。'
+        
+        return jsonify(response)
+        
     except Exception as e:
         current_app.logger.error(f'データセット準備エラー: {str(e)}')
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'status': 'error',
             'message': f'データセット準備エラー: {str(e)}'
         }), 500
-
 # データセット状態確認エンドポイントを追加
 @yolo_bp.route('/dataset-status', methods=['GET'])
 def dataset_status():
@@ -327,7 +349,7 @@ def save_yolo_annotation():
         filename = os.path.basename(image_path)
         label_name = os.path.splitext(filename)[0] + '.txt'
         
-        # YOLOフォーマットで保存
+        # YOLOフォーマットで保存（まずは一時的にtrainに保存）
         label_dir = os.path.join('data/yolo_dataset/labels/train')
         os.makedirs(label_dir, exist_ok=True)
         label_path = os.path.join(label_dir, label_name)
@@ -335,15 +357,13 @@ def save_yolo_annotation():
         with open(label_path, 'w') as f:
             f.write(yolo_data)
         
-        # データセットに画像をコピー（必要な場合）
-        if not os.path.exists(os.path.join('data/yolo_dataset/images/train', filename)):
-            # find_image_pathを使用して画像を検索
-            source_image = find_image_path(filename)
-            
-            if source_image:
-                import shutil
-                dst_path = os.path.join('data/yolo_dataset/images/train', filename)
-                shutil.copy2(source_image, dst_path)
+        # アノテーションが空でないか確認
+        if not yolo_data.strip():
+            current_app.logger.warning(f'空のアノテーションが保存されました: {label_name}')
+        else:
+            # f-string内でバックスラッシュを使えないため、変数に分ける
+            object_count = len(yolo_data.strip().split('\n'))
+            current_app.logger.info(f'アノテーション保存: {label_name} - {object_count}個のオブジェクト')
         
         return jsonify({
             'status': 'success',

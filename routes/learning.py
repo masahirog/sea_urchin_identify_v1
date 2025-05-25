@@ -36,7 +36,7 @@ def learning_page():
 
 @learning_bp.route('/upload-data', methods=['POST'])
 def upload_learning_data():
-    """学習データ用の画像をアップロード（改良版）"""
+    """学習データ用の画像をアップロード（シンプル版）"""
     from app import app
     from config import STATIC_SAMPLES_DIR
     
@@ -44,16 +44,12 @@ def upload_learning_data():
         return jsonify({"error": "画像ファイルがありません"}), 400
     
     files = request.files.getlist('images')
-    gender = request.form.get('gender', 'unknown')
     
     if not files or all(f.filename == '' for f in files):
         return jsonify({"error": "ファイルが選択されていません"}), 400
     
-    # 保存先ディレクトリの決定
-    if gender in ['male', 'female']:
-        target_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', gender)
-    else:
-        target_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'unknown')
+    # 保存先ディレクトリ（性別分けをしない）
+    target_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
     
     # 共通関数を使用
     uploaded_files, errors = handle_multiple_image_upload(
@@ -62,10 +58,9 @@ def upload_learning_data():
         app.config.get('ALLOWED_EXTENSIONS')
     )
     
-    # パスの調整（gender情報を追加）
+    # パスの調整
     for file_info in uploaded_files:
-        file_info['gender'] = gender
-        file_info['path'] = f'papillae/{gender}/{file_info["filename"]}'
+        file_info['path'] = f'papillae/{file_info["filename"]}'
     
     result = {
         "success": len(uploaded_files) > 0,
@@ -79,7 +74,7 @@ def upload_learning_data():
     
     if len(uploaded_files) > 0:
         result["message"] = f"{len(uploaded_files)}個のファイルをアップロードしました"
-        current_app.logger.info(f"学習データアップロード: {len(uploaded_files)}ファイル ({gender})")
+        current_app.logger.info(f"学習データアップロード: {len(uploaded_files)}ファイル")
     else:
         result["message"] = "アップロードに失敗しました"
         

@@ -32,6 +32,7 @@ ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif'}
 # ==================== 学習データ設定（一元化） ====================
 # 学習用データは static/images/samples/papillae/ に統一
 TRAINING_DATA_DIR = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
+
 TRAINING_DATA_MALE = os.path.join(TRAINING_DATA_DIR, 'male')
 TRAINING_DATA_FEMALE = os.path.join(TRAINING_DATA_DIR, 'female')
 

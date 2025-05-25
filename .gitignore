@@ -84,8 +84,6 @@ Desktop.ini
 # ただし、.gitkeepファイルは保持（ディレクトリ構造維持）
 !/static/images/samples/.gitkeep
 !/static/images/samples/papillae/.gitkeep
-!/static/images/samples/papillae/male/.gitkeep
-!/static/images/samples/papillae/female/.gitkeep
 !/static/images/detection_results/.gitkeep
 !/static/images/annotations/.gitkeep
 !/static/images/evaluations/.gitkeep
