@@ -1,0 +1,795 @@
+{% extends "base.html" %}
+
+{% block title %}YOLO学習実行 - ウニ生殖乳頭分析{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* データセット情報カード */
+    .dataset-info-card {
+        background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+        border-radius: 15px;
+        padding: 25px;
+        margin-bottom: 20px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+    }
+    
+    .dataset-stat {
+        text-align: center;
+        padding: 15px;
+    }
+    
+    .dataset-stat-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    
+    .dataset-stat-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin-top: 5px;
+    }
+    
+    /* 学習設定 */
+    .config-section {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    
+    .config-group {
+        margin-bottom: 20px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .config-group:last-child {
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: none;
+    }
+    
+    .config-item {
+        margin-bottom: 15px;
+    }
+    
+    .config-label {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 5px;
+        display: block;
+    }
+    
+    .config-help {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-top: 5px;
+    }
+    
+    /* プリセット */
+    .preset-card {
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 2px solid #dee2e6;
+        height: 100%;
+    }
+    
+    .preset-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    }
+    
+    .preset-card.selected {
+        border-color: #007bff;
+        background: #e7f3ff;
+    }
+    
+    .preset-icon {
+        font-size: 3rem;
+        margin-bottom: 15px;
+    }
+    
+    /* 学習進行状況 */
+    .training-monitor {
+        background: #f8f9fa;
+        border-radius: 15px;
+        padding: 30px;
+        margin-top: 20px;
+    }
+    
+    .metric-display {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        transition: transform 0.3s ease;
+    }
+    
+    .metric-display:hover {
+        transform: translateY(-3px);
+    }
+    
+    .metric-value {
+        font-size: 2rem;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    
+    .metric-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+    
+    /* ログ表示 */
+    .log-container {
+        background: #1e1e1e;
+        color: #d4d4d4;
+        border-radius: 10px;
+        padding: 20px;
+        height: 400px;
+        overflow-y: auto;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 0.85rem;
+    }
+    
+    .log-entry {
+        margin-bottom: 5px;
+        padding: 2px 0;
+    }
+    
+    .log-entry.info {
+        color: #58a6ff;
+    }
+    
+    .log-entry.success {
+        color: #56d364;
+    }
+    
+    .log-entry.warning {
+        color: #f0883e;
+    }
+    
+    .log-entry.error {
+        color: #f85149;
+    }
+    
+    /* 学習履歴 */
+    .history-item {
+        background: white;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 10px;
+        border: 1px solid #e9ecef;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .history-item:hover {
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        transform: translateX(5px);
+    }
+    
+    .history-badge {
+        font-size: 0.75rem;
+        padding: 4px 8px;
+        border-radius: 5px;
+    }
+    
+    /* レスポンシブ */
+    @media (max-width: 768px) {
+        .dataset-stat-value {
+            font-size: 2rem;
+        }
+        
+        .config-section {
+            padding: 15px;
+        }
+        
+        .metric-display {
+            margin-bottom: 10px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2 class="text-center mb-4">
+        <i class="fas fa-brain me-2"></i>YOLO学習実行
+    </h2>
+    
+    <!-- データセット情報 -->
+    <div class="dataset-info-card">
+        <h4 class="mb-3">
+            <i class="fas fa-database me-2"></i>学習用データセット
+        </h4>
+        <div class="row">
+            <div class="col-md-3 col-6">
+                <div class="dataset-stat">
+                    <div class="dataset-stat-value" id="totalImages">0</div>
+                    <div class="dataset-stat-label">総画像数</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="dataset-stat">
+                    <div class="dataset-stat-value" id="trainImages">0</div>
+                    <div class="dataset-stat-label">訓練用</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="dataset-stat">
+                    <div class="dataset-stat-value" id="valImages">0</div>
+                    <div class="dataset-stat-label">検証用</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="dataset-stat">
+                    <div class="dataset-stat-value" id="totalAnnotations">0</div>
+                    <div class="dataset-stat-label">総アノテーション</div>
+                </div>
+            </div>
+        </div>
+        <div class="text-center mt-3">
+            <span class="badge bg-success" id="datasetStatus">
+                <i class="fas fa-check-circle"></i> 学習準備完了
+            </span>
+        </div>
+    </div>
+    
+    <!-- 学習設定 -->
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="config-section">
+                <h4 class="mb-4">
+                    <i class="fas fa-cog me-2"></i>学習設定
+                </h4>
+                
+                <!-- プリセット選択 -->
+                <div class="config-group">
+                    <label class="config-label">学習プリセット</label>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="card preset-card" data-preset="quick">
+                                <div class="card-body text-center">
+                                    <div class="preset-icon text-primary">
+                                        <i class="fas fa-rocket"></i>
+                                    </div>
+                                    <h5>高速学習</h5>
+                                    <p class="text-muted small">
+                                        少ないエポック数で素早く結果を確認
+                                    </p>
+                                    <div class="mt-2">
+                                        <span class="badge bg-primary">50エポック</span>
+                                        <span class="badge bg-secondary">バッチ16</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card preset-card selected" data-preset="balanced">
+                                <div class="card-body text-center">
+                                    <div class="preset-icon text-success">
+                                        <i class="fas fa-balance-scale"></i>
+                                    </div>
+                                    <h5>バランス学習</h5>
+                                    <p class="text-muted small">
+                                        精度と学習時間のバランスが良い推奨設定
+                                    </p>
+                                    <div class="mt-2">
+                                        <span class="badge bg-success">100エポック</span>
+                                        <span class="badge bg-secondary">バッチ16</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card preset-card" data-preset="quality">
+                                <div class="card-body text-center">
+                                    <div class="preset-icon text-warning">
+                                        <i class="fas fa-crown"></i>
+                                    </div>
+                                    <h5>高精度学習</h5>
+                                    <p class="text-muted small">
+                                        時間をかけて最高の精度を目指す
+                                    </p>
+                                    <div class="mt-2">
+                                        <span class="badge bg-warning">200エポック</span>
+                                        <span class="badge bg-secondary">バッチ8</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 詳細設定 -->
+                <div class="config-group">
+                    <label class="config-label">詳細設定</label>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="config-item">
+                                <label class="form-label">エポック数</label>
+                                <input type="number" class="form-control" id="epochs" value="100" min="10" max="500">
+                                <div class="config-help">学習の繰り返し回数</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="config-item">
+                                <label class="form-label">バッチサイズ</label>
+                                <select class="form-select" id="batchSize">
+                                    <option value="4">4 (低スペック)</option>
+                                    <option value="8">8 (標準)</option>
+                                    <option value="16" selected>16 (推奨)</option>
+                                    <option value="32">32 (高性能GPU)</option>
+                                </select>
+                                <div class="config-help">一度に処理する画像数</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="config-item">
+                                <label class="form-label">モデルサイズ</label>
+                                <select class="form-select" id="modelSize">
+                                    <option value="yolov5n.pt">Nano (最軽量)</option>
+                                    <option value="yolov5s.pt" selected>Small (推奨)</option>
+                                    <option value="yolov5m.pt">Medium (高精度)</option>
+                                    <option value="yolov5l.pt">Large (最高精度)</option>
+                                </select>
+                                <div class="config-help">モデルの複雑さ</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 学習開始ボタン -->
+                <div class="text-center mt-4">
+                    <button class="btn btn-lg btn-success" id="startTrainingBtn">
+                        <i class="fas fa-play me-2"></i>学習を開始
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 学習履歴 -->
+        <div class="col-lg-4">
+            <div class="config-section">
+                <h5 class="mb-3">
+                    <i class="fas fa-history me-2"></i>学習履歴
+                </h5>
+                <div id="trainingHistory">
+                    <p class="text-muted text-center">学習履歴がありません</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 学習モニター（学習中のみ表示） -->
+    <div id="trainingMonitor" class="training-monitor d-none">
+        <h4 class="mb-4">
+            <i class="fas fa-chart-line me-2"></i>学習進行状況
+        </h4>
+        
+        <!-- 進捗バー -->
+        <div class="mb-4">
+            <div class="d-flex justify-content-between mb-2">
+                <span>進捗: <strong id="currentEpoch">0</strong> / <strong id="totalEpochs">100</strong> エポック</span>
+                <span>経過時間: <strong id="elapsedTime">00:00:00</strong></span>
+            </div>
+            <div class="progress" style="height: 25px;">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                     id="trainingProgress" style="width: 0%">0%</div>
+            </div>
+        </div>
+        
+        <!-- メトリクス表示 -->
+        <div class="row mb-4">
+            <div class="col-md-3 col-6">
+                <div class="metric-display">
+                    <div class="metric-value text-primary" id="metricPrecision">0.00</div>
+                    <div class="metric-label">Precision</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="metric-display">
+                    <div class="metric-value text-success" id="metricRecall">0.00</div>
+                    <div class="metric-label">Recall</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="metric-display">
+                    <div class="metric-value text-info" id="metricMAP">0.00</div>
+                    <div class="metric-label">mAP@0.5</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="metric-display">
+                    <div class="metric-value text-warning" id="metricLoss">0.00</div>
+                    <div class="metric-label">Loss</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- ログ表示 -->
+        <div class="mb-3">
+            <h5>
+                <i class="fas fa-terminal me-2"></i>学習ログ
+            </h5>
+            <div class="log-container" id="trainingLog">
+                <div class="log-entry info">学習を開始しています...</div>
+            </div>
+        </div>
+        
+        <!-- 制御ボタン -->
+        <div class="text-center">
+            <button class="btn btn-danger" id="stopTrainingBtn">
+                <i class="fas fa-stop me-2"></i>学習を停止
+            </button>
+        </div>
+    </div>
+    
+    <!-- 学習完了画面 -->
+    <div id="trainingComplete" class="d-none">
+        <div class="alert alert-success text-center">
+            <h4 class="alert-heading">
+                <i class="fas fa-check-circle me-2"></i>学習が完了しました！
+            </h4>
+            <p>モデルの学習が正常に完了しました。</p>
+            <hr>
+            <div class="mb-0">
+                <a href="#" id="viewResultsBtn" class="btn btn-primary me-2">
+                    <i class="fas fa-chart-bar me-1"></i>詳細な結果を見る
+                </a>
+                <button class="btn btn-secondary" id="newTrainingBtn">
+                    <i class="fas fa-redo me-1"></i>新しい学習を開始
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script type="module">
+import { showLoading, hideLoading, showSuccessMessage, showErrorMessage } from '/static/js/utilities.js';
+
+// グローバル変数
+let isTraining = false;
+let trainingInterval = null;
+let startTime = null;
+
+// 初期化
+document.addEventListener('DOMContentLoaded', function() {
+    setupEventListeners();
+    loadDatasetInfo();
+    loadTrainingHistory();
+});
+
+// イベントリスナー
+function setupEventListeners() {
+    // プリセット選択
+    document.querySelectorAll('.preset-card').forEach(card => {
+        card.addEventListener('click', function() {
+            selectPreset(this.dataset.preset);
+        });
+    });
+    
+    // 学習開始
+    document.getElementById('startTrainingBtn')?.addEventListener('click', startTraining);
+    document.getElementById('stopTrainingBtn')?.addEventListener('click', stopTraining);
+    document.getElementById('newTrainingBtn')?.addEventListener('click', resetForNewTraining);
+}
+
+// データセット情報読み込み
+async function loadDatasetInfo() {
+    try {
+        const response = await fetch('/yolo/dataset-status');
+        const data = await response.json();
+        
+        if (data.status === 'success' && data.stats) {
+            document.getElementById('totalImages').textContent = 
+                data.stats.train_images + data.stats.val_images;
+            document.getElementById('trainImages').textContent = data.stats.train_images;
+            document.getElementById('valImages').textContent = data.stats.val_images;
+            document.getElementById('totalAnnotations').textContent = 
+                data.stats.train_labels + data.stats.val_labels;
+            
+            // データセット準備状態
+            if (data.stats.total_images === 0) {
+                document.getElementById('datasetStatus').innerHTML = 
+                    '<i class="fas fa-exclamation-circle"></i> データセットがありません';
+                document.getElementById('datasetStatus').className = 'badge bg-danger';
+                document.getElementById('startTrainingBtn').disabled = true;
+            }
+        }
+    } catch (error) {
+        console.error('データセット情報取得エラー:', error);
+    }
+}
+
+// 学習履歴読み込み
+async function loadTrainingHistory() {
+    try {
+        const response = await fetch('/learning/learning-history');
+        const data = await response.json();
+        
+        const historyContainer = document.getElementById('trainingHistory');
+        
+        if (data.history && data.history.length > 0) {
+            historyContainer.innerHTML = '';
+            
+            // 最新5件のみ表示
+            data.history.slice(0, 5).forEach(item => {
+                const historyItem = document.createElement('div');
+                historyItem.className = 'history-item';
+                
+                const date = new Date(item.date);
+                const accuracy = (item.accuracy * 100).toFixed(1);
+                
+                historyItem.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted">${date.toLocaleDateString()}</small>
+                            <div>${item.experiment}</div>
+                        </div>
+                        <div class="text-end">
+                            <span class="history-badge bg-primary">精度 ${accuracy}%</span>
+                        </div>
+                    </div>
+                `;
+                
+                historyItem.addEventListener('click', () => {
+                    window.location.href = `/learning/results/${item.experiment}`;
+                });
+                
+                historyContainer.appendChild(historyItem);
+            });
+        }
+    } catch (error) {
+        console.error('学習履歴取得エラー:', error);
+    }
+}
+
+// プリセット選択
+function selectPreset(preset) {
+    // 選択状態更新
+    document.querySelectorAll('.preset-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    document.querySelector(`[data-preset="${preset}"]`).classList.add('selected');
+    
+    // 設定値更新
+    const presets = {
+        quick: { epochs: 50, batchSize: 16, modelSize: 'yolov5s.pt' },
+        balanced: { epochs: 100, batchSize: 16, modelSize: 'yolov5s.pt' },
+        quality: { epochs: 200, batchSize: 8, modelSize: 'yolov5m.pt' }
+    };
+    
+    const config = presets[preset];
+    if (config) {
+        document.getElementById('epochs').value = config.epochs;
+        document.getElementById('batchSize').value = config.batchSize;
+        document.getElementById('modelSize').value = config.modelSize;
+    }
+}
+
+// 学習開始
+async function startTraining() {
+    if (isTraining) {
+        showErrorMessage('既に学習が実行中です');
+        return;
+    }
+    
+    const params = {
+        epochs: parseInt(document.getElementById('epochs').value),
+        batch_size: parseInt(document.getElementById('batchSize').value),
+        weights: document.getElementById('modelSize').value
+    };
+    
+    try {
+        showLoading('学習を開始中...');
+        
+        const response = await fetch('/yolo/training/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(params)
+        });
+        
+        const data = await response.json();
+        hideLoading();
+        
+        if (data.status === 'success') {
+            isTraining = true;
+            startTime = new Date();
+            
+            // UI更新
+            document.getElementById('trainingMonitor').classList.remove('d-none');
+            document.getElementById('startTrainingBtn').disabled = true;
+            document.getElementById('totalEpochs').textContent = params.epochs;
+            
+            // モニタリング開始
+            startMonitoring();
+            
+            showSuccessMessage('学習を開始しました');
+        } else {
+            showErrorMessage(data.message || '学習の開始に失敗しました');
+        }
+        
+    } catch (error) {
+        hideLoading();
+        showErrorMessage('エラー: ' + error.message);
+    }
+}
+
+// 学習モニタリング
+function startMonitoring() {
+    if (trainingInterval) {
+        clearInterval(trainingInterval);
+    }
+    
+    trainingInterval = setInterval(async () => {
+        try {
+            const response = await fetch('/yolo/training/status');
+            const status = await response.json();
+            
+            updateTrainingStatus(status);
+            
+            // 完了チェック
+            if (status.status === 'completed' || 
+                (status.current_epoch >= status.total_epochs && status.total_epochs > 0)) {
+                stopMonitoring();
+                onTrainingComplete();
+            } else if (status.status === 'failed' || status.status === 'stopped') {
+                stopMonitoring();
+                showErrorMessage('学習が中断されました');
+                resetUI();
+            }
+            
+        } catch (error) {
+            console.error('ステータス取得エラー:', error);
+        }
+    }, 2000);
+}
+
+// ステータス更新
+function updateTrainingStatus(status) {
+    // 進捗更新
+    const progress = (status.progress || 0) * 100;
+    const progressBar = document.getElementById('trainingProgress');
+    progressBar.style.width = progress + '%';
+    progressBar.textContent = Math.round(progress) + '%';
+    
+    document.getElementById('currentEpoch').textContent = status.current_epoch || 0;
+    
+    // 経過時間
+    if (startTime) {
+        const elapsed = new Date() - startTime;
+        const hours = Math.floor(elapsed / 3600000);
+        const minutes = Math.floor((elapsed % 3600000) / 60000);
+        const seconds = Math.floor((elapsed % 60000) / 1000);
+        document.getElementById('elapsedTime').textContent = 
+            `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+    
+    // メトリクス更新
+    if (status.metrics) {
+        const metrics = status.metrics;
+        
+        if (metrics.precision && metrics.precision.length > 0) {
+            document.getElementById('metricPrecision').textContent = 
+                (metrics.precision[metrics.precision.length - 1] || 0).toFixed(3);
+        }
+        
+        if (metrics.recall && metrics.recall.length > 0) {
+            document.getElementById('metricRecall').textContent = 
+                (metrics.recall[metrics.recall.length - 1] || 0).toFixed(3);
+        }
+        
+        if (metrics.mAP50 && metrics.mAP50.length > 0) {
+            document.getElementById('metricMAP').textContent = 
+                (metrics.mAP50[metrics.mAP50.length - 1] || 0).toFixed(3);
+        }
+        
+        if (metrics.box_loss && metrics.box_loss.length > 0) {
+            const totalLoss = (metrics.box_loss[metrics.box_loss.length - 1] || 0) + 
+                            (metrics.obj_loss[metrics.obj_loss.length - 1] || 0) +
+                            (metrics.cls_loss[metrics.cls_loss.length - 1] || 0);
+            document.getElementById('metricLoss').textContent = totalLoss.toFixed(4);
+        }
+    }
+    
+    // ログ追加
+    if (status.message) {
+        addLogEntry(status.message, 'info');
+    }
+}
+
+// ログ追加
+function addLogEntry(message, type = 'info') {
+    const logContainer = document.getElementById('trainingLog');
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${type}`;
+    entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+    
+    logContainer.appendChild(entry);
+    logContainer.scrollTop = logContainer.scrollHeight;
+}
+
+// モニタリング停止
+function stopMonitoring() {
+    if (trainingInterval) {
+        clearInterval(trainingInterval);
+        trainingInterval = null;
+    }
+}
+
+// 学習停止
+async function stopTraining() {
+    if (!isTraining) return;
+    
+    if (!confirm('学習を停止しますか？')) return;
+    
+    try {
+        const response = await fetch('/yolo/training/stop', {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            showSuccessMessage('学習を停止しました');
+            stopMonitoring();
+            resetUI();
+        }
+        
+    } catch (error) {
+        showErrorMessage('停止エラー: ' + error.message);
+    }
+}
+
+// 学習完了
+async function onTrainingComplete() {
+    isTraining = false;
+    
+    document.getElementById('trainingMonitor').classList.add('d-none');
+    document.getElementById('trainingComplete').classList.remove('d-none');
+    
+    addLogEntry('学習が完了しました！', 'success');
+    showSuccessMessage('学習が正常に完了しました！');
+    
+    // 結果リンク設定
+    try {
+        const response = await fetch('/yolo/training/latest-experiment');
+        const data = await response.json();
+        
+        if (data.experiment) {
+            document.getElementById('viewResultsBtn').href = `/learning/results/${data.experiment}`;
+        }
+    } catch (error) {
+        console.error('結果取得エラー:', error);
+    }
+    
+    // 履歴更新
+    loadTrainingHistory();
+}
+
+// UI リセット
+function resetUI() {
+    isTraining = false;
+    document.getElementById('startTrainingBtn').disabled = false;
+    document.getElementById('trainingMonitor').classList.add('d-none');
+}
+
+// 新しい学習のためのリセット
+function resetForNewTraining() {
+    document.getElementById('trainingComplete').classList.add('d-none');
+    resetUI();
+}
+
+</script>
+{% endblock %}
