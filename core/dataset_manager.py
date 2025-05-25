@@ -56,16 +56,30 @@ class DatasetManager:
     
     @staticmethod
     def prepare_yolo_dataset():
-        from config import TRAINING_DATA_MALE, TRAINING_DATA_FEMALE, YOLO_DATASET_DIR
-        source_dirs = [TRAINING_DATA_MALE, TRAINING_DATA_FEMALE]  # 設定から取得
-
-        if source_dirs is None:
-            source_dirs = [
-                'static/images/samples/papillae/male',
-                'static/images/samples/papillae/female'
-            ]
+        from config import TRAINING_DATA_MALE, TRAINING_DATA_FEMALE, YOLO_DATASET_DIR, STATIC_SAMPLES_DIR
         
         yolo_dataset_dir = 'data/yolo_dataset'
+        
+        # デバッグ: クリア前の状態を確認
+        print("=== データセット準備開始 ===")
+        train_labels_dir = os.path.join(yolo_dataset_dir, 'labels/train')
+        if os.path.exists(train_labels_dir):
+            existing_labels = [f for f in os.listdir(train_labels_dir) if f.endswith('.txt')]
+            print(f"既存のラベルファイル: {existing_labels}")
+        
+        # ソースディレクトリの設定
+        source_dirs = []
+        
+        # 1. 性別ごとのディレクトリ
+        if os.path.exists(TRAINING_DATA_MALE):
+            source_dirs.append(TRAINING_DATA_MALE)
+        if os.path.exists(TRAINING_DATA_FEMALE):
+            source_dirs.append(TRAINING_DATA_FEMALE)
+        
+        # 2. papillaeディレクトリ直下も含める
+        papillae_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
+        if os.path.exists(papillae_dir):
+            source_dirs.append(papillae_dir)
         
         # ディレクトリ作成
         dirs_to_create = [
@@ -76,14 +90,23 @@ class DatasetManager:
         for dir_path in dirs_to_create:
             os.makedirs(os.path.join(yolo_dataset_dir, dir_path), exist_ok=True)
         
-        # 既存のデータセットをクリア（オプション）
-        # これにより、古いデータが残らないようにする
-        for dir_path in dirs_to_create:
-            full_path = os.path.join(yolo_dataset_dir, dir_path)
+        # 既存のデータセットをクリア（画像のみクリア、ラベルは残す）
+        for dir_name in ['images/train', 'images/val']:
+            full_path = os.path.join(yolo_dataset_dir, dir_name)
             if os.path.exists(full_path):
-                # ディレクトリ内のファイルを削除
                 for file in os.listdir(full_path):
-                    file_path = os.path.join(full_path, file)
+                    if file.lower().endswith(('.jpg', '.jpeg', '.png')):
+                        file_path = os.path.join(full_path, file)
+                        if os.path.isfile(file_path):
+                            os.remove(file_path)
+                            print(f"画像削除: {file_path}")
+        
+        # 検証用ラベルディレクトリのみクリア
+        val_labels_dir = os.path.join(yolo_dataset_dir, 'labels/val')
+        if os.path.exists(val_labels_dir):
+            for file in os.listdir(val_labels_dir):
+                if file.endswith('.txt'):
+                    file_path = os.path.join(val_labels_dir, file)
                     if os.path.isfile(file_path):
                         os.remove(file_path)
         
@@ -95,7 +118,7 @@ class DatasetManager:
         # data.yaml生成
         DatasetManager._generate_data_yaml(yolo_dataset_dir)
         
-        # 検証: 実際にファイルが存在するか確認
+        # 検証
         train_images_dir = os.path.join(yolo_dataset_dir, 'images/train')
         train_labels_dir = os.path.join(yolo_dataset_dir, 'labels/train')
         
@@ -116,163 +139,117 @@ class DatasetManager:
             'actual_train_images': actual_train_images,
             'actual_train_labels': actual_train_labels
         }
-    @staticmethod
-    def _split_and_copy_data_simple(source_dir, target_dir, train_ratio=0.8):
-        """データを訓練用と検証用に分割してコピー（シンプル版）"""
-        all_images = []
-        
-        # 画像を収集（サブディレクトリも含む）
-        if os.path.exists(source_dir):
-            # 直接配置された画像
-            for filename in os.listdir(source_dir):
-                if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
-                    all_images.append({
-                        'filename': filename,
-                        'source_path': os.path.join(source_dir, filename)
-                    })
-            
-            # サブディレクトリ内の画像も収集（後方互換性）
-            for subdir in ['male', 'female', 'unknown']:
-                subdir_path = os.path.join(source_dir, subdir)
-                if os.path.exists(subdir_path):
-                    for filename in os.listdir(subdir_path):
-                        if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
-                            all_images.append({
-                                'filename': filename,
-                                'source_path': os.path.join(subdir_path, filename)
-                            })
-        
-        print(f"収集された画像数: {len(all_images)}")
-        
-        # データが少ない場合は全てを訓練用に使用
-        if len(all_images) <= 5:
-            train_ratio = 1.0
-        
-        # シャッフルして分割
-        random.shuffle(all_images)
-        split_idx = int(len(all_images) * train_ratio)
-        train_images = all_images[:split_idx]
-        val_images = all_images[split_idx:]
-        
-        train_count = 0
-        val_count = 0
-        
-        # 訓練データ
-        for img_info in train_images:
-            dst_path = os.path.join(target_dir, 'images/train', img_info['filename'])
-            
-            try:
-                shutil.copy2(img_info['source_path'], dst_path)
-                
-                # ラベルファイルがあるか確認
-                label_name = os.path.splitext(img_info['filename'])[0] + '.txt'
-                label_src = os.path.join('data/yolo_dataset/labels/train', label_name)
-                if os.path.exists(label_src):
-                    train_count += 1
-                else:
-                    train_count += 1
-                    
-            except Exception as e:
-                print(f"画像コピーエラー: {img_info['source_path']} -> {dst_path}: {str(e)}")
-        
-        # 検証データ
-        for img_info in val_images:
-            dst_path = os.path.join(target_dir, 'images/val', img_info['filename'])
-            
-            try:
-                shutil.copy2(img_info['source_path'], dst_path)
-                
-                # ラベルファイルの移動
-                label_name = os.path.splitext(img_info['filename'])[0] + '.txt'
-                label_src = os.path.join('data/yolo_dataset/labels/train', label_name)
-                label_dst = os.path.join(target_dir, 'labels/val', label_name)
-                if os.path.exists(label_src):
-                    shutil.move(label_src, label_dst)
-                    val_count += 1
-                else:
-                    val_count += 1
-                    
-            except Exception as e:
-                print(f"画像コピーエラー: {img_info['source_path']} -> {dst_path}: {str(e)}")
-        
-        print(f"データセット準備完了: 訓練用 {train_count}枚, 検証用 {val_count}枚")
-        
-        return train_count, val_count
+
 
 
     @staticmethod
     def _split_and_copy_data(source_dirs, target_dir, train_ratio=0.8):
-        """データを訓練用と検証用に分割してコピー"""
+        """データを訓練用と検証用に分割してコピー（改良版）"""
+        import random
+        import shutil
+        
         all_images = []
         
-        # 全画像を収集
+        # 全画像を収集（既存のコードと同じ）
         for source_dir in source_dirs:
             if os.path.exists(source_dir):
+                # ディレクトリ直下の画像
                 for filename in os.listdir(source_dir):
                     if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
                         all_images.append({
                             'filename': filename,
-                            'source_dir': source_dir,
-                            'gender': os.path.basename(source_dir)
+                            'source_path': os.path.join(source_dir, filename),
+                            'source_dir': source_dir
                         })
         
-        # データが少ない場合は全てを訓練用に使用
-        if len(all_images) <= 5:
-            train_ratio = 1.0  # 5枚以下の場合は全て訓練用
+        print(f"収集された画像数: {len(all_images)}")
         
-        # シャッフルして分割
-        random.shuffle(all_images)
-        split_idx = int(len(all_images) * train_ratio)
-        train_images = all_images[:split_idx]
-        val_images = all_images[split_idx:]
+        # データ分割の改良
+        if len(all_images) == 0:
+            return 0, 0
+        elif len(all_images) == 1:
+            # 1枚しかない場合は、訓練と検証の両方に同じ画像を使用
+            train_images = all_images
+            val_images = all_images
+            print("警告: 画像が1枚のみのため、訓練と検証に同じ画像を使用します")
+        elif len(all_images) <= 3:
+            # 2-3枚の場合は、1枚を検証用に確保
+            random.shuffle(all_images)
+            val_images = all_images[:1]
+            train_images = all_images
+            print(f"少数データモード: 訓練{len(train_images)}枚（重複あり）, 検証{len(val_images)}枚")
+        else:
+            # 4枚以上の場合は通常の分割
+            random.shuffle(all_images)
+            if len(all_images) <= 5:
+                train_ratio = 0.8  # 80%を訓練用
+            split_idx = int(len(all_images) * train_ratio)
+            split_idx = max(1, split_idx)  # 最低1枚は検証用
+            train_images = all_images[:split_idx]
+            val_images = all_images[split_idx:]
         
         train_count = 0
         val_count = 0
         
-        # 訓練データ
+        # 訓練データ処理（既存のコードと同じ）
         for img_info in train_images:
-            src_path = os.path.join(img_info['source_dir'], img_info['filename'])
-            dst_path = os.path.join(target_dir, 'images/train', img_info['filename'])
+            src_path = img_info['source_path']
+            filename = img_info['filename']
+            dst_path = os.path.join(target_dir, 'images/train', filename)
             
-            # 画像をコピー
             try:
+                # 画像をコピー
                 shutil.copy2(src_path, dst_path)
+                print(f"訓練画像コピー: {filename}")
                 
-                # ラベルファイルがあるか確認してコピー
-                label_name = os.path.splitext(img_info['filename'])[0] + '.txt'
-                label_src = os.path.join('data/yolo_dataset/labels/train', label_name)
-                if os.path.exists(label_src):
-                    # ラベルファイルはそのまま train に残す
+                # ラベルファイル処理
+                label_name = os.path.splitext(filename)[0] + '.txt'
+                label_src_train = os.path.join(target_dir, 'labels/train', label_name)
+                
+                if os.path.exists(label_src_train):
+                    print(f"訓練ラベル既存: {label_name}")
                     train_count += 1
                 else:
-                    # ラベルファイルがない場合は画像のみカウント
+                    print(f"警告: 訓練ラベルなし: {label_name}")
                     train_count += 1
                     
             except Exception as e:
-                print(f"画像コピーエラー: {src_path} -> {dst_path}: {str(e)}")
+                print(f"訓練データエラー: {str(e)}")
         
-        # 検証データ
+        # 検証データ処理
         for img_info in val_images:
-            src_path = os.path.join(img_info['source_dir'], img_info['filename'])
-            dst_path = os.path.join(target_dir, 'images/val', img_info['filename'])
+            src_path = img_info['source_path']
+            filename = img_info['filename']
+            dst_path = os.path.join(target_dir, 'images/val', filename)
             
-            # 画像をコピー
             try:
+                # 画像をコピー
                 shutil.copy2(src_path, dst_path)
+                print(f"検証画像コピー: {filename}")
                 
-                # ラベルファイルがあるか確認して移動
-                label_name = os.path.splitext(img_info['filename'])[0] + '.txt'
-                label_src = os.path.join('data/yolo_dataset/labels/train', label_name)
+                # ラベルファイル処理
+                label_name = os.path.splitext(filename)[0] + '.txt'
+                label_src = os.path.join(target_dir, 'labels/train', label_name)
                 label_dst = os.path.join(target_dir, 'labels/val', label_name)
+                
                 if os.path.exists(label_src):
-                    shutil.move(label_src, label_dst)
+                    # 少数データの場合はコピー（移動ではなく）
+                    if len(all_images) <= 3:
+                        shutil.copy2(label_src, label_dst)
+                        print(f"検証ラベルコピー: {label_name}")
+                    else:
+                        shutil.move(label_src, label_dst)
+                        print(f"検証ラベル移動: {label_name}")
                     val_count += 1
                 else:
-                    # ラベルファイルがない場合は画像のみカウント
+                    print(f"警告: 検証ラベルなし: {label_name}")
+                    # 空のラベルファイルを作成
+                    with open(label_dst, 'w') as f:
+                        f.write('')
                     val_count += 1
                     
             except Exception as e:
-                print(f"画像コピーエラー: {src_path} -> {dst_path}: {str(e)}")
+                print(f"検証データエラー: {str(e)}")
         
         print(f"データセット準備完了: 訓練用 {train_count}枚, 検証用 {val_count}枚")
         
@@ -281,17 +258,31 @@ class DatasetManager:
     @staticmethod
     def _generate_data_yaml(dataset_dir):
         """YOLOのdata.yamlファイルを生成"""
-        yaml_content = f"""path: {os.path.abspath(dataset_dir)}
-            train: images/train
-            val: images/val
-
-            names:
-              0: male_papillae
-              1: female_papillae
-            """
-        with open(os.path.join(dataset_dir, 'data.yaml'), 'w') as f:
+        abs_path = os.path.abspath(dataset_dir)
+        
+        # リストとして定義してから結合
+        yaml_lines = [
+            f"path: {abs_path}",
+            "train: images/train",
+            "val: images/val",
+            "",
+            "names:",
+            "  0: male_papillae",
+            "  1: female_papillae"
+        ]
+        
+        yaml_content = '\n'.join(yaml_lines) + '\n'
+        
+        yaml_path = os.path.join(dataset_dir, 'data.yaml')
+        with open(yaml_path, 'w') as f:
             f.write(yaml_content)
-    
+        
+        print(f"data.yaml生成: {yaml_path}")
+        print("=== data.yaml内容 ===")
+        print(yaml_content)
+        print("===================")
+
+
     @staticmethod
     def get_dataset_stats():
         """データセットの統計情報を取得"""

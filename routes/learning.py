@@ -48,8 +48,13 @@ def upload_learning_data():
     if not files or all(f.filename == '' for f in files):
         return jsonify({"error": "ファイルが選択されていません"}), 400
     
-    # 保存先ディレクトリ（性別分けをしない）
+    # 保存先ディレクトリ（性別分けをしない場合、直接papillaeに保存）
     target_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
+    
+    # gender パラメータをチェック
+    gender = request.form.get('gender', 'unknown')
+    if gender in ['male', 'female']:
+        target_dir = os.path.join(target_dir, gender)
     
     # 共通関数を使用
     uploaded_files, errors = handle_multiple_image_upload(
@@ -60,7 +65,14 @@ def upload_learning_data():
     
     # パスの調整
     for file_info in uploaded_files:
-        file_info['path'] = f'papillae/{file_info["filename"]}'
+        # 相対パスを正しく設定
+        if gender in ['male', 'female']:
+            file_info['path'] = f'papillae/{gender}/{file_info["filename"]}'
+        else:
+            file_info['path'] = f'papillae/{file_info["filename"]}'
+        
+        # URLも設定
+        file_info['url'] = f'/sample/{file_info["path"]}'
     
     result = {
         "success": len(uploaded_files) > 0,
@@ -74,7 +86,7 @@ def upload_learning_data():
     
     if len(uploaded_files) > 0:
         result["message"] = f"{len(uploaded_files)}個のファイルをアップロードしました"
-        current_app.logger.info(f"学習データアップロード: {len(uploaded_files)}ファイル")
+        current_app.logger.info(f"学習データアップロード: {len(uploaded_files)}ファイル - ディレクトリ: {target_dir}")
     else:
         result["message"] = "アップロードに失敗しました"
         
