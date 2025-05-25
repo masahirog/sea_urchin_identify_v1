@@ -41,72 +41,7 @@ def processing_worker(queue, status_dict, app_config):
                 }
                 
                 # タスクの種類に応じた処理
-                if task_type == 'process_video':
-                    # 動画処理タスク
-                    from core.analyzer import UnifiedAnalyzer as UrchinPapillaeAnalyzer
-                    
-                    # パラメータ取得
-                    video_path = task.get('video_path')
-                    max_images = task.get('max_images', 10)
-                    
-                    # 状態更新
-                    status_dict[task_id].update({
-                        "message": "動画処理の準備中...",
-                        "progress": 20
-                    })
-                    
-                    # 分析インスタンス作成
-                    analyzer = UrchinPapillaeAnalyzer()
-                    
-                    # 出力ディレクトリ
-                    output_dir = app_config.get('EXTRACTED_FOLDER', 'extracted_images')
-                    
-                    # この処理は時間がかかるので、途中で進捗を更新
-                    import threading
-                    
-                    # 進捗更新スレッド
-                    def update_progress():
-                        """バックグラウンドで進捗を更新するヘルパー関数"""
-                        progress = 30
-                        while task_id in status_dict and status_dict[task_id].get('status') == 'running':
-                            # 定期的に進捗を更新（30%から80%までゆっくり上げる）
-                            if progress < 80:
-                                progress += 2
-                                status_dict[task_id].update({
-                                    "message": f"動画から生殖乳頭を検出中... ({progress}%)",
-                                    "progress": progress
-                                })
-                            import time
-                            time.sleep(2)  # 2秒ごとに更新
-                    
-                    # 進捗更新スレッドを開始
-                    progress_thread = threading.Thread(target=update_progress)
-                    progress_thread.daemon = True
-                    progress_thread.start()
-                    
-                    try:
-                        # 処理実行
-                        extracted_images = analyzer.process_video(video_path, output_dir, task_id, max_images)
-                        
-                        # 処理完了を記録
-                        image_count = len(extracted_images) if extracted_images else 0
-                        status_dict[task_id] = {
-                            "status": "completed",
-                            "message": f"抽出完了: {image_count}枚",
-                            "image_count": image_count,
-                            "progress": 100
-                        }
-                        print(f"動画処理完了: {task_id}, {image_count}枚の画像を抽出")
-                        
-                    except Exception as e:
-                        status_dict[task_id] = {
-                            "status": "error",
-                            "message": f"動画処理エラー: {str(e)}",
-                            "progress": 100
-                        }
-                        print(f"動画処理エラー: {str(e)}")
-                
-                elif task_type == 'train_model':
+                if task_type == 'train_model':
                     # モデル訓練タスク
                     from core.analyzer import UnifiedAnalyzer as UrchinPapillaeAnalyzer
                     

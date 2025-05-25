@@ -6,7 +6,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # ==================== データディレクトリ（非公開）====================
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 UPLOAD_DIR = os.path.join(DATA_DIR, 'uploads')              # 一時アップロード
-EXTRACTED_DIR = os.path.join(DATA_DIR, 'extracted_frames')  # 抽出画像
 DATASET_DIR = os.path.join(DATA_DIR, 'dataset')             # 学習データ
 MODELS_DIR = os.path.join(DATA_DIR, 'models')               # モデル
 EVALUATION_DATA_DIR = os.path.join(DATA_DIR, 'evaluations') # 評価JSON
@@ -25,7 +24,6 @@ MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 500MB
 DEBUG = True
 
 # 許可する拡張子
-ALLOWED_VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv'}
 ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif'}
 
 
@@ -60,8 +58,6 @@ def ensure_directories():
         # データディレクトリ（非公開）
         DATA_DIR,
         UPLOAD_DIR,
-        EXTRACTED_DIR,
-        # DATASET_DIR は削除
         os.path.join(MODELS_DIR, 'saved'),
         EVALUATION_DATA_DIR,
         

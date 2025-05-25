@@ -210,19 +210,4 @@ class PapillaeDetector:
         
         return features
     
-    def process_video_frame(self, frame):
-        """
-        動画フレームを処理
-        
-        Parameters:
-        - frame: 処理するフレーム
-        
-        Returns:
-        - detections: 検出結果
-        - processed_frame: 処理後のフレーム
-        """
-        # 検出実行
-        detections, annotated_frame = self.detect_papillae(frame)
-        
-        return detections, annotated_frame
     

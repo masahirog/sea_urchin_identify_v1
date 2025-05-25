@@ -33,7 +33,6 @@ app = Flask(__name__, static_folder='static', static_url_path='/static')
 # 設定の一元化
 app.config.update({
     'UPLOAD_FOLDER': UPLOAD_DIR,
-    'EXTRACTED_FOLDER': EXTRACTED_DIR,
     'MODEL_FOLDER': os.path.join(MODELS_DIR, 'saved'),
     'SAMPLES_FOLDER': STATIC_SAMPLES_DIR,
     'ALLOWED_EXTENSIONS': {'mp4', 'avi', 'mov', 'mkv', 'jpg', 'jpeg', 'png'},
@@ -44,11 +43,6 @@ app.config.update({
 
 # 必要なディレクトリの作成
 ensure_directories()
-
-# グローバル変数の一元化
-processing_queue = queue.Queue()
-processing_results = {}
-processing_status = {}
 
 # 起動時クリーンアップ
 with app.app_context():
@@ -61,23 +55,11 @@ with app.app_context():
 # 定期クリーンアップ
 schedule_cleanup(app, interval_hours=6)
 
-# ワーカースレッド開始
-from utils.worker import processing_worker
-processing_thread = threading.Thread(
-    target=processing_worker, 
-    args=(processing_queue, processing_status, app.config)
-)
-processing_thread.daemon = True
-processing_thread.start()
-logger.info("処理ワーカースレッドを開始しました")
-
 # ルートのインポートと登録
 from routes.main import main_bp
-from routes.video import video_bp  
 from routes.learning import learning_bp
 
 app.register_blueprint(main_bp)
-app.register_blueprint(video_bp, url_prefix='/video')
 app.register_blueprint(learning_bp, url_prefix='/learning')
 app.register_blueprint(yolo_bp)  # YOLOルートの登録
 app.register_blueprint(annotation_bp)
