@@ -55,10 +55,40 @@ def cleanup_temp_files(directory='static/uploads', max_age_hours=24):
         logger.info(f"合計 {deleted_count} 個の一時ファイルを削除しました")
     else:
         logger.debug(f"削除対象の一時ファイルはありませんでした")
-                
+    if directory == 'static/uploads':  # メインのクリーンアップ時のみ
+        cleanup_old_logs()
     return deleted_count
 
-
+def cleanup_old_logs(log_dir='logs', max_age_days=30):
+    """古いログファイルを削除（新規追加）"""
+    if not os.path.exists(log_dir):
+        return 0
+        
+    now = time.time()
+    deleted_count = 0
+    
+    # ローテーションされたログファイル（.log.1, .log.2など）
+    for log_file in glob.glob(os.path.join(log_dir, '*.log.*')):
+        file_modified = os.path.getmtime(log_file)
+        if now - file_modified > max_age_days * 24 * 3600:
+            try:
+                os.remove(log_file)
+                deleted_count += 1
+                logger.info(f"古いログファイルを削除: {log_file}")
+            except Exception as e:
+                logger.error(f"ログファイル削除エラー {log_file}: {str(e)}")
+    
+    # 古いYOLOトレーニングログ
+    for log_file in glob.glob(os.path.join(log_dir, 'yolo_training_*.log')):
+        file_modified = os.path.getmtime(log_file)
+        if now - file_modified > max_age_days * 24 * 3600:
+            try:
+                os.remove(log_file)
+                deleted_count += 1
+            except Exception as e:
+                logger.error(f"YOLOログ削除エラー {log_file}: {str(e)}")
+    
+    return deleted_count
 def schedule_cleanup(app, interval_hours=12):
     """
     定期的なクリーンアップをスケジュールする

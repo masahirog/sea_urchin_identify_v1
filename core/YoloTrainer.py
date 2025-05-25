@@ -121,6 +121,15 @@ class YoloTrainer:
         # ログファイルの設定
         log_dir = 'logs'
         os.makedirs(log_dir, exist_ok=True)
+        # 古いログファイルを削除（5個より多い場合）
+        import glob
+        old_logs = sorted(glob.glob(os.path.join(log_dir, 'yolo_training_*.log')))
+        if len(old_logs) > 5:
+            for old_log in old_logs[:-5]:  # 最新5個を残して削除
+                try:
+                    os.remove(old_log)
+                except:
+                    pass
         self.log_file = os.path.join(log_dir, f'yolo_training_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
         
         logger.info(f"トレーニングプロセス開始: {self.log_file}")

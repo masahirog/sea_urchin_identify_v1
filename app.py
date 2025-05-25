@@ -11,18 +11,18 @@ from routes.yolo import yolo_bp
 
 
 
-
+# ログディレクトリ作成
+os.makedirs('logs', exist_ok=True)
 
 # ロギング設定
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('app.log'),
+        RotatingFileHandler('logs/app.log', maxBytes=10485760, backupCount=5),
         logging.StreamHandler()
     ]
 )
-logging.getLogger('core.YoloTrainer').setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
@@ -33,12 +33,10 @@ app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config.update({
     'UPLOAD_FOLDER': UPLOAD_DIR,
     'EXTRACTED_FOLDER': EXTRACTED_DIR,
-    'DATASET_FOLDER': DATASET_DIR,
     'MODEL_FOLDER': os.path.join(MODELS_DIR, 'saved'),
     'SAMPLES_FOLDER': STATIC_SAMPLES_DIR,
     'ALLOWED_EXTENSIONS': {'mp4', 'avi', 'mov', 'mkv', 'jpg', 'jpeg', 'png'},
     'TEMP_FILES_MAX_AGE': 24,
-    'SECRET_KEY': SECRET_KEY,
     'MAX_CONTENT_LENGTH': MAX_CONTENT_LENGTH,
     'STATIC_FOLDER': STATIC_DIR  # 追加: STATICフォルダのパスを設定
 })

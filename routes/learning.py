@@ -93,7 +93,7 @@ def get_dataset_stats():
     Returns:
     - JSON: データセット統計情報
     """
-    from config import STATIC_SAMPLES_DIR  # 修正: 正しいディレクトリを使用
+    from config import TRAINING_DATA_MALE, TRAINING_DATA_FEMALE
     
     try:
         # 各カテゴリのディレクトリパス（修正版）
@@ -102,8 +102,10 @@ def get_dataset_stats():
         unknown_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'unknown')
         
         # 画像ファイル数をカウント
-        male_count = len([f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(male_dir) else 0
-        female_count = len([f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(female_dir) else 0
+        male_count = len([f for f in os.listdir(TRAINING_DATA_MALE) 
+                         if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(TRAINING_DATA_MALE) else 0
+        female_count = len([f for f in os.listdir(TRAINING_DATA_FEMALE) 
+                           if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(TRAINING_DATA_FEMALE) else 0
         unknown_count = len([f for f in os.listdir(unknown_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(unknown_dir) else 0
         
         # 合計カウント

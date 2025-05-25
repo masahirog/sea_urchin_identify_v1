@@ -22,16 +22,22 @@ STATIC_EVALUATION_DIR = os.path.join(STATIC_IMAGES_DIR, 'evaluations')    # 評�
 
 # ==================== アプリケーション設定 ====================
 MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 500MB
-SECRET_KEY = 'your-secret-key-here'
 DEBUG = True
 
 # 許可する拡張子
 ALLOWED_VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv'}
 ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif'}
 
-# YOLOv5関連の設定
+
+# ==================== 学習データ設定（一元化） ====================
+# 学習用データは static/images/samples/papillae/ に統一
+TRAINING_DATA_DIR = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
+TRAINING_DATA_MALE = os.path.join(TRAINING_DATA_DIR, 'male')
+TRAINING_DATA_FEMALE = os.path.join(TRAINING_DATA_DIR, 'female')
+
+# YOLOデータセット（学習時に生成される）
+YOLO_DATASET_DIR = os.path.join(DATA_DIR, 'yolo_dataset')
 YOLO_DIR = 'yolov5'
-YOLO_DATASET_DIR = 'data/yolo_dataset'
 YOLO_IMAGES_DIR = os.path.join(YOLO_DATASET_DIR, 'images')
 YOLO_LABELS_DIR = os.path.join(YOLO_DATASET_DIR, 'labels')
 YOLO_TRAIN_IMAGES_DIR = os.path.join(YOLO_IMAGES_DIR, 'train')
@@ -44,22 +50,31 @@ STATIC_FOLDER = 'static'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp'}
 STATIC_SAMPLES_DIR = os.path.join(STATIC_FOLDER, 'images/samples')
 
+
+
+
 def ensure_directories():
-    """必要なディレクトリを作成"""
+    """必要なディレクトリを作成（修正版）"""
     directories = [
         # データディレクトリ（非公開）
         DATA_DIR,
         UPLOAD_DIR,
         EXTRACTED_DIR,
-        os.path.join(DATASET_DIR, 'male'),
-        os.path.join(DATASET_DIR, 'female'),
+        # DATASET_DIR は削除
         os.path.join(MODELS_DIR, 'saved'),
         EVALUATION_DATA_DIR,
         
-        # 静的ディレクトリ（公開）
-        STATIC_IMAGES_DIR,
-        os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'male'),
-        os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'female'),
+        # 学習データディレクトリ（静的ファイル内）
+        TRAINING_DATA_MALE,
+        TRAINING_DATA_FEMALE,
+        
+        # YOLOデータセット
+        os.path.join(YOLO_DATASET_DIR, 'images/train'),
+        os.path.join(YOLO_DATASET_DIR, 'images/val'),
+        os.path.join(YOLO_DATASET_DIR, 'labels/train'),
+        os.path.join(YOLO_DATASET_DIR, 'labels/val'),
+        
+        # その他の静的ディレクトリ
         STATIC_ANNOTATIONS_DIR,
         STATIC_DETECTION_DIR,
         STATIC_EVALUATION_DIR
@@ -67,7 +82,6 @@ def ensure_directories():
     
     for directory in directories:
         os.makedirs(directory, exist_ok=True)
-        print(f"ディレクトリ確認/作成: {directory}")
 
 def get_relative_path(absolute_path, base_dir):
     """絶対パスから相対パスを取得"""

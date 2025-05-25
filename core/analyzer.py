@@ -264,7 +264,7 @@ class UnifiedAnalyzer:
         データセットからモデルを学習
         
         Args:
-            dataset_dir: データセットディレクトリ
+            dataset_dir: データセットディレクトリ（互換性のため残すが使用しない）
             task_id: 学習タスクID
             
         Returns:
@@ -285,23 +285,22 @@ class UnifiedAnalyzer:
             }
         
         try:
-            # 修正: 正しいデータセットディレクトリを使用
-            from config import STATIC_SAMPLES_DIR
+            # 統一された設定から学習データパスを取得
+            from config import TRAINING_DATA_MALE, TRAINING_DATA_FEMALE
             
-            # データセット検証（修正版）
-            male_dir = os.path.join(STATIC_SAMPLES_DIR, "papillae", "male")
-            female_dir = os.path.join(STATIC_SAMPLES_DIR, "papillae", "female")
+            # データセット検証
+            if not os.path.exists(TRAINING_DATA_MALE) or not os.path.exists(TRAINING_DATA_FEMALE):
+                raise Exception(f"学習データディレクトリが見つかりません")
             
-            if not os.path.exists(male_dir) or not os.path.exists(female_dir):
-                raise Exception(f"データセットディレクトリが見つかりません: {male_dir}, {female_dir}")
-            
-            male_images = [f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-            female_images = [f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+            male_images = [f for f in os.listdir(TRAINING_DATA_MALE) 
+                          if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+            female_images = [f for f in os.listdir(TRAINING_DATA_FEMALE) 
+                            if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
             
             if len(male_images) == 0 and len(female_images) == 0:
                 raise Exception("学習データが見つかりません")
             
-            # 修正: より緩い条件
+            # より緩い条件
             if len(male_images) == 0 or len(female_images) == 0:
                 print(f"警告: 片方の性別のデータがありません。オス:{len(male_images)}枚, メス:{len(female_images)}枚")
                 # 警告は出すが続行
@@ -311,13 +310,17 @@ class UnifiedAnalyzer:
             # アノテーション情報読み込み
             annotation_mapping = self._load_annotation_mapping()
             
-            # 特徴量抽出
-            X, y = self._extract_dataset_features(male_dir, female_dir, male_images, female_images, annotation_mapping, task_id)
+            # 特徴量抽出（統一されたパスを使用）
+            X, y = self._extract_dataset_features(
+                TRAINING_DATA_MALE, TRAINING_DATA_FEMALE, 
+                male_images, female_images, 
+                annotation_mapping, task_id
+            )
             
             if len(X) == 0:
                 raise Exception("特徴量が抽出できませんでした")
             
-            # 修正: 最小データ数チェック
+            # 最小データ数チェック
             if len(X) < 2:
                 raise Exception(f"学習には最低2つのサンプルが必要です。現在: {len(X)}個")
             
@@ -333,7 +336,9 @@ class UnifiedAnalyzer:
                 processing_status[task_id] = {
                     "status": "completed",
                     "message": f"学習完了 (精度: {accuracy:.2f})",
-                    "accuracy": float(accuracy)
+                    "accuracy": float(accuracy),
+                    "male_images": len(male_images),
+                    "female_images": len(female_images)
                 }
             
             return True

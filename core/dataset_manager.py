@@ -45,8 +45,10 @@ class DatasetManager:
         return issues
     
     @staticmethod
-    def prepare_yolo_dataset(source_dirs=None):
-        """YOLOデータセットを準備"""
+    def prepare_yolo_dataset():
+        from config import TRAINING_DATA_MALE, TRAINING_DATA_FEMALE, YOLO_DATASET_DIR
+        source_dirs = [TRAINING_DATA_MALE, TRAINING_DATA_FEMALE]  # 設定から取得
+
         if source_dirs is None:
             source_dirs = [
                 'static/images/samples/papillae/male',

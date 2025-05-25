@@ -539,7 +539,7 @@ def execute_model_training_phase(task_id, dataset_dir, status_dict):
     """
     フェーズ2: モデル訓練
     """
-    print(f"フェーズ2開始: モデル訓練 - {task_id}")
+    from config import TRAINING_DATA_DIR  # 統一された設定を使用
     
     # 状態更新
     status_dict[task_id].update({
@@ -552,21 +552,17 @@ def execute_model_training_phase(task_id, dataset_dir, status_dict):
         from core.analyzer import UnifiedAnalyzer as UrchinPapillaeAnalyzer
         from config import STATIC_SAMPLES_DIR
         
-        # ★修正: 正しいデータセットディレクトリを使用
         actual_dataset_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
         print(f"実際の学習データディレクトリ: {actual_dataset_dir}")
         
-        # モデル訓練実行
         analyzer = UrchinPapillaeAnalyzer()
         
-        # 進捗更新
         status_dict[task_id].update({
             "message": "モデル訓練実行中...",
             "progress": 50
         })
         
-        # ★修正: 正しいディレクトリでモデル訓練
-        success = analyzer.train_model(actual_dataset_dir, task_id)
+        success = analyzer.train_model(TRAINING_DATA_DIR, task_id) 
         
         if not success:
             raise Exception("モデル訓練に失敗しました")
