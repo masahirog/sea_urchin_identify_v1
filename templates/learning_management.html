@@ -71,17 +71,6 @@
         background: #28a745;
     }
     
-    .annotation-controls {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: white;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        z-index: 1000;
-    }
-    
     .class-selector {
         margin-bottom: 10px;
     }
@@ -168,6 +157,38 @@
         opacity: 0.7;
         cursor: not-allowed;
     }
+    
+    /* 画像ナビゲーション */
+    .image-navigation {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    
+    .nav-btn {
+        padding: 5px 15px;
+        font-size: 0.9rem;
+    }
+    
+    .image-counter {
+        font-weight: bold;
+        color: #333;
+    }
+    
+    /* アノテーション済みインジケーター */
+    .annotation-indicator {
+        width: 8px;
+        height: 8px;
+        background: #28a745;
+        border-radius: 50%;
+        display: inline-block;
+        margin-left: 5px;
+    }
+    
+    .annotation-indicator.empty {
+        background: #dc3545;
+    }
 </style>
 {% endblock %}
 
@@ -237,6 +258,19 @@
                         <div id="annotationArea" class="d-none">
                             <div class="row">
                                 <div class="col-md-8">
+                                    <!-- 画像ナビゲーション追加 -->
+                                    <div class="image-navigation">
+                                        <button class="btn btn-sm btn-outline-secondary nav-btn" id="prevImage" title="前の画像">
+                                            <i class="fas fa-chevron-left"></i> 前へ
+                                        </button>
+                                        <div class="image-counter">
+                                            <span id="currentImageIndex">1</span> / <span id="totalImages">1</span>
+                                            <span class="annotation-indicator" id="annotationIndicator"></span>
+                                        </div>
+                                        <button class="btn btn-sm btn-outline-secondary nav-btn" id="nextImage" title="次の画像">
+                                            次へ <i class="fas fa-chevron-right"></i>
+                                        </button>
+                                    </div>
                                     <canvas id="annotationCanvas" class="annotation-canvas"></canvas>
                                 </div>
                                 <div class="col-md-4">
@@ -279,6 +313,13 @@
                                                 </button>
                                                 <button class="btn btn-success" id="saveAnnotations">
                                                     <i class="fas fa-save"></i> 保存して次へ
+                                                </button>
+                                                
+                                                <!-- 間隔を空けるための区切り線 -->
+                                                <hr class="my-3">
+                                                
+                                                <button class="btn btn-primary" id="completeAnnotations">
+                                                    <i class="fas fa-check-circle"></i> 全画像のアノテーション完了
                                                 </button>
                                             </div>
                                         </div>
@@ -348,8 +389,8 @@
                 <div class="d-flex align-items-center">
                     <div class="step-number">4</div>
                     <div class="flex-grow-1">
-                        <h4>学習完了</h4>
-                        <p class="mb-2">学習が完了しました</p>
+                        <h4>学習実行中</h4>  <!-- 初期は「実行中」として表示 -->
+                        <p class="mb-2">YOLOモデルを学習中です...</p>
                         
                         <div id="trainingResults" class="d-none">
                             <div class="alert alert-success">
@@ -371,16 +412,6 @@
         </div>
     </div>
 </div>
-
-<!-- アノテーション操作ガイド -->
-<div class="annotation-controls d-none" id="annotationControls">
-    <h6>操作方法</h6>
-    <small>
-        <div><i class="fas fa-mouse"></i> マウスドラッグで囲む</div>
-        <div><i class="fas fa-keyboard"></i> Delete: 選択削除</div>
-        <div><i class="fas fa-undo"></i> Ctrl+Z: 元に戻す</div>
-    </small>
-</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -399,6 +430,7 @@ let currentStep = 1;
 let trainingInterval = null;
 let latestExperiment = null;
 let annotations = {};
+let isNavigating = false; // ナビゲーション中フラグ
 
 // ==========================================
 // 初期化
@@ -435,7 +467,14 @@ function setupEventListeners() {
     // アノテーション関連
     document.getElementById('clearAnnotations')?.addEventListener('click', clearCurrentAnnotations);
     document.getElementById('saveAnnotations')?.addEventListener('click', saveAndNext);
-
+    document.getElementById('completeAnnotations')?.addEventListener('click', completeAnnotationPhase);
+    
+    // 画像ナビゲーション
+    document.getElementById('prevImage')?.addEventListener('click', navigateToPrev);
+    document.getElementById('nextImage')?.addEventListener('click', navigateToNext);
+    
+    // キーボードナビゲーション
+    document.addEventListener('keydown', handleKeyNavigation);
     
     // クラス選択
     document.querySelectorAll('input[name="classType"]').forEach(radio => {
@@ -449,6 +488,83 @@ function setupEventListeners() {
     document.getElementById('newTraining')?.addEventListener('click', function() {
         location.reload();
     });
+}
+
+// ==========================================
+// 画像ナビゲーション
+// ==========================================
+function navigateToPrev() {
+    if (currentImageIndex > 0) {
+        saveCurrentAnnotations();
+        currentImageIndex--;
+        loadImageForAnnotation(uploadedImages[currentImageIndex]);
+        updateNavigationUI();
+    }
+}
+
+function navigateToNext() {
+    if (currentImageIndex < uploadedImages.length - 1) {
+        saveCurrentAnnotations();
+        currentImageIndex++;
+        loadImageForAnnotation(uploadedImages[currentImageIndex]);
+        updateNavigationUI();
+    }
+}
+
+function handleKeyNavigation(e) {
+    if (isNavigating || !annotator) return;
+    
+    if (e.key === 'ArrowLeft') {
+        navigateToPrev();
+    } else if (e.key === 'ArrowRight') {
+        navigateToNext();
+    }
+}
+
+function updateNavigationUI() {
+    const prevBtn = document.getElementById('prevImage');
+    const nextBtn = document.getElementById('nextImage');
+    const currentIndexEl = document.getElementById('currentImageIndex');
+    const totalImagesEl = document.getElementById('totalImages');
+    const indicator = document.getElementById('annotationIndicator');
+    
+    if (prevBtn) {
+        prevBtn.disabled = currentImageIndex === 0;
+    }
+    
+    if (nextBtn) {
+        nextBtn.disabled = currentImageIndex === uploadedImages.length - 1;
+    }
+    
+    if (currentIndexEl) {
+        currentIndexEl.textContent = currentImageIndex + 1;
+    }
+    
+    if (totalImagesEl) {
+        totalImagesEl.textContent = uploadedImages.length;
+    }
+    
+    // アノテーション状態インジケーター
+    if (indicator) {
+        const currentImage = uploadedImages[currentImageIndex];
+        const hasAnnotations = annotations[currentImage.path] && annotations[currentImage.path].length > 0;
+        
+        indicator.classList.toggle('empty', !hasAnnotations);
+        indicator.title = hasAnnotations ? 'アノテーション済み' : '未アノテーション';
+    }
+    
+    updateAnnotationProgress();
+}
+
+function saveCurrentAnnotations() {
+    if (!annotator || !uploadedImages[currentImageIndex]) return;
+    
+    const currentImage = uploadedImages[currentImageIndex];
+    if (annotator.annotations.length > 0) {
+        annotations[currentImage.path] = [...annotator.annotations];
+    } else {
+        delete annotations[currentImage.path];
+    }
 }
 
 // ==========================================
@@ -592,6 +708,9 @@ async function deleteImage(index) {
         const data = await response.json();
         
         if (data.success) {
+            // アノテーション情報も削除
+            delete annotations[image.path];
+            
             uploadedImages.splice(index, 1);
             updateImageList();
             showSuccessMessage('画像を削除しました');
@@ -607,7 +726,7 @@ async function deleteImage(index) {
                 document.getElementById('annotationArea')?.classList.add('d-none');
             } else if (annotator && currentImageIndex < uploadedImages.length) {
                 loadImageForAnnotation(uploadedImages[currentImageIndex]);
-                updateAnnotationProgress();
+                updateNavigationUI();
             }
         } else {
             showErrorMessage(data.error || '削除に失敗しました');
@@ -650,12 +769,12 @@ async function clearAllImages() {
         if (data.success) {
             uploadedImages = [];
             currentImageIndex = 0;
+            annotations = {}; // アノテーション情報もクリア
             updateImageList();
             
             // UIリセット
             moveToStep(1);
             document.getElementById('annotationArea')?.classList.add('d-none');
-            document.getElementById('annotationControls')?.classList.add('d-none');
             
             showSuccessMessage(data.message);
         } else {
@@ -675,12 +794,12 @@ function startAnnotation() {
     
     currentImageIndex = 0;
     document.getElementById('annotationArea')?.classList.remove('d-none');
-    document.getElementById('annotationControls')?.classList.remove('d-none');
     loadImageForAnnotation(uploadedImages[currentImageIndex]);
-    updateAnnotationProgress();
+    updateNavigationUI();
 }
 
 function loadImageForAnnotation(imageInfo) {
+    isNavigating = true;
     const canvas = document.getElementById('annotationCanvas');
     const img = new Image();
     
@@ -691,18 +810,24 @@ function loadImageForAnnotation(imageInfo) {
         annotator = new YoloAnnotator(canvas, img);
         annotator.setMode('create');
         updateCurrentClass();
+        
+        // アノテーション変更時のコールバック
+        annotator.onAnnotationsChanged = updateAnnotationStats;
+        
         document.getElementById('currentImageName').textContent = imageInfo.filename;
-        updateAnnotationStats();
         
         // 既存のアノテーションがあれば読み込み
         if (annotations[imageInfo.path]) {
             annotator.loadAnnotations(annotations[imageInfo.path]);
-            updateAnnotationStats();
         }
+        
+        updateAnnotationStats();
+        isNavigating = false;
     };
     
     img.onerror = function() {
         showErrorMessage('画像の読み込みに失敗しました: ' + imageInfo.filename);
+        isNavigating = false;
     };
     
     // シンプルな画像パス
@@ -744,8 +869,48 @@ async function saveAndNext() {
         return;
     }
     
+    saveCurrentAnnotations();
+    await saveYoloAnnotation();
+    
+    currentImageIndex++;
+    
+    if (currentImageIndex < uploadedImages.length) {
+        loadImageForAnnotation(uploadedImages[currentImageIndex]);
+        updateNavigationUI();
+    } else {
+        showSuccessMessage('全ての画像のアノテーションが完了しました');
+        moveToStep(3);
+    }
+}
+
+async function completeAnnotationPhase() {
+    // 現在の画像のアノテーションを保存
+    saveCurrentAnnotations();
+    
+    // 全画像分のアノテーションを保存
+    let savedCount = 0;
+    for (let i = 0; i < uploadedImages.length; i++) {
+        const image = uploadedImages[i];
+        if (annotations[image.path] && annotations[image.path].length > 0) {
+            currentImageIndex = i; // 一時的にインデックスを設定
+            annotator.annotations = annotations[image.path];
+            await saveYoloAnnotation();
+            savedCount++;
+        }
+    }
+    
+    if (savedCount === 0) {
+        showErrorMessage('アノテーションされた画像がありません');
+        return;
+    }
+    
+    showSuccessMessage(`${savedCount}枚の画像のアノテーションを保存しました`);
+    moveToStep(3);
+}
+
+async function saveYoloAnnotation() {
     const currentImage = uploadedImages[currentImageIndex];
-    annotations[currentImage.path] = annotator.annotations;
+    if (!currentImage || !annotator) return;
     
     const yoloData = annotator.exportToYoloFormat();
     
@@ -769,16 +934,6 @@ async function saveAndNext() {
     } catch (error) {
         console.error('YOLOアノテーション保存エラー:', error);
     }
-    
-    currentImageIndex++;
-    
-    if (currentImageIndex < uploadedImages.length) {
-        loadImageForAnnotation(uploadedImages[currentImageIndex]);
-        updateAnnotationProgress();
-    } else {
-        showSuccessMessage('全ての画像のアノテーションが完了しました');
-        moveToStep(3);
-    }
 }
 
 function updateAnnotationProgress() {
@@ -786,15 +941,23 @@ function updateAnnotationProgress() {
     const progressBar = progress?.querySelector('.progress-bar');
     const progressText = progress?.querySelector('.progress-text');
     
+    // アノテーション済み画像数をカウント
+    let annotatedCount = 0;
+    uploadedImages.forEach(image => {
+        if (annotations[image.path] && annotations[image.path].length > 0) {
+            annotatedCount++;
+        }
+    });
+    
     if (progress) {
         progress.classList.remove('d-none');
         
-        const percentage = ((currentImageIndex + 1) / uploadedImages.length) * 100;
+        const percentage = (annotatedCount / uploadedImages.length) * 100;
         if (progressBar) {
             progressBar.style.width = percentage + '%';
         }
         if (progressText) {
-            progressText.textContent = `${currentImageIndex + 1}/${uploadedImages.length}`;
+            progressText.textContent = `${annotatedCount}/${uploadedImages.length}`;
         }
     }
 }
@@ -846,7 +1009,7 @@ async function startTraining() {
         
         if (data.status === 'success') {
             showSuccessMessage('トレーニングを開始しました');
-            moveToStep(4);
+            moveToStep(4);  // ステップ4に移動（この時点では「学習実行中」と表示）
             document.getElementById('trainingProgress')?.classList.remove('d-none');
             startTrainingMonitoring();
         } else {
@@ -880,15 +1043,24 @@ function startTrainingMonitoring() {
                 clearInterval(trainingInterval);
                 trainingInterval = null;
                 isTraining = false;
-                enableUI();
                 
+                // 完了時にステップ4のテキストを更新
+                const step4Title = document.querySelector('#step-4 h4');
+                const step4Text = document.querySelector('#step-4 p.mb-2');
+                
+                if (step4Title) step4Title.textContent = '学習完了';
+                if (step4Text) step4Text.textContent = '学習が正常に完了しました';
+                
+                document.getElementById('trainingResults')?.classList.remove('d-none');
                 showSuccessMessage('トレーニングが完了しました！');
-                showTrainingResults();
+                
+                // 結果リンクの設定
+                await setupResultsLink();
+                
             } else if (status.status === 'failed' || status.status === 'stopped') {
                 clearInterval(trainingInterval);
                 trainingInterval = null;
                 isTraining = false;
-                enableUI();
                 
                 showErrorMessage('トレーニングが中断されました');
             }
@@ -898,6 +1070,25 @@ function startTrainingMonitoring() {
     }, 2000);
 }
 
+// 結果リンク設定を別関数に分離（シンプル化）
+async function setupResultsLink() {
+    try {
+        const response = await fetch('/yolo/training/status');
+        const status = await response.json();
+        
+        if (status.result_images && status.result_images.results) {
+            const match = status.result_images.results.match(/train\/([^\/]+)\//);
+            if (match) {
+                const viewResultsLink = document.getElementById('viewResultsLink');
+                if (viewResultsLink) {
+                    viewResultsLink.href = `/learning/results/${match[1]}`;
+                }
+            }
+        }
+    } catch (error) {
+        console.error('結果取得エラー:', error);
+    }
+}
 function updateTrainingStatus(status) {
     const progressBar = document.querySelector('#trainingProgress .progress-bar');
     const statusText = document.getElementById('trainingStatus');
@@ -923,30 +1114,6 @@ function updateTrainingStatus(status) {
         if (status.elapsed_time) {
             statusText.textContent += ` (経過時間: ${status.elapsed_time})`;
         }
-    }
-}
-
-async function showTrainingResults() {
-    document.getElementById('trainingResults')?.classList.remove('d-none');
-    
-    try {
-        const response = await fetch('/yolo/training/status');
-        const status = await response.json();
-        
-        if (status.result_images && status.result_images.results) {
-            const match = status.result_images.results.match(/train\/([^\/]+)\//);
-            if (match) {
-                latestExperiment = match[1];
-                
-                const viewResultsLink = document.getElementById('viewResultsLink');
-                if (viewResultsLink) {
-                    viewResultsLink.href = `/learning/results/${latestExperiment}`;
-                }
-            }
-        }
-        
-    } catch (error) {
-        console.error('結果取得エラー:', error);
     }
 }
 
@@ -1015,17 +1182,14 @@ function disableUI() {
     });
     
     // アノテーション関連ボタン
-    const clearAnnotationsBtn = document.getElementById('clearAnnotations');
-    if (clearAnnotationsBtn) {
-        clearAnnotationsBtn.disabled = true;
-        clearAnnotationsBtn.classList.add('disabled');
-    }
-    
-    const saveAnnotationsBtn = document.getElementById('saveAnnotations');
-    if (saveAnnotationsBtn) {
-        saveAnnotationsBtn.disabled = true;
-        saveAnnotationsBtn.classList.add('disabled');
-    }
+    const annotationButtons = ['clearAnnotations', 'saveAnnotations', 'completeAnnotations', 'prevImage', 'nextImage'];
+    annotationButtons.forEach(btnId => {
+        const btn = document.getElementById(btnId);
+        if (btn) {
+            btn.disabled = true;
+            btn.classList.add('disabled');
+        }
+    });
     
     // トレーニングボタン
     const startTrainingBtn = document.getElementById('startTraining');
@@ -1048,61 +1212,8 @@ function disableUI() {
 }
 
 function enableUI() {
-    // アップロード関連
-    const fileInput = document.getElementById('imageFiles');
-    if (fileInput) fileInput.disabled = false;
-    
-    const uploadBtn = document.querySelector('#imageUploadForm button[type="submit"]');
-    if (uploadBtn) {
-        uploadBtn.disabled = false;
-        uploadBtn.classList.remove('disabled');
-    }
-    
-    // 削除ボタン
-    const clearAllBtn = document.getElementById('clearAllImages');
-    if (clearAllBtn) {
-        clearAllBtn.disabled = false;
-        clearAllBtn.classList.remove('disabled');
-    }
-    
-    // 全ての個別削除ボタンを有効化
-    document.querySelectorAll('.delete-image-btn').forEach(btn => {
-        btn.disabled = false;
-        btn.style.opacity = '1';
-        btn.style.cursor = 'pointer';
-    });
-    
-    // アノテーション関連ボタン
-    const clearAnnotationsBtn = document.getElementById('clearAnnotations');
-    if (clearAnnotationsBtn) {
-        clearAnnotationsBtn.disabled = false;
-        clearAnnotationsBtn.classList.remove('disabled');
-    }
-    
-    const saveAnnotationsBtn = document.getElementById('saveAnnotations');
-    if (saveAnnotationsBtn) {
-        saveAnnotationsBtn.disabled = false;
-        saveAnnotationsBtn.classList.remove('disabled');
-    }
-    
-    // トレーニングボタン
-    const startTrainingBtn = document.getElementById('startTraining');
-    if (startTrainingBtn) {
-        startTrainingBtn.disabled = false;
-        startTrainingBtn.classList.remove('disabled');
-    }
-    
-    // クラス選択ラジオボタンも有効化
-    document.querySelectorAll('input[name="classType"]').forEach(radio => {
-        radio.disabled = false;
-    });
-    
-    // キャンバスのインタラクションも有効化
-    const canvas = document.getElementById('annotationCanvas');
-    if (canvas) {
-        canvas.style.pointerEvents = 'auto';
-        canvas.style.opacity = '1';
-    }
+    // 注意: 完了後は有効化しない（要件に従う）
+    // この関数は呼ばれるが、何もしない
 }
 
 // ==========================================
