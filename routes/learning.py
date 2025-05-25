@@ -295,6 +295,7 @@ def delete_all_learning_data():
         # 各カテゴリのディレクトリ
         categories = ['male', 'female', 'unknown']
         deleted_count = 0
+        deleted_files = []  # デバッグ用
         
         for category in categories:
             category_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', category)
@@ -305,31 +306,42 @@ def delete_all_learning_data():
             for filename in os.listdir(category_dir):
                 if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
                     file_path = os.path.join(category_dir, filename)
-                    os.remove(file_path)
-                    deleted_count += 1
-                    
-                    # YOLOアノテーションも削除
-                    base_name = os.path.splitext(filename)[0]
-                    yolo_paths = [
-                        os.path.join('data/yolo_dataset/labels/train', f'{base_name}.txt'),
-                        os.path.join('data/yolo_dataset/labels/val', f'{base_name}.txt')
-                    ]
-                    
-                    for yolo_path in yolo_paths:
-                        if os.path.exists(yolo_path):
-                            os.remove(yolo_path)
+                    try:
+                        os.remove(file_path)
+                        deleted_count += 1
+                        deleted_files.append(f"{category}/{filename}")  # デバッグ用
+                        
+                        # YOLOアノテーションも削除
+                        base_name = os.path.splitext(filename)[0]
+                        yolo_paths = [
+                            os.path.join('data/yolo_dataset/labels/train', f'{base_name}.txt'),
+                            os.path.join('data/yolo_dataset/labels/val', f'{base_name}.txt'),
+                            os.path.join('data/yolo_dataset/images/train', filename),
+                            os.path.join('data/yolo_dataset/images/val', filename)
+                        ]
+                        
+                        for yolo_path in yolo_paths:
+                            if os.path.exists(yolo_path):
+                                try:
+                                    os.remove(yolo_path)
+                                except Exception as e:
+                                    current_app.logger.warning(f"YOLOファイル削除エラー: {yolo_path} - {str(e)}")
+                    except Exception as e:
+                        current_app.logger.error(f"ファイル削除エラー: {file_path} - {str(e)}")
         
-        current_app.logger.info(f"全学習データ削除: {deleted_count}ファイル")
+        current_app.logger.info(f"全学習データ削除: {deleted_count}ファイル - {deleted_files}")
         
         return jsonify({
             "success": True,
             "message": f"{deleted_count}個の画像を削除しました",
-            "deleted_count": deleted_count
+            "deleted_count": deleted_count,
+            "deleted_files": deleted_files  # デバッグ情報
         })
         
     except Exception as e:
         current_app.logger.error(f"全データ削除エラー: {str(e)}")
         return jsonify({"error": f"削除中にエラーが発生しました: {str(e)}"}), 500
+        
 # ================================
 # アノテーション機能
 # ================================
@@ -1363,6 +1375,30 @@ def view_results(exp=None):
                     return render_template('learning_results.html', error='学習結果が見つかりません')
                 target_exp = exp_dirs[-1]
             
+            # 実験に含まれる画像ファイルのリストを生成
+            exp_path = os.path.join(train_dir, target_exp)
+            available_images = {
+                'training': [],
+                'validation': [],
+                'analysis': []
+            }
+            
+            # 訓練画像
+            for i in range(10):  # 最大10個チェック
+                if os.path.exists(os.path.join(exp_path, f'train_batch{i}.jpg')):
+                    available_images['training'].append(i)
+            
+            # 検証画像
+            if os.path.exists(os.path.join(exp_path, 'val_batch0_labels.jpg')):
+                available_images['validation'].append('labels')
+            if os.path.exists(os.path.join(exp_path, 'val_batch0_pred.jpg')):
+                available_images['validation'].append('pred')
+                
+            # 分析画像
+            for img in ['labels.jpg', 'results.png', 'confusion_matrix.png', 'PR_curve.png', 'P_curve.png', 'R_curve.png', 'F1_curve.png']:
+                if os.path.exists(os.path.join(exp_path, img)):
+                    available_images['analysis'].append(img)
+            
             results_csv_path = os.path.join(train_dir, target_exp, 'results.csv')
             
             if os.path.exists(results_csv_path):
@@ -1454,6 +1490,9 @@ def view_results(exp=None):
                     },
                     'training_params': training_params
                 }
+            # results_dataに画像情報を追加
+            if results_data:
+                results_data['available_images'] = available_images
         
         return render_template('learning_results.html', results=results_data)
         

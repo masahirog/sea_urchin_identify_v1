@@ -497,3 +497,43 @@ def get_training_session_status():
     session['training_status'] = training_status
     
     return jsonify(session)
+@yolo_bp.route('/training/latest-experiment', methods=['GET'])
+def get_latest_experiment():
+    """最新の学習実験を取得"""
+    try:
+        runs_dir = 'yolov5/runs/train'
+        if not os.path.exists(runs_dir):
+            return jsonify({'error': '学習結果が見つかりません'}), 404
+        
+        # 実験ディレクトリを取得（作成時刻でソート）
+        exp_dirs = []
+        for d in os.listdir(runs_dir):
+            if d.startswith('exp'):
+                exp_path = os.path.join(runs_dir, d)
+                if os.path.isdir(exp_path):
+                    exp_dirs.append({
+                        'name': d,
+                        'path': exp_path,
+                        'created': os.path.getctime(exp_path)
+                    })
+        
+        if not exp_dirs:
+            return jsonify({'error': '実験が見つかりません'}), 404
+        
+        # 作成時刻で降順ソート（最新が最初）
+        exp_dirs.sort(key=lambda x: x['created'], reverse=True)
+        latest = exp_dirs[0]
+        
+        # 結果ファイルの存在確認
+        results_csv = os.path.join(latest['path'], 'results.csv')
+        has_results = os.path.exists(results_csv)
+        
+        return jsonify({
+            'experiment': latest['name'],
+            'created': datetime.fromtimestamp(latest['created']).isoformat(),
+            'has_results': has_results
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'最新実験取得エラー: {str(e)}')
+        return jsonify({'error': str(e)}), 500

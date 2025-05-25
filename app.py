@@ -1,6 +1,6 @@
-# app.py - 最終統合版（import文修正済み）
 import os
 import logging
+from logging.handlers import RotatingFileHandler
 from flask import Flask, send_from_directory, jsonify
 import threading
 import queue
@@ -108,6 +108,7 @@ def serve_runs(filename):
     runs_dir = os.path.join('yolov5', 'runs')
     return send_from_directory(runs_dir, filename)
 
+
 # システム状態API
 @app.route('/api/system-status')
 def system_status():
@@ -188,7 +189,6 @@ def too_large(error):
 @app.route('/images/samples/<path:filename>')
 def serve_sample_images(filename):
     return send_from_directory(STATIC_SAMPLES_DIR, filename)
-
 
 # アプリケーション起動
 if __name__ == '__main__':

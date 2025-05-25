@@ -606,17 +606,27 @@ async function handleImageUpload(e) {
         
         // 新しい画像を追加（既存の画像に追加）
         if (data.uploaded_files && data.uploaded_files.length > 0) {
-            uploadedImages = uploadedImages.concat(data.uploaded_files);
-            updateImageList();
-            showSuccessMessage(`${data.uploaded_files.length}枚の画像をアップロードしました`);
+            // 重複チェック
+            const existingPaths = uploadedImages.map(img => img.path);
+            const newImages = data.uploaded_files.filter(img => !existingPaths.includes(img.path));
+            
+            if (newImages.length > 0) {
+                uploadedImages = uploadedImages.concat(newImages);
+                updateImageList();
+                showSuccessMessage(`${newImages.length}枚の画像をアップロードしました`);
+            } else {
+                showWarningMessage('すべての画像は既にアップロード済みです');
+            }
             
             // フォームをリセット
             fileInput.value = '';
             
             // ステップ2を有効化
-            moveToStep(2);
-            if (uploadedImages.length > 0 && !annotator) {
-                startAnnotation();
+            if (uploadedImages.length > 0) {
+                moveToStep(2);
+                if (!annotator) {
+                    startAnnotation();
+                }
             }
         }
         
@@ -1070,18 +1080,39 @@ function startTrainingMonitoring() {
     }, 2000);
 }
 
-// 結果リンク設定を別関数に分離（シンプル化）
+
 async function setupResultsLink() {
     try {
-        const response = await fetch('/yolo/training/status');
-        const status = await response.json();
+        // 最新の実験ディレクトリを直接チェック
+        const trainDir = 'yolov5/runs/train';
         
-        if (status.result_images && status.result_images.results) {
-            const match = status.result_images.results.match(/train\/([^\/]+)\//);
-            if (match) {
+        // サーバーサイドで最新の実験を取得するAPIを呼ぶ
+        const response = await fetch('/yolo/training/latest-experiment', {
+            method: 'GET'
+        });
+        
+        if (!response.ok) {
+            // APIがない場合は既存の方法を使用
+            const statusResponse = await fetch('/yolo/training/status');
+            const status = await statusResponse.json();
+            
+            if (status.result_images && status.result_images.results) {
+                const match = status.result_images.results.match(/train\/([^\/]+)\//);
+                if (match) {
+                    latestExperiment = match[1];
+                    const viewResultsLink = document.getElementById('viewResultsLink');
+                    if (viewResultsLink) {
+                        viewResultsLink.href = `/learning/results/${match[1]}`;
+                    }
+                }
+            }
+        } else {
+            const data = await response.json();
+            if (data.experiment) {
+                latestExperiment = data.experiment;
                 const viewResultsLink = document.getElementById('viewResultsLink');
                 if (viewResultsLink) {
-                    viewResultsLink.href = `/learning/results/${match[1]}`;
+                    viewResultsLink.href = `/learning/results/${data.experiment}`;
                 }
             }
         }
@@ -1089,6 +1120,7 @@ async function setupResultsLink() {
         console.error('結果取得エラー:', error);
     }
 }
+
 function updateTrainingStatus(status) {
     const progressBar = document.querySelector('#trainingProgress .progress-bar');
     const statusText = document.getElementById('trainingStatus');
