@@ -29,10 +29,10 @@ ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif'}
 
 # ==================== 学習データ設定（一元化） ====================
 # 学習用データは static/images/samples/papillae/ に統一
-TRAINING_DATA_DIR = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
-
+TRAINING_DATA_DIR = os.path.join(DATA_DIR, 'training_data')
 TRAINING_DATA_MALE = os.path.join(TRAINING_DATA_DIR, 'male')
 TRAINING_DATA_FEMALE = os.path.join(TRAINING_DATA_DIR, 'female')
+TRAINING_DATA_UNKNOWN = os.path.join(TRAINING_DATA_DIR, 'unknown')
 
 # YOLOデータセット（学習時に生成される）
 YOLO_DATASET_DIR = os.path.join(DATA_DIR, 'yolo_dataset')
@@ -51,7 +51,6 @@ STATIC_SAMPLES_DIR = os.path.join(STATIC_FOLDER, 'images/samples')
 
 
 
-
 def ensure_directories():
     """必要なディレクトリを作成（修正版）"""
     directories = [
@@ -62,8 +61,8 @@ def ensure_directories():
         EVALUATION_DATA_DIR,
         
         # 学習データディレクトリ（静的ファイル内）
-        TRAINING_DATA_MALE,
-        TRAINING_DATA_FEMALE,
+        TRAINING_DATA_MALE,     # static/images/samples/papillae/male
+        TRAINING_DATA_FEMALE,   # static/images/samples/papillae/female
         
         # YOLOデータセット
         os.path.join(YOLO_DATASET_DIR, 'images/train'),
@@ -72,9 +71,8 @@ def ensure_directories():
         os.path.join(YOLO_DATASET_DIR, 'labels/val'),
         
         # その他の静的ディレクトリ
-        STATIC_ANNOTATIONS_DIR,
-        STATIC_DETECTION_DIR,
-        STATIC_EVALUATION_DIR
+        STATIC_ANNOTATIONS_DIR,    # static/images/annotations
+        STATIC_DETECTION_DIR      # static/images/detection_results
     ]
     
     for directory in directories:

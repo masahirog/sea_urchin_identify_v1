@@ -35,7 +35,7 @@ app.config.update({
     'UPLOAD_FOLDER': UPLOAD_DIR,
     'MODEL_FOLDER': os.path.join(MODELS_DIR, 'saved'),
     'SAMPLES_FOLDER': STATIC_SAMPLES_DIR,
-    'ALLOWED_EXTENSIONS': {'mp4', 'avi', 'mov', 'mkv', 'jpg', 'jpeg', 'png'},
+    'ALLOWED_EXTENSIONS': {'jpg', 'jpeg', 'png'},
     'TEMP_FILES_MAX_AGE': 24,
     'MAX_CONTENT_LENGTH': MAX_CONTENT_LENGTH,
     'STATIC_FOLDER': STATIC_DIR  # 追加: STATICフォルダのパスを設定
@@ -171,7 +171,16 @@ def internal_error(error):
 def too_large(error):
     return jsonify({'error': 'ファイルサイズが大きすぎます'}), 413
 
-
+@app.route('/training-images/<path:filename>')
+@login_required  # 認証を追加（オプション）
+def serve_training_image(filename):
+    """学習画像を配信（アクセス制御付き）"""
+    # セキュリティチェック
+    if '..' in filename:
+        abort(403)
+    
+    from config import TRAINING_DATA_DIR
+    return send_from_directory(TRAINING_DATA_DIR, filename)
 
 @app.route('/images/samples/<path:filename>')
 def serve_sample_images(filename):

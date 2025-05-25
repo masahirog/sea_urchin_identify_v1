@@ -78,17 +78,12 @@ Desktop.ini
 /static/images/samples/*
 /static/images/detection_results/*
 /static/images/annotations/*
-/static/images/evaluations/*
-/static/annotations/yolo/*
 
 # ただし、.gitkeepファイルは保持（ディレクトリ構造維持）
 !/static/images/samples/.gitkeep
 !/static/images/samples/papillae/.gitkeep
 !/static/images/detection_results/.gitkeep
 !/static/images/annotations/.gitkeep
-!/static/images/evaluations/.gitkeep
-!/static/annotations/.gitkeep
-!/static/annotations/yolo/.gitkeep
 
 # フォントファイル（必要に応じて）
 /static/fonts/*
@@ -100,4 +95,8 @@ Desktop.ini
 # ==================== 必要なディレクトリ構造 ====================
 # 空のディレクトリを保持するための.gitkeepファイル
 !/logs/.gitkeep
-!/models/.gitkeep
+
+
+*.pyc
+__pycache__/
+.env

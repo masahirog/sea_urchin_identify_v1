@@ -150,36 +150,7 @@ def get_uploaded_file(filename):
     """
     from app import app
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
-@main_bp.route('/images/<path:path>')
-def get_image(path):
-    """
-    画像ファイルを提供 (旧image_routes.pyから統合)
     
-    Parameters:
-    - path: 画像ファイルの相対パス
-    
-    Returns:
-    - Response: 画像ファイル
-    """
-    from app import app
-    
-    # パスの検証
-    if '..' in path or path.startswith('/'):
-        current_app.logger.warning(f"不正なパスへのアクセス試行: {path}")
-        return jsonify({"error": "不正なパスです"}), 400
-    
-    # ディレクトリ名とファイル名を分離
-    parts = path.split('/')
-    filename = parts[-1]
-    dirname = '/'.join(parts[:-1]) if len(parts) > 1 else ''
-    
-    # 画像を提供
-    extracted_folder = app.config['EXTRACTED_FOLDER']
-    image_path = os.path.join(extracted_folder, dirname)
-    
-    return send_from_directory(image_path, filename)
-
 # ================================
 # 画像管理機能 (旧image_routes.pyから統合)
 # ================================
@@ -417,45 +388,6 @@ def task_status(task_id):
     
     return jsonify({"status": "unknown", "message": "タスクが見つかりません"}), 404
 
-@main_bp.route('/task-history', methods=['GET'])
-def get_task_history():
-    """
-    タスク履歴を取得
-    
-    Returns:
-    - JSON: タスク履歴のリスト
-    """
-    from app import app
-    from datetime import datetime
-    
-    # 抽出された画像のディレクトリを探索
-    extracted_dirs = []
-    
-    base_dir = app.config['EXTRACTED_FOLDER']
-    if os.path.exists(base_dir):
-        # ディレクトリ内のサブディレクトリ（タスクID）を取得
-        for task_id in os.listdir(base_dir):
-            task_dir = os.path.join(base_dir, task_id)
-            if os.path.isdir(task_dir):
-                # 各タスクディレクトリ内の画像数をカウント
-                images = [f for f in os.listdir(task_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-                
-                if images:  # 画像が存在する場合のみ追加
-                    # タスク情報を作成
-                    creation_time = os.path.getctime(task_dir)
-                    task_info = {
-                        "task_id": task_id,
-                        "image_count": len(images),
-                        "date": datetime.fromtimestamp(creation_time).strftime("%Y-%m-%d %H:%M:%S"),
-                        "timestamp": creation_time  # ソート用
-                    }
-                    
-                    extracted_dirs.append(task_info)
-    
-    # 日付でソート（新しい順）
-    extracted_dirs.sort(key=lambda x: x["timestamp"], reverse=True)
-    
-    return jsonify({"tasks": extracted_dirs})
 
 # ================================
 # データセット・システム情報 (旧main_routes.pyから統合)

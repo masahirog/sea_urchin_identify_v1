@@ -34,7 +34,7 @@ def cleanup_temp_files(directory='static/uploads', max_age_hours=24):
     deleted_count = 0
     
     # 画像と動画ファイルのパターン
-    patterns = ['*.jpg', '*.jpeg', '*.png', '*.mp4', '*.avi', '*.mov', '*.mkv']
+    patterns = ['*.jpg', '*.jpeg', '*.png']
     
     # すべてのパターンに対して検索
     for pattern in patterns:

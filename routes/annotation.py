@@ -13,7 +13,7 @@ from PIL import Image
 annotation_bp = Blueprint('annotation', __name__, url_prefix='/annotation')
 
 # アノテーション済み画像の管理用ディレクトリ
-ANNOTATED_IMAGES_DIR = 'data/annotated_images'
+ANNOTATED_IMAGES_DIR = 'static/images/annotations'
 ANNOTATION_METADATA_FILE = 'data/annotation_metadata.json'
 
 def ensure_annotation_directories():

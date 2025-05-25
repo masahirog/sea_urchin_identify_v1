@@ -15,7 +15,6 @@ import os
 import json
 import uuid
 import traceback
-import base64
 from datetime import datetime
 from utils.file_handlers import handle_multiple_image_upload
 
@@ -49,7 +48,7 @@ def upload_learning_data():
         return jsonify({"error": "ファイルが選択されていません"}), 400
     
     # 保存先ディレクトリ（性別分けをしない場合、直接papillaeに保存）
-    target_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
+    target_dir = TRAINING_DATA_DIR
     
     # gender パラメータをチェック
     gender = request.form.get('gender', 'unknown')
