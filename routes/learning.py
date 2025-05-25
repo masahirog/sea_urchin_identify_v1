@@ -682,88 +682,61 @@ def cancel_task(task_id):
 # @learning_bp.route('/learning-history')
 # def get_learning_history():
 #     """
-#     学習・評価履歴を取得（修正版）
-    
-#     Returns:
-#     - JSON: 学習・評価履歴
+#     学習・評価履歴を取得（簡易版）
+#     YOLOの学習履歴から情報を取得
 #     """
 #     try:
-#         from core.evaluator import UnifiedEvaluator
+#         import pandas as pd
+#         from datetime import datetime
         
-#         # デバッグログ追加
-#         current_app.logger.info("履歴データ取得開始")
+#         history = []
+#         train_dir = 'yolov5/runs/train'
         
-#         # 評価履歴を取得
-#         evaluator = UnifiedEvaluator()
-#         evaluation_history = evaluator.get_evaluation_history()
-        
-#         # デバッグ出力
-#         current_app.logger.info(f"取得した履歴数: {len(evaluation_history)}")
-#         if evaluation_history:
-#             for i, item in enumerate(evaluation_history[:3]):  # 最初の3件だけログ出力
-#                 current_app.logger.info(f"履歴{i}: タイプ={item.get('type', '不明')}, タイムスタンプ={item.get('timestamp', 'なし')}")
-        
-#         # 学習履歴も含める（将来の拡張用）
-#         combined_history = []
-        
-#         # 評価履歴を追加
-#         for item in evaluation_history:
-#             # 日付フォーマットの標準化（ISOフォーマットをYYYYMMDD_HHMMSSに変換）
-#             timestamp = item.get("timestamp", "")
-#             normalized_timestamp = timestamp
+#         if os.path.exists(train_dir):
+#             exp_dirs = sorted([d for d in os.listdir(train_dir) if d.startswith('exp')])
             
-#             # ISO形式の場合は変換
-#             if timestamp and 'T' in timestamp:
-#                 try:
-#                     dt = datetime.fromisoformat(timestamp.split('.')[0])
-#                     normalized_timestamp = dt.strftime("%Y%m%d_%H%M%S")
-#                 except:
-#                     pass
-            
-#             # タイプを明示的に設定
-#             if 'type' not in item:
-#                 if 'annotation' in str(item).lower():
-#                     item_type = 'annotation'
-#                 else:
-#                     item_type = 'evaluation'
-#             else:
-#                 item_type = item.get('type', 'evaluation')
-            
-#             # 精度値の取得（cv_mean優先、なければaccuracy）
-#             if 'cv_mean' in item:
-#                 accuracy = item['cv_mean']
-#             elif 'accuracy' in item:
-#                 accuracy = item['accuracy']
-#             else:
-#                 accuracy = 0
-                
-#             combined_history.append({
-#                 "id": normalized_timestamp,
-#                 "type": item_type,
-#                 "timestamp": normalized_timestamp,
-#                 "date": format_timestamp_to_date(timestamp),
-#                 "accuracy": accuracy,
-#                 "details": item
-#             })
+#             for exp_dir in exp_dirs:
+#                 results_csv = os.path.join(train_dir, exp_dir, 'results.csv')
+#                 if os.path.exists(results_csv):
+#                     try:
+#                         # CSVを読み込み
+#                         df = pd.read_csv(results_csv)
+#                         df.columns = df.columns.str.strip()
+                        
+#                         # 最高精度を取得
+#                         max_map = df['metrics/mAP_0.5'].max() if 'metrics/mAP_0.5' in df.columns else 0
+                        
+#                         # タイムスタンプを生成
+#                         created_time = os.path.getctime(os.path.join(train_dir, exp_dir))
+#                         timestamp = datetime.fromtimestamp(created_time).strftime('%Y%m%d_%H%M%S')
+                        
+#                         history.append({
+#                             'id': timestamp,
+#                             'type': 'yolo',
+#                             'timestamp': timestamp,
+#                             'date': datetime.fromtimestamp(created_time).strftime('%Y年%m月%d日 %H:%M:%S'),
+#                             'accuracy': max_map,
+#                             'details': {
+#                                 'experiment': exp_dir,
+#                                 'epochs': len(df),
+#                                 'final_accuracy': df['metrics/mAP_0.5'].iloc[-1] if len(df) > 0 else 0,
+#                                 'best_accuracy': max_map
+#                             }
+#                         })
+#                     except Exception as e:
+#                         current_app.logger.error(f"履歴読み込みエラー ({exp_dir}): {str(e)}")
         
 #         # 日付でソート（新しい順）
-#         combined_history.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-        
-#         current_app.logger.info(f"返却する履歴データ: {len(combined_history)}件")
-#         if combined_history:
-#             for i, item in enumerate(combined_history[:3]):  # 最初の3件だけログ出力
-#                 current_app.logger.info(f"結果{i}: タイプ={item.get('type')}, タイムスタンプ={item.get('timestamp')}")
+#         history.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
         
 #         return jsonify({
-#             "history": combined_history,
-#             "count": len(combined_history)
+#             "history": history,
+#             "count": len(history)
 #         })
         
 #     except Exception as e:
 #         current_app.logger.error(f"学習履歴取得エラー: {str(e)}")
-#         traceback.print_exc()
-#         return jsonify({"error": "学習履歴の取得に失敗しました"}), 500
-
+#         return jsonify({"error": "学習履歴の取得に失敗しました", "history": [], "count": 0}), 500
 # ================================
 # データセット準備度評価
 # ================================
@@ -1531,7 +1504,22 @@ def learning_dashboard():
         total_epochs = 0
         
         if os.path.exists(train_dir):
-            exp_dirs = sorted([d for d in os.listdir(train_dir) if d.startswith('exp')])
+            # expディレクトリを数値順にソート（exp, exp2, exp3...の順）
+            exp_dirs = []
+            for d in os.listdir(train_dir):
+                if d.startswith('exp'):
+                    exp_dirs.append(d)
+            
+            # 数値でソート（exp -> exp2 -> exp3 の順）
+            def get_exp_number(exp_name):
+                if exp_name == 'exp':
+                    return 0
+                try:
+                    return int(exp_name[3:])
+                except:
+                    return 0
+            
+            exp_dirs.sort(key=get_exp_number)
             
             for exp_dir in exp_dirs:
                 results_csv = os.path.join(train_dir, exp_dir, 'results.csv')
@@ -1551,7 +1539,7 @@ def learning_dashboard():
                         
                         # 画像数を推定（データセットから）
                         dataset_info = get_dataset_info()
-                        total_images += dataset_info['total']
+                        total_images = dataset_info['total']  # 最新の値で更新
                         
                         all_trainings.append({
                             'experiment': exp_dir,
@@ -1576,10 +1564,10 @@ def learning_dashboard():
             'total_trainings': len(all_trainings),
             'total_images': total_images,
             'best_accuracy': best_accuracy,
-            'total_annotations': get_total_annotations()  # アノテーション数を取得
+            'total_annotations': get_total_annotations()
         }
         
-        # 最近の学習（最新5件）
+        # 最近の学習（最新5件）- 新しい順に並べ替え
         recent_trainings = all_trainings[-5:][::-1] if all_trainings else []
         
         # 改善の推奨事項
@@ -1599,12 +1587,15 @@ def learning_dashboard():
                 'message': f'現在の学習画像数は{total_images}枚です。100枚以上を推奨します。'
             })
         
-        if len(all_trainings) > 0 and all_trainings[-1]['final_accuracy'] < all_trainings[-1]['accuracy'] * 0.8:
-            recommendations.append({
-                'type': 'warning',
-                'icon': 'chart-line',
-                'message': '最新の学習で過学習の兆候があります。エポック数を調整してください。'
-            })
+        # 最新の学習で過学習をチェック
+        if len(all_trainings) > 0:
+            latest = all_trainings[-1]
+            if latest['final_accuracy'] < latest['accuracy'] * 0.8:
+                recommendations.append({
+                    'type': 'warning',
+                    'icon': 'chart-line',
+                    'message': '最新の学習で過学習の兆候があります。エポック数を調整してください。'
+                })
         
         return render_template('learning_dashboard.html',
                              summary=summary,
@@ -1628,22 +1619,41 @@ def get_dataset_info():
     from config import STATIC_SAMPLES_DIR
     import os
     
-    male_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'male')
-    female_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'female')
+    # papillaeディレクトリのパス
+    papillae_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
     
-    male_count = len([f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(male_dir) else 0
-    female_count = len([f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(female_dir) else 0
+    male_count = 0
+    female_count = 0
+    
+    # maleディレクトリ
+    male_dir = os.path.join(papillae_dir, 'male')
+    if os.path.exists(male_dir):
+        male_count = len([f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
+    
+    # femaleディレクトリ
+    female_dir = os.path.join(papillae_dir, 'female')
+    if os.path.exists(female_dir):
+        female_count = len([f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
+    
+    # unknownディレクトリもチェック
+    unknown_count = 0
+    unknown_dir = os.path.join(papillae_dir, 'unknown')
+    if os.path.exists(unknown_dir):
+        unknown_count = len([f for f in os.listdir(unknown_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
     
     return {
         'male': male_count,
         'female': female_count,
-        'total': male_count + female_count
+        'unknown': unknown_count,
+        'total': male_count + female_count + unknown_count
     }
 
 
 def get_total_annotations():
-    """総アノテーション数を取得"""
+    """総アノテーション数を取得（修正版）"""
     import os
+    
+    total_annotations = 0
     
     # YOLOデータセットのラベルファイルをカウント
     label_dirs = [
@@ -1651,12 +1661,20 @@ def get_total_annotations():
         'data/yolo_dataset/labels/val'
     ]
     
-    total_annotations = 0
     for label_dir in label_dirs:
         if os.path.exists(label_dir):
-            # .txtファイルの数をカウント
-            txt_files = [f for f in os.listdir(label_dir) if f.endswith('.txt')]
-            total_annotations += len(txt_files)
+            # .txtファイルの内容も確認（空ファイルを除外）
+            for txt_file in os.listdir(label_dir):
+                if txt_file.endswith('.txt'):
+                    file_path = os.path.join(label_dir, txt_file)
+                    try:
+                        with open(file_path, 'r') as f:
+                            content = f.read().strip()
+                            if content:  # 空でないファイルのみカウント
+                                # 行数をカウント（各行が1つのアノテーション）
+                                lines = content.split('\n')
+                                total_annotations += len([line for line in lines if line.strip()])
+                    except:
+                        pass
     
     return total_annotations
-
