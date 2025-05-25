@@ -9,6 +9,8 @@
 !/data/yolo_dataset/labels/train/.gitkeep
 !/data/yolo_dataset/labels/val/.gitkeep
 
+
+.env/
 # ==================== Python関連 ====================
 __pycache__/
 **/__pycache__/
