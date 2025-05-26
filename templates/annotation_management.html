@@ -120,15 +120,15 @@
         gap: 10px;
         margin-bottom: 15px;
         padding: 10px;
-        background: white;
+        background: #f8f9fa;
         border-radius: 10px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
     
     .tool-btn {
-        width: 40px;
-        height: 40px;
-        border: 1px solid #dee2e6;
+        width: 45px;
+        height: 45px;
+        border: 2px solid #dee2e6;
         background: white;
         border-radius: 8px;
         display: flex;
@@ -136,17 +136,20 @@
         justify-content: center;
         cursor: pointer;
         transition: all 0.2s;
+        font-size: 1.1rem;
     }
-    
+
     .tool-btn:hover {
-        background: #f8f9fa;
+        background: #e9ecef;
         transform: translateY(-2px);
+        border-color: #adb5bd;
     }
-    
+
     .tool-btn.active {
         background: #007bff;
         color: white;
         border-color: #007bff;
+        box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
     }
     
     /* 保存済み画像一覧 */
@@ -328,6 +331,24 @@
             grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
         }
     }
+
+    .tool-group {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .tool-label {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-right: 5px;
+    }
+
+    .toolbar-separator {
+        width: 1px;
+        height: 30px;
+        background: #dee2e6;
+    }
 </style>
 {% endblock %}
 
@@ -412,18 +433,17 @@
                         
                         <!-- ツールバー -->
                         <div class="annotation-toolbar">
-                            <button class="tool-btn active" data-tool="draw" title="描画">
-                                <i class="fas fa-pencil-alt"></i>
-                            </button>
-                            <button class="tool-btn" data-tool="select" title="選択">
-                                <i class="fas fa-mouse-pointer"></i>
-                            </button>
-                            <button class="tool-btn" data-tool="delete" title="削除">
-                                <i class="fas fa-eraser"></i>
-                            </button>
-                            <div class="ms-auto">
-                                <button class="btn btn-sm btn-warning" id="clearCurrentBtn">
-                                    <i class="fas fa-redo"></i> クリア
+                            <!-- 描画ツール群 -->
+                            <div class="tool-group">
+                                <span class="tool-label">ツール:</span>
+                                <button class="tool-btn active" data-tool="draw" title="新しいバウンディングボックスを描画">
+                                    <i class="fas fa-pencil-alt"></i>
+                                </button>
+                                <button class="tool-btn" data-tool="select" title="既存のボックスを選択・移動">
+                                    <i class="fas fa-mouse-pointer"></i>
+                                </button>
+                                <button class="tool-btn" data-tool="delete" title="クリックでボックスを削除">
+                                    <i class="fas fa-eraser"></i>
                                 </button>
                             </div>
                         </div>
@@ -679,7 +699,6 @@ function setupEventListeners() {
     
     // ボタン類
     document.getElementById('clearAllBtn')?.addEventListener('click', clearAllUploaded);
-    document.getElementById('clearCurrentBtn')?.addEventListener('click', clearCurrentAnnotations);
     document.getElementById('saveAnnotationBtn')?.addEventListener('click', saveCurrentAnnotation);
     document.getElementById('skipImageBtn')?.addEventListener('click', skipToNextImage);
     document.getElementById('finishAnnotationBtn')?.addEventListener('click', finishAnnotation);
@@ -890,9 +909,9 @@ function loadImageToCanvas(imageInfo) {
         
         // アノテーション変更時のコールバック
         annotator.onAnnotationsChanged = updateAnnotationCounts;
+
         
         updateAnnotationCounts();
-        
         // キャンバスを表示
         canvas.style.display = 'block';
     };
@@ -949,13 +968,6 @@ function updateAnnotationProgress() {
     document.getElementById('annotationProgressBar').style.width = completionRate + '%';
 }
 
-// アノテーションクリア
-function clearCurrentAnnotations() {
-    if (annotator) {
-        annotator.clearAnnotations();
-        updateAnnotationCounts();
-    }
-}
 
 // アノテーション保存
 async function saveCurrentAnnotation() {
@@ -1351,13 +1363,6 @@ document.getElementById('closeEditModal')?.addEventListener('click', function() 
 
 document.getElementById('cancelEdit')?.addEventListener('click', function() {
     document.getElementById('editAnnotationModal').style.display = 'none';
-});
-
-document.getElementById('clearEditAnnotations')?.addEventListener('click', function() {
-    if (editAnnotator) {
-        editAnnotator.clearAnnotations();
-        updateEditAnnotationCounts();
-    }
 });
 
 // クラス選択（編集用）

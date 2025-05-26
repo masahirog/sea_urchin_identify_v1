@@ -15,25 +15,27 @@ export class YoloAnnotator {
         
         // 描画状態
         this.isDrawing = false;
+        this.isMoving = false;
         this.startX = 0;
         this.startY = 0;
         this.currentX = 0;
         this.currentY = 0;
+
+        // 移動用の初期位置記録
+        this.moveStartX = 0;
+        this.moveStartY = 0;
+        this.originalBox = null;
         
         // モード
-        this.mode = 'create'; // create, edit, delete
+        this.mode = 'create';
         
         // クラス情報
         this.classes = [
-            { id: 0, name: '雄の生殖乳頭', color: 'rgba(33, 150, 243, 0.7)' },
-            { id: 1, name: '雌の生殖乳頭', color: 'rgba(244, 67, 54, 0.7)' },
-            { id: 2, name: '多孔板', color: 'rgba(76, 175, 80, 0.7)' }
+            { id: 0, name: '雄の生殖乳頭', color: 'rgba(33, 150, 243, 0.8)' },
+            { id: 1, name: '雌の生殖乳頭', color: 'rgba(244, 67, 54, 0.8)' },
+            { id: 2, name: '多孔板', color: 'rgba(76, 175, 80, 0.8)' }
         ];
         this.currentClass = 0;
-        
-        // 変更履歴
-        this.history = [];
-        this.historyIndex = -1;
         
         // コールバック
         this.onAnnotationsChanged = null;
@@ -71,15 +73,35 @@ export class YoloAnnotator {
             this.currentX = x;
             this.currentY = y;
         } else if (this.mode === 'edit') {
-            this.selectedAnnotation = this.findAnnotationAt(x, y);
-            this.redraw();
+            // 編集モード（選択・移動）
+            const index = this.findAnnotationAt(x, y);
+            if (index !== -1) {
+                this.selectedAnnotation = index;
+                this.isMoving = true;
+                this.moveStartX = x;
+                this.moveStartY = y;
+                // 元のボックス位置を保存
+                const ann = this.annotations[index];
+                this.originalBox = {
+                    x1: ann.x1,
+                    y1: ann.y1,
+                    x2: ann.x2,
+                    y2: ann.y2
+                };
+                this.redraw();
+            } else {
+                this.selectedAnnotation = -1;
+                this.redraw();
+            }
         } else if (this.mode === 'delete') {
             const index = this.findAnnotationAt(x, y);
             if (index !== -1) {
-                this.saveToHistory();
                 this.annotations.splice(index, 1);
                 this.selectedAnnotation = -1;
                 this.redraw();
+                if (this.onAnnotationsChanged) {
+                    this.onAnnotationsChanged();
+                }
             }
         }
     }
@@ -95,6 +117,43 @@ export class YoloAnnotator {
             this.currentY = y;
             this.redraw();
             this.drawTempBox();
+        } else if (this.mode === 'edit' && this.isMoving && this.selectedAnnotation !== -1) {
+            // ボックスを移動
+            const dx = x - this.moveStartX;
+            const dy = y - this.moveStartY;
+            
+            const ann = this.annotations[this.selectedAnnotation];
+            ann.x1 = this.originalBox.x1 + dx;
+            ann.y1 = this.originalBox.y1 + dy;
+            ann.x2 = this.originalBox.x2 + dx;
+            ann.y2 = this.originalBox.y2 + dy;
+            
+            // キャンバスの境界内に制限
+            const width = ann.x2 - ann.x1;
+            const height = ann.y2 - ann.y1;
+            
+            if (ann.x1 < 0) {
+                ann.x1 = 0;
+                ann.x2 = width;
+            }
+            if (ann.y1 < 0) {
+                ann.y1 = 0;
+                ann.y2 = height;
+            }
+            if (ann.x2 > this.canvas.width) {
+                ann.x2 = this.canvas.width;
+                ann.x1 = this.canvas.width - width;
+            }
+            if (ann.y2 > this.canvas.height) {
+                ann.y2 = this.canvas.height;
+                ann.y1 = this.canvas.height - height;
+            }
+            
+            this.redraw();
+        } else if (this.mode === 'edit') {
+            // カーソルの変更（ホバー時）
+            const index = this.findAnnotationAt(x, y);
+            this.canvas.style.cursor = index !== -1 ? 'move' : 'default';
         }
     }
     
@@ -105,7 +164,6 @@ export class YoloAnnotator {
             this.isDrawing = false;
             
             if (Math.abs(this.currentX - this.startX) > 5 && Math.abs(this.currentY - this.startY) > 5) {
-                this.saveToHistory();
                 
                 const [x1, y1, x2, y2] = this.normalizeCoordinates(
                     this.startX, this.startY, this.currentX, this.currentY
@@ -114,11 +172,23 @@ export class YoloAnnotator {
                 this.annotations.push({ x1, y1, x2, y2, class: this.currentClass });
                 this.redraw();
 
-                // コールバック実行
                 if (this.onAnnotationsChanged) {
                     this.onAnnotationsChanged();
                 }
             }
+        } else if (this.mode === 'edit' && this.isMoving) {
+            // 移動完了
+            this.isMoving = false;
+            if (this.originalBox) {
+                // 実際に移動があった場合のみ履歴に保存
+                const ann = this.annotations[this.selectedAnnotation];
+                if (ann.x1 !== this.originalBox.x1 || ann.y1 !== this.originalBox.y1) {
+                    if (this.onAnnotationsChanged) {
+                        this.onAnnotationsChanged();
+                    }
+                }
+            }
+            this.originalBox = null;
         }
     }
     
@@ -159,58 +229,11 @@ export class YoloAnnotator {
     
     handleKeyDown(e) {
         if (e.key === 'Delete' && this.selectedAnnotation !== -1) {
-            this.saveToHistory();
             this.annotations.splice(this.selectedAnnotation, 1);
             this.selectedAnnotation = -1;
             this.redraw();
 
             // コールバック実行
-            if (this.onAnnotationsChanged) {
-                this.onAnnotationsChanged();
-            }
-        }
-        
-        if (e.ctrlKey && e.key === 'z') {
-            this.undo();
-        }
-        
-        if (e.ctrlKey && e.key === 'y') {
-            this.redo();
-        }
-    }
-    
-    saveToHistory() {
-        if (this.historyIndex < this.history.length - 1) {
-            this.history = this.history.slice(0, this.historyIndex + 1);
-        }
-        
-        this.history.push(JSON.parse(JSON.stringify(this.annotations)));
-        this.historyIndex = this.history.length - 1;
-        
-        if (this.history.length > 20) {
-            this.history.shift();
-            this.historyIndex--;
-        }
-    }
-    
-    undo() {
-        if (this.historyIndex > 0) {
-            this.historyIndex--;
-            this.annotations = JSON.parse(JSON.stringify(this.history[this.historyIndex]));
-            this.selectedAnnotation = -1;
-            this.redraw();
-            if (this.onAnnotationsChanged) {
-                this.onAnnotationsChanged();
-            }
-        }
-    }
-    
-    redo() {
-        if (this.historyIndex < this.history.length - 1) {
-            this.historyIndex++;
-            this.annotations = JSON.parse(JSON.stringify(this.history[this.historyIndex]));
-            this.selectedAnnotation = -1;
-            this.redraw();
             if (this.onAnnotationsChanged) {
                 this.onAnnotationsChanged();
             }
@@ -227,9 +250,27 @@ export class YoloAnnotator {
     }
     
     findAnnotationAt(x, y) {
+        // クリック位置の周囲5ピクセルまで許容
+        const tolerance = 5;
+        
         for (let i = this.annotations.length - 1; i >= 0; i--) {
             const ann = this.annotations[i];
-            if (x >= ann.x1 && x <= ann.x2 && y >= ann.y1 && y <= ann.y2) {
+            
+            // バウンディングボックスの境界線上も含めて判定
+            const onBorder = (
+                // 上下の境界線
+                (Math.abs(y - ann.y1) <= tolerance || Math.abs(y - ann.y2) <= tolerance) &&
+                (x >= ann.x1 - tolerance && x <= ann.x2 + tolerance)
+            ) || (
+                // 左右の境界線
+                (Math.abs(x - ann.x1) <= tolerance || Math.abs(x - ann.x2) <= tolerance) &&
+                (y >= ann.y1 - tolerance && y <= ann.y2 + tolerance)
+            );
+            
+            // 内部またはボーダー上にある場合
+            const inside = x >= ann.x1 && x <= ann.x2 && y >= ann.y1 && y <= ann.y2;
+            
+            if (inside || onBorder) {
                 return i;
             }
         }
@@ -253,34 +294,129 @@ export class YoloAnnotator {
             this.startX, this.startY, this.currentX, this.currentY
         );
         
+        // プレビュー用の点線ボックス
         this.ctx.strokeStyle = this.classes[this.currentClass].color;
-        this.ctx.lineWidth = 2;
-        this.ctx.setLineDash([5, 3]);
+        this.ctx.lineWidth = 4;  // 太く
+        this.ctx.setLineDash([8, 4]);
         this.ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
         this.ctx.setLineDash([]);
+        
+        // サイズ表示
+        const width = Math.abs(x2 - x1);
+        const height = Math.abs(y2 - y1);
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        this.ctx.font = '12px Arial';
+        const sizeText = `${Math.round(width)} × ${Math.round(height)}`;
+        const textMetrics = this.ctx.measureText(sizeText);
+        this.ctx.fillRect(x1, y1 - 20, textMetrics.width + 8, 18);
+        this.ctx.fillStyle = 'white';
+        this.ctx.fillText(sizeText, x1 + 4, y1 - 6);
     }
     
     drawAnnotation(ann, isSelected = false) {
         const classInfo = this.classes[ann.class] || this.classes[0];
         
-        this.ctx.strokeStyle = isSelected ? 'rgba(255, 255, 0, 0.9)' : classInfo.color;
-        this.ctx.lineWidth = isSelected ? 3 : 2;
+        // 影を追加して線を強調
+        this.ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+        this.ctx.shadowBlur = 4;
+        this.ctx.shadowOffsetX = 2;
+        this.ctx.shadowOffsetY = 2;
+        
+        // メインの線（さらに太く）
+        this.ctx.strokeStyle = isSelected ? 'rgba(255, 255, 0, 1)' : classInfo.color;
+        this.ctx.lineWidth = isSelected ? 8 : 6;  // 6→8, 4→6に変更
         this.ctx.strokeRect(ann.x1, ann.y1, ann.x2 - ann.x1, ann.y2 - ann.y1);
         
-        this.ctx.fillStyle = isSelected ? 'rgba(255, 255, 0, 0.2)' : 'rgba(255, 87, 34, 0.1)';
+        // 影をリセット
+        this.ctx.shadowColor = 'transparent';
+        this.ctx.shadowBlur = 0;
+        this.ctx.shadowOffsetX = 0;
+        this.ctx.shadowOffsetY = 0;
+        
+        // 選択時の追加ハイライト
+        if (isSelected) {
+            // 外側の枠（点線）
+            this.ctx.setLineDash([5, 5]);
+            this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(ann.x1 - 4, ann.y1 - 4, ann.x2 - ann.x1 + 8, ann.y2 - ann.y1 + 8);
+            this.ctx.setLineDash([]);
+            
+            // コーナーハンドル（リサイズ用・将来実装）
+            this.drawCornerHandles(ann);
+        }
+        
+        // 塗りつぶし（軽く）
+        this.ctx.fillStyle = isSelected ? 'rgba(255, 255, 0, 0.1)' : classInfo.color.replace('0.8', '0.1');
         this.ctx.fillRect(ann.x1, ann.y1, ann.x2 - ann.x1, ann.y2 - ann.y1);
         
-        this.ctx.font = '12px Arial';
-        this.ctx.fillStyle = isSelected ? 'rgba(255, 255, 0, 0.9)' : classInfo.color;
-        this.ctx.fillText(classInfo.name, ann.x1, ann.y1 - 5);
+        // ラベル表示の改善
+        this.drawLabel(ann, classInfo, isSelected);
+    }
+    drawLabel(ann, classInfo, isSelected) {
+        const label = classInfo.name;
+        this.ctx.font = 'bold 16px Arial';  // フォントサイズを大きく
+        const metrics = this.ctx.measureText(label);
+        const labelHeight = 22;
+        const padding = 6;
+        
+        // ラベルの位置（ボックスの上に配置）
+        let labelX = ann.x1;
+        let labelY = ann.y1 - labelHeight - 4;
+        
+        // 画面上部からはみ出す場合は内側に配置
+        if (labelY < 0) {
+            labelY = ann.y1 + 4;
+        }
+        
+        // ラベル背景（角丸）
+        this.ctx.fillStyle = isSelected ? 'rgba(255, 255, 0, 0.9)' : 'rgba(0, 0, 0, 0.8)';
+        this.roundRect(labelX, labelY, metrics.width + padding * 2, labelHeight, 4);
+        this.ctx.fill();
+        
+        // ラベルテキスト
+        this.ctx.fillStyle = isSelected ? 'black' : 'white';
+        this.ctx.fillText(label, labelX + padding, labelY + labelHeight - 6);
+    }
+    // コーナーハンドルの描画（将来的なリサイズ機能用）
+    drawCornerHandles(ann) {
+        const handleSize = 8;
+        const handles = [
+            { x: ann.x1, y: ann.y1 },  // 左上
+            { x: ann.x2, y: ann.y1 },  // 右上
+            { x: ann.x1, y: ann.y2 },  // 左下
+            { x: ann.x2, y: ann.y2 }   // 右下
+        ];
+        
+        this.ctx.fillStyle = 'white';
+        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+        this.ctx.lineWidth = 2;
+        
+        handles.forEach(handle => {
+            this.ctx.fillRect(handle.x - handleSize/2, handle.y - handleSize/2, handleSize, handleSize);
+            this.ctx.strokeRect(handle.x - handleSize/2, handle.y - handleSize/2, handleSize, handleSize);
+        });
+    }
+    
+    // 角丸矩形を描画するヘルパーメソッド
+    roundRect(x, y, width, height, radius) {
+        this.ctx.beginPath();
+        this.ctx.moveTo(x + radius, y);
+        this.ctx.lineTo(x + width - radius, y);
+        this.ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+        this.ctx.lineTo(x + width, y + height - radius);
+        this.ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        this.ctx.lineTo(x + radius, y + height);
+        this.ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+        this.ctx.lineTo(x, y + radius);
+        this.ctx.quadraticCurveTo(x, y, x + radius, y);
+        this.ctx.closePath();
     }
     
     loadAnnotations(annotations) {
         this.annotations = annotations;
         this.selectedAnnotation = -1;
         this.redraw();
-        this.history = [JSON.parse(JSON.stringify(annotations))];
-        this.historyIndex = 0;
     }
     
     loadFromYoloFormat(yoloText) {
@@ -333,8 +469,6 @@ export class YoloAnnotator {
     }
     
     loadAutoDetectedBoxes(boxes) {
-        this.saveToHistory();
-        
         for (const box of boxes) {
             this.annotations.push({
                 x1: box.x1,
@@ -351,21 +485,21 @@ export class YoloAnnotator {
         }
     }
     
-    clearAnnotations() {
-        this.saveToHistory();
-        this.annotations = [];
-        this.selectedAnnotation = -1;
-        this.redraw();
-        if (this.onAnnotationsChanged) {
-            this.onAnnotationsChanged();
-        }
-    }
-    
     setMode(mode) {
         if (['create', 'edit', 'delete'].includes(mode)) {
             this.mode = mode;
             this.selectedAnnotation = -1;
+            this.isMoving = false;
             this.redraw();
+            
+            // カーソルの変更
+            if (mode === 'create') {
+                this.canvas.style.cursor = 'crosshair';
+            } else if (mode === 'edit') {
+                this.canvas.style.cursor = 'default';
+            } else if (mode === 'delete') {
+                this.canvas.style.cursor = 'pointer';
+            }
         }
     }
     
