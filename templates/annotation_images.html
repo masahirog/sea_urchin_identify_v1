@@ -577,9 +577,12 @@ window.editAnnotation = function(imageId) {
 function annotateSelected() {
     if (selectedImages.size === 0) return;
     
-    // 最初の画像でエディタを開く
+    // 選択された画像IDをカンマ区切りで連結
+    const selectedIds = Array.from(selectedImages).join(',');
+    
+    // 最初の画像でエディタを開き、選択されたIDリストも渡す
     const firstImageId = Array.from(selectedImages)[0];
-    window.location.href = `/annotation/editor/?image_id=${firstImageId}`;
+    window.location.href = `/annotation/editor/?image_id=${firstImageId}&selected=${encodeURIComponent(selectedIds)}`;
 }
 
 // 選択画像の削除

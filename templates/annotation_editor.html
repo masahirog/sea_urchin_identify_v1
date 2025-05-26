@@ -395,10 +395,25 @@ function setClass(classId) {
 // 画像リストの読み込み
 async function loadImageList() {
     try {
-        const response = await fetch('/annotation/editor/list-for-edit');
+        // URLパラメータから選択されたIDリストを取得
+        const urlParams = new URLSearchParams(window.location.search);
+        const selectedIds = urlParams.get('selected');
+        
+        let url = '/annotation/editor/list-for-edit';
+        if (selectedIds) {
+            url += `?selected=${encodeURIComponent(selectedIds)}`;
+        }
+        
+        const response = await fetch(url);
         const data = await response.json();
         
         allImages = data.images || [];
+        
+        // 選択モードの場合はヘッダーに表示
+        if (data.selected_mode) {
+            document.getElementById('currentImageInfo').textContent = 
+                `選択された画像: ${allImages.length}枚`;
+        }
         
         // 初期画像がある場合、その画像のインデックスを探す
         if (initialImageId) {
@@ -419,6 +434,17 @@ async function loadImageList() {
         showErrorMessage('画像リストの読み込みに失敗しました');
     }
 }
+
+// ブラウザの戻る/進むボタンへの対応
+window.addEventListener('popstate', function(event) {
+    if (event.state && event.state.imageId) {
+        const index = allImages.findIndex(img => img.id === event.state.imageId);
+        if (index !== -1) {
+            currentIndex = index;
+            loadImage(index);
+        }
+    }
+});
 
 // 画像リストの表示更新
 function updateImageList() {
@@ -496,6 +522,12 @@ async function selectImage(index) {
     if (index < 0 || index >= allImages.length) return;
     
     currentIndex = index;
+    const image = allImages[index];
+    
+    // URLを更新（ページリロードなし）
+    const newUrl = `/annotation/editor/?image_id=${image.id}`;
+    window.history.pushState({imageId: image.id}, '', newUrl);
+    
     await loadImage(index);
 }
 
@@ -641,7 +673,7 @@ async function saveAndNext() {
     }
 }
 
-// ナビゲーション
+// ナビゲーション関数も修正
 async function loadPreviousImage() {
     if (currentIndex > 0) {
         await selectImage(currentIndex - 1);

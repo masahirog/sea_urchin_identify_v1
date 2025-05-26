@@ -42,7 +42,8 @@ def load_annotation(image_id):
             'original_name': image_info.get('original_name', image_id),
             'annotations': annotations,
             'annotation_count': len([line for line in annotations.split('\n') if line.strip()]),
-            'image_url': f'/annotation/images/image/{image_id}'
+            'image_url': f'/annotation/images/image/{image_id}',
+            'redirect_url': f'/annotation/editor/?image_id={image_id}'  # URLリダイレクト用
         })
         
     except Exception as e:
@@ -104,18 +105,27 @@ def save_annotation(image_id):
 
 @annotation_editor_bp.route('/list-for-edit')
 def list_for_edit():
-    """エディタ用の画像リストを取得（全画像を取得）"""
-    # 全画像のサムネイル情報を返す
+    """エディタ用の画像リストを取得（選択された画像のみ）"""
+    # URLパラメータから選択された画像IDリストを取得
+    selected_ids = request.args.get('selected', '')
+    
+    if selected_ids:
+        # カンマ区切りのIDリストを配列に変換
+        selected_image_ids = [id.strip() for id in selected_ids.split(',') if id.strip()]
+    else:
+        selected_image_ids = None
+    
     metadata = load_annotation_metadata()
     images = []
     
     images_dir = os.path.join(ANNOTATED_IMAGES_DIR, 'images')
     if os.path.exists(images_dir):
-        # すべての画像ファイルを取得
         all_image_files = []
         for image_file in os.listdir(images_dir):
             if image_file.lower().endswith(('.png', '.jpg', '.jpeg')):
-                all_image_files.append(image_file)
+                # 選択されたIDリストがある場合はフィルタリング
+                if selected_image_ids is None or image_file in selected_image_ids:
+                    all_image_files.append(image_file)
         
         # ファイル名でソート（新しい順）
         all_image_files.sort(reverse=True)
@@ -138,31 +148,13 @@ def list_for_edit():
                 'annotated': annotation_count > 0,
                 'annotation_count': annotation_count,
                 'thumbnail_url': f'/annotation/images/image/{image_file}',
-                'upload_time': image_info.get('upload_time', '')  # ソート用
+                'upload_time': image_info.get('upload_time', '')
             })
     
-    # ページネーションパラメータの取得（オプション）
-    page = request.args.get('page', type=int)
-    per_page = request.args.get('per_page', type=int)
-    
-    # ページネーションが指定されていない場合は全件返す
-    if page is None or per_page is None:
-        return jsonify({
-            'images': images,
-            'total': len(images)
-        })
-    
-    # ページネーションが指定されている場合
-    start = (page - 1) * per_page
-    end = start + per_page
-    paginated_images = images[start:end]
-    
     return jsonify({
-        'images': paginated_images,
+        'images': images,
         'total': len(images),
-        'page': page,
-        'per_page': per_page,
-        'pages': (len(images) + per_page - 1) // per_page
+        'selected_mode': selected_image_ids is not None
     })
 
 # ヘルパー関数（annotation_images.pyと共通）
