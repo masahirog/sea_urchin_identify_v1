@@ -62,16 +62,17 @@
                             <!-- データ準備状況バッジ -->
                             <span id="learning-status-badge" class="badge bg-secondary ms-1 d-none">0</span>
                         </a>
-                        <ul class="dropdown-menu" aria-labelledby="learningDropdown">
-                            <li><a class="dropdown-item" href="{{ url_for('annotation.annotation_page') }}">
-                                <i class="fas fa-draw-polygon me-1"></i> アノテーション
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="annotationDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-draw-polygon me-1"></i> アノテーション
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="annotationDropdown">
+                            <li><a class="dropdown-item" href="{{ url_for('annotation_images.images_management_page') }}">
+                                <i class="fas fa-images me-1"></i> 画像管理
                             </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('training.training_page') }}">
-                                <i class="fas fa-brain me-1"></i> 学習実行
-                            </a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{{ url_for('learning.learning_dashboard') }}">
-                                <i class="fas fa-chart-line me-1"></i> ダッシュボード
+                            <li><a class="dropdown-item" href="{{ url_for('annotation_editor.editor_page') }}">
+                                <i class="fas fa-edit me-1"></i> アノテーション編集
                             </a></li>
                         </ul>
                     </li>

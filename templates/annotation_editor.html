@@ -1,0 +1,783 @@
+{% extends "base.html" %}
+
+{% block title %}アノテーション編集 - ウニ生殖乳頭分析{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* レイアウト */
+    .editor-container {
+        display: flex;
+        gap: 20px;
+        height: calc(100vh - 200px);
+    }
+    
+    /* 左サイドバー：画像リスト */
+    .image-sidebar {
+        width: 280px;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .sidebar-header {
+        padding: 15px;
+        border-bottom: 1px solid #dee2e6;
+        font-weight: bold;
+    }
+    
+    .image-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px;
+    }
+    
+    .image-list-item {
+        display: flex;
+        align-items: center;
+        padding: 10px;
+        margin-bottom: 5px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 2px solid transparent;
+    }
+    
+    .image-list-item:hover {
+        background: #f8f9fa;
+    }
+    
+    .image-list-item.active {
+        background: #e7f3ff;
+        border-color: #007bff;
+    }
+    
+    .image-thumbnail {
+        width: 60px;
+        height: 60px;
+        object-fit: cover;
+        border-radius: 5px;
+        margin-right: 10px;
+    }
+    
+    .image-list-info {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .image-list-name {
+        font-size: 0.9rem;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .image-list-status {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+    
+    .annotation-count-badge {
+        background: #28a745;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: bold;
+    }
+    
+    /* 中央：キャンバスエリア */
+    .canvas-area {
+        flex: 1;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .canvas-header {
+        padding: 15px;
+        border-bottom: 1px solid #dee2e6;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .canvas-title {
+        font-weight: bold;
+        font-size: 1.1rem;
+    }
+    
+    .canvas-container {
+        flex: 1;
+        padding: 20px;
+        overflow: auto;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: #f8f9fa;
+    }
+    
+    .annotation-canvas {
+        max-width: 100%;
+        max-height: 100%;
+        border: 3px solid #dee2e6;
+        cursor: crosshair;
+        background: white;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    /* ツールバー */
+    .annotation-toolbar {
+        display: flex;
+        gap: 10px;
+        padding: 15px;
+        background: white;
+        border-bottom: 1px solid #dee2e6;
+        align-items: center;
+    }
+    
+    .tool-btn {
+        width: 45px;
+        height: 45px;
+        border: 2px solid #dee2e6;
+        background: white;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 1.1rem;
+    }
+
+    .tool-btn:hover {
+        background: #e9ecef;
+        transform: translateY(-2px);
+        border-color: #adb5bd;
+    }
+
+    .tool-btn.active {
+        background: #007bff;
+        color: white;
+        border-color: #007bff;
+        box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+    }
+    
+    .toolbar-separator {
+        width: 1px;
+        height: 30px;
+        background: #dee2e6;
+        margin: 0 10px;
+    }
+    
+    /* 右サイドバー：コントロール */
+    .control-sidebar {
+        width: 300px;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        padding: 20px;
+    }
+    
+    .control-section {
+        margin-bottom: 25px;
+    }
+    
+    .control-section h6 {
+        font-weight: bold;
+        margin-bottom: 15px;
+        color: #495057;
+    }
+    
+    .annotation-stats {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    
+    .stat-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5px;
+    }
+    
+    .stat-row:last-child {
+        margin-bottom: 0;
+        padding-top: 5px;
+        border-top: 1px solid #dee2e6;
+        font-weight: bold;
+    }
+    
+    /* ショートカットヘルプ */
+    .shortcuts-help {
+        background: #e7f3ff;
+        padding: 15px;
+        border-radius: 8px;
+        font-size: 0.85rem;
+    }
+    
+    .shortcut-item {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5px;
+    }
+    
+    .shortcut-key {
+        background: white;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-family: monospace;
+        font-weight: bold;
+    }
+    
+    /* プログレスバー */
+    .progress-section {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        padding: 15px;
+        border-top: 1px solid #dee2e6;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .progress-info {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+    }
+    
+    /* レスポンシブ */
+    @media (max-width: 1200px) {
+        .image-sidebar {
+            width: 220px;
+        }
+        
+        .control-sidebar {
+            width: 250px;
+        }
+    }
+    
+    @media (max-width: 992px) {
+        .editor-container {
+            flex-direction: column;
+            height: auto;
+        }
+        
+        .image-sidebar, .control-sidebar {
+            width: 100%;
+        }
+        
+        .image-list {
+            max-height: 200px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <!-- ヘッダー -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>
+            <i class="fas fa-edit me-2"></i>アノテーション編集
+        </h3>
+        <div>
+            <button class="btn btn-outline-secondary me-2" onclick="window.location.href='/annotation/images/'">
+                <i class="fas fa-arrow-left me-1"></i> 画像管理に戻る
+            </button>
+            <button class="btn btn-success" id="saveAllBtn">
+                <i class="fas fa-save me-1"></i> すべて保存
+            </button>
+        </div>
+    </div>
+    
+    <!-- エディタコンテナ -->
+    <div class="editor-container">
+        <!-- 左サイドバー：画像リスト -->
+        <div class="image-sidebar">
+            <div class="sidebar-header">
+                画像一覧
+                <span class="badge bg-secondary float-end" id="imageCount">0</span>
+            </div>
+            <div class="image-list" id="imageList">
+                <!-- 画像リストがここに表示される -->
+            </div>
+        </div>
+        
+        <!-- 中央：キャンバスエリア -->
+        <div class="canvas-area">
+            <div class="canvas-header">
+                <div class="canvas-title" id="currentImageName">画像を選択してください</div>
+                <div>
+                    <button class="btn btn-sm btn-outline-secondary" id="prevImageBtn" disabled>
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" id="nextImageBtn" disabled>
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- ツールバー -->
+            <div class="annotation-toolbar">
+                <button class="tool-btn active" data-tool="draw" title="新しいバウンディングボックスを描画">
+                    <i class="fas fa-pencil-alt"></i>
+                </button>
+                <button class="tool-btn" data-tool="select" title="既存のボックスを選択・移動">
+                    <i class="fas fa-mouse-pointer"></i>
+                </button>
+                <button class="tool-btn" data-tool="delete" title="クリックでボックスを削除">
+                    <i class="fas fa-eraser"></i>
+                </button>
+                
+                <div class="toolbar-separator"></div>
+                
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="autoDetectToggle">
+                    <label class="form-check-label" for="autoDetectToggle">
+                        自動検出
+                    </label>
+                </div>
+            </div>
+            
+            <div class="canvas-container">
+                <canvas id="annotationCanvas" class="annotation-canvas"></canvas>
+            </div>
+        </div>
+        
+        <!-- 右サイドバー：コントロール -->
+        <div class="control-sidebar">
+            <!-- クラス選択 -->
+            <div class="control-section">
+                <h6>クラス選択</h6>
+                <div class="btn-group-vertical w-100" role="group">
+                    <input type="radio" class="btn-check" name="classType" id="classMale" value="0" checked>
+                    <label class="btn btn-outline-primary" for="classMale">
+                        <i class="fas fa-mars"></i> 雄の生殖乳頭
+                    </label>
+                    
+                    <input type="radio" class="btn-check" name="classType" id="classFemale" value="1">
+                    <label class="btn btn-outline-danger" for="classFemale">
+                        <i class="fas fa-venus"></i> 雌の生殖乳頭
+                    </label>
+                    
+                    <input type="radio" class="btn-check" name="classType" id="classMadreporite" value="2">
+                    <label class="btn btn-outline-success" for="classMadreporite">
+                        <i class="fas fa-shapes"></i> 多孔板
+                    </label>
+                </div>
+            </div>
+            
+            <!-- アノテーション統計 -->
+            <div class="control-section">
+                <h6>アノテーション数</h6>
+                <div class="annotation-stats">
+                    <div class="stat-row">
+                        <span>雄の生殖乳頭</span>
+                        <span class="badge bg-primary" id="maleCount">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>雌の生殖乳頭</span>
+                        <span class="badge bg-danger" id="femaleCount">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>多孔板</span>
+                        <span class="badge bg-success" id="madreporiteCount">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>合計</span>
+                        <span class="badge bg-secondary" id="totalAnnotations">0</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- アクションボタン -->
+            <div class="control-section">
+                <button class="btn btn-primary w-100 mb-2" id="saveCurrentBtn">
+                    <i class="fas fa-save"></i> 現在の画像を保存
+                </button>
+                <button class="btn btn-secondary w-100" id="skipBtn">
+                    <i class="fas fa-forward"></i> 次の画像へ
+                </button>
+            </div>
+            
+            <!-- ショートカット -->
+            <div class="control-section">
+                <h6>ショートカット</h6>
+                <div class="shortcuts-help">
+                    <div class="shortcut-item">
+                        <span>削除</span>
+                        <span class="shortcut-key">Delete</span>
+                    </div>
+                    <div class="shortcut-item">
+                        <span>次の画像</span>
+                        <span class="shortcut-key">→</span>
+                    </div>
+                    <div class="shortcut-item">
+                        <span>前の画像</span>
+                        <span class="shortcut-key">←</span>
+                    </div>
+                    <div class="shortcut-item">
+                        <span>保存</span>
+                        <span class="shortcut-key">Ctrl+S</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- プログレスバー -->
+    <div class="progress-section">
+        <div class="progress-info">
+            <span>進捗: <strong id="completedCount">0</strong> / <strong id="totalCount">0</strong></span>
+            <span>完了率: <strong id="completionRate">0%</strong></span>
+        </div>
+        <div class="progress">
+            <div class="progress-bar bg-success" id="progressBar" style="width: 0%"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script type="module">
+import { YoloAnnotator } from '/static/js/YoloAnnotator.js';
+import { showLoading, hideLoading, showSuccessMessage, showErrorMessage } from '/static/js/utilities.js';
+
+// グローバル変数
+let imageList = [];
+let currentImageIndex = -1;
+let annotator = null;
+let hasUnsavedChanges = false;
+
+// 初期画像ID（URLパラメータから取得）
+const urlParams = new URLSearchParams(window.location.search);
+const initialImageId = urlParams.get('image_id');
+
+// 初期化
+document.addEventListener('DOMContentLoaded', function() {
+    setupEventListeners();
+    loadImageList();
+    setupKeyboardShortcuts();
+});
+
+// イベントリスナーのセットアップ
+function setupEventListeners() {
+    // ツールボタン
+    document.querySelectorAll('.tool-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            if (annotator) {
+                const tool = this.dataset.tool;
+                if (tool === 'draw') {
+                    annotator.setMode('create');
+                } else if (tool === 'select') {
+                    annotator.setMode('edit');
+                } else if (tool === 'delete') {
+                    annotator.setMode('delete');
+                }
+            }
+        });
+    });
+    
+    // クラス選択
+    document.querySelectorAll('input[name="classType"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            if (annotator) {
+                annotator.setCurrentClass(parseInt(this.value));
+            }
+        });
+    });
+    
+    // ナビゲーションボタン
+    document.getElementById('prevImageBtn').addEventListener('click', () => navigateImage(-1));
+    document.getElementById('nextImageBtn').addEventListener('click', () => navigateImage(1));
+    document.getElementById('skipBtn').addEventListener('click', () => navigateImage(1));
+    
+    // 保存ボタン
+    document.getElementById('saveCurrentBtn').addEventListener('click', saveCurrentImage);
+    document.getElementById('saveAllBtn').addEventListener('click', saveAllImages);
+    
+    // 自動検出トグル
+    document.getElementById('autoDetectToggle').addEventListener('change', handleAutoDetect);
+    
+    // ページ離脱時の確認
+    window.addEventListener('beforeunload', function(e) {
+        if (hasUnsavedChanges) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+}
+
+// キーボードショートカット
+function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', function(e) {
+        // Ctrl+S: 保存
+        if (e.ctrlKey && e.key === 's') {
+            e.preventDefault();
+            saveCurrentImage();
+        }
+        // 矢印キー: ナビゲーション
+        else if (e.key === 'ArrowLeft') {
+            navigateImage(-1);
+        }
+        else if (e.key === 'ArrowRight') {
+            navigateImage(1);
+        }
+    });
+}
+
+// 画像リストの読み込み
+async function loadImageList() {
+    try {
+        showLoading('画像一覧を読み込み中...');
+        
+        const response = await fetch('/annotation/editor/list-for-edit');
+        const data = await response.json();
+        
+        imageList = data.images;
+        updateImageListUI();
+        
+        // 初期画像の選択
+        if (initialImageId) {
+            const index = imageList.findIndex(img => img.id === initialImageId);
+            if (index !== -1) {
+                selectImage(index);
+            }
+        } else if (imageList.length > 0) {
+            selectImage(0);
+        }
+        
+        hideLoading();
+    } catch (error) {
+        hideLoading();
+        showErrorMessage('画像一覧の読み込みエラー: ' + error.message);
+    }
+}
+
+// 画像リストUI更新
+function updateImageListUI() {
+    const listContainer = document.getElementById('imageList');
+    const imageCount = document.getElementById('imageCount');
+    
+    imageCount.textContent = imageList.length;
+    listContainer.innerHTML = '';
+    
+    imageList.forEach((image, index) => {
+        const item = document.createElement('div');
+        item.className = 'image-list-item';
+        item.dataset.index = index;
+        
+        item.innerHTML = `
+            <img src="${image.thumbnail_url}" class="image-thumbnail" alt="${image.original_name}">
+            <div class="image-list-info">
+                <div class="image-list-name">${image.original_name}</div>
+                <div class="image-list-status">
+                    ${image.annotated ? 
+                        `<span class="annotation-count-badge">${image.annotation_count}</span>` : 
+                        '<span class="text-muted">未アノテーション</span>'
+                    }
+                </div>
+            </div>
+        `;
+        
+        item.addEventListener('click', () => selectImage(index));
+        listContainer.appendChild(item);
+    });
+    
+    updateProgress();
+}
+
+// 画像選択
+async function selectImage(index) {
+    // 未保存の変更がある場合は確認
+    if (hasUnsavedChanges) {
+        if (!confirm('未保存の変更があります。破棄して続行しますか？')) {
+            return;
+        }
+    }
+    
+    currentImageIndex = index;
+    const image = imageList[index];
+    
+    // リストのアクティブ状態を更新
+    document.querySelectorAll('.image-list-item').forEach((item, i) => {
+        if (i === index) {
+            item.classList.add('active');
+            item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+            item.classList.remove('active');
+        }
+    });
+    
+    // ナビゲーションボタンの状態更新
+    document.getElementById('prevImageBtn').disabled = index === 0;
+    document.getElementById('nextImageBtn').disabled = index === imageList.length - 1;
+    
+    // 画像名を表示
+    document.getElementById('currentImageName').textContent = image.original_name;
+    
+    // 画像とアノテーションを読み込み
+    await loadImageAndAnnotations(image.id);
+}
+
+// 画像とアノテーションの読み込み
+async function loadImageAndAnnotations(imageId) {
+    try {
+        showLoading('画像を読み込み中...');
+        
+        const response = await fetch(`/annotation/editor/load/${imageId}`);
+        const data = await response.json();
+        
+        // キャンバスに画像を読み込み
+        const canvas = document.getElementById('annotationCanvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        
+        img.crossOrigin = "anonymous";
+        
+        img.onload = function() {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            
+            // アノテーターを初期化
+            annotator = new YoloAnnotator(canvas, img);
+            annotator.setMode('create');
+            annotator.setCurrentClass(parseInt(document.querySelector('input[name="classType"]:checked').value));
+            
+            // 既存のアノテーションを読み込み
+            if (data.annotations) {
+                annotator.loadFromYoloFormat(data.annotations);
+            }
+            
+            // アノテーション変更時のコールバック
+            annotator.onAnnotationsChanged = function() {
+                updateAnnotationCounts();
+                hasUnsavedChanges = true;
+            };
+            
+            updateAnnotationCounts();
+            hasUnsavedChanges = false;
+            hideLoading();
+        };
+        
+        img.onerror = function() {
+            hideLoading();
+            showErrorMessage('画像の読み込みに失敗しました');
+        };
+        
+        img.src = data.image_url;
+        
+    } catch (error) {
+        hideLoading();
+        showErrorMessage('画像読み込みエラー: ' + error.message);
+    }
+}
+
+// アノテーション数更新
+function updateAnnotationCounts() {
+    if (!annotator) return;
+    
+    let maleCount = 0;
+    let femaleCount = 0;
+    let madreporiteCount = 0;
+    
+    annotator.annotations.forEach(ann => {
+        if (ann.class === 0) maleCount++;
+        else if (ann.class === 1) femaleCount++;
+        else if (ann.class === 2) madreporiteCount++;
+    });
+    
+    document.getElementById('maleCount').textContent = maleCount;
+    document.getElementById('femaleCount').textContent = femaleCount;
+    document.getElementById('madreporiteCount').textContent = madreporiteCount;
+    document.getElementById('totalAnnotations').textContent = maleCount + femaleCount + madreporiteCount;
+}
+
+// 現在の画像を保存
+async function saveCurrentImage() {
+    if (!annotator || currentImageIndex === -1) return;
+    
+    const currentImage = imageList[currentImageIndex];
+    const yoloData = annotator.exportToYoloFormat();
+    
+    try {
+        showLoading('保存中...');
+        
+        const response = await fetch(`/annotation/editor/save/${currentImage.id}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                annotations: yoloData,
+                annotation_count: annotator.annotations.length
+            })
+        });
+        
+        const data = await response.json();
+        hideLoading();
+        
+        if (data.success) {
+            showSuccessMessage('保存しました');
+            hasUnsavedChanges = false;
+            
+            // リストの情報を更新
+            imageList[currentImageIndex].annotated = data.annotation_count > 0;
+            imageList[currentImageIndex].annotation_count = data.annotation_count;
+            updateImageListUI();
+        } else {
+            showErrorMessage(data.error || '保存に失敗しました');
+        }
+    } catch (error) {
+        hideLoading();
+        showErrorMessage('保存エラー: ' + error.message);
+    }
+}
+
+// すべての画像を保存（未実装の場合は現在の画像のみ）
+async function saveAllImages() {
+    await saveCurrentImage();
+}
+
+// 画像ナビゲーション
+function navigateImage(direction) {
+    const newIndex = currentImageIndex + direction;
+    if (newIndex >= 0 && newIndex < imageList.length) {
+        selectImage(newIndex);
+    }
+}
+
+// 自動検出処理
+async function handleAutoDetect(e) {
+    if (!e.target.checked || !annotator) return;
+    
+    // TODO: YOLOモデルによる自動検出を実装
+    showErrorMessage('自動検出機能は現在開発中です');
+    e.target.checked = false;
+}
+
+// 進捗更新
+function updateProgress() {
+    const annotatedCount = imageList.filter(img => img.annotated).length;
+    const totalCount = imageList.length;
+    const rate = totalCount > 0 ? Math.round((annotatedCount / totalCount) * 100) : 0;
+    
+    document.getElementById('completedCount').textContent = annotatedCount;
+    document.getElementById('totalCount').textContent = totalCount;
+    document.getElementById('completionRate').textContent = rate + '%';
+    document.getElementById('progressBar').style.width = rate + '%';
+}
+
+</script>
+{% endblock %}

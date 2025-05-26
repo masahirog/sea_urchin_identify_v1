@@ -1,0 +1,651 @@
+{% extends "base.html" %}
+
+{% block title %}画像管理 - ウニ生殖乳頭分析{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* アップロードエリア */
+    .upload-zone {
+        border: 3px dashed #dee2e6;
+        border-radius: 15px;
+        padding: 60px;
+        text-align: center;
+        transition: all 0.3s ease;
+        background: #f8f9fa;
+        cursor: pointer;
+    }
+    
+    .upload-zone:hover {
+        border-color: #007bff;
+        background: #e7f3ff;
+    }
+    
+    .upload-zone.dragover {
+        border-color: #28a745;
+        background: #d4edda;
+        transform: scale(1.02);
+    }
+    
+    /* フィルターボタン */
+    .filter-buttons {
+        margin-bottom: 20px;
+    }
+    
+    /* 画像グリッド */
+    .image-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 20px;
+        margin-top: 20px;
+    }
+    
+    .image-card {
+        border: 1px solid #dee2e6;
+        border-radius: 10px;
+        background: white;
+        transition: all 0.3s ease;
+        overflow: hidden;
+        position: relative;
+    }
+    
+    .image-card:hover {
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        transform: translateY(-2px);
+    }
+    
+    .image-card.selected {
+        border-color: #007bff;
+        box-shadow: 0 0 0 3px rgba(0,123,255,0.25);
+    }
+    
+    .image-preview {
+        width: 100%;
+        height: 200px;
+        object-fit: contain;
+        background: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+        cursor: pointer;
+    }
+    
+    .image-info {
+        padding: 15px;
+    }
+    
+    .image-checkbox {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+    }
+    
+    .annotation-status {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: bold;
+    }
+    
+    .annotation-status.annotated {
+        background: #28a745;
+        color: white;
+    }
+    
+    .annotation-status.not-annotated {
+        background: #6c757d;
+        color: white;
+    }
+    
+    /* 統計カード */
+    .stats-card {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+    
+    .stats-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    }
+    
+    .stats-value {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #007bff;
+    }
+    
+    .stats-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+    
+    /* アクションバー */
+    .action-bar {
+        position: sticky;
+        top: 0;
+        background: white;
+        padding: 15px;
+        border-bottom: 1px solid #dee2e6;
+        z-index: 100;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    
+    /* ページネーション */
+    .pagination {
+        justify-content: center;
+        margin-top: 30px;
+    }
+    
+    /* 画像モーダル */
+    .image-modal {
+        display: none;
+        position: fixed;
+        z-index: 1100;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        cursor: zoom-out;
+    }
+    
+    .image-modal-content {
+        margin: auto;
+        display: block;
+        max-width: 90%;
+        max-height: 90%;
+        margin-top: 2%;
+    }
+    
+    .image-modal-close {
+        position: absolute;
+        top: 15px;
+        right: 35px;
+        color: #f1f1f1;
+        font-size: 40px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    
+    .image-modal-close:hover {
+        color: #bbb;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2 class="text-center mb-4">
+        <i class="fas fa-images me-2"></i>画像管理
+    </h2>
+    
+    <!-- 統計情報 -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="stats-value" id="totalImages">0</div>
+                <div class="stats-label">総画像数</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="stats-value text-success" id="annotatedImages">0</div>
+                <div class="stats-label">アノテーション済み</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="stats-value text-warning" id="notAnnotatedImages">0</div>
+                <div class="stats-label">未アノテーション</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <div class="stats-value text-info" id="totalAnnotations">0</div>
+                <div class="stats-label">総アノテーション数</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- アップロードエリア -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="upload-zone" id="uploadZone">
+                <i class="fas fa-cloud-upload-alt fa-4x text-muted mb-3"></i>
+                <h3>画像をドラッグ＆ドロップ</h3>
+                <p class="text-muted">または</p>
+                <input type="file" id="fileInput" class="d-none" accept="image/*" multiple>
+                <button class="btn btn-primary btn-lg" onclick="document.getElementById('fileInput').click()">
+                    <i class="fas fa-folder-open me-2"></i>ファイルを選択
+                </button>
+                <p class="text-muted mt-3">
+                    <small>対応形式: JPG, PNG, JPEG | 複数選択可能</small>
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- フィルター -->
+    <div class="filter-buttons">
+        <div class="btn-group" role="group">
+            <input type="radio" class="btn-check" name="filter" id="filterAll" value="all" checked>
+            <label class="btn btn-outline-primary" for="filterAll">
+                <i class="fas fa-images me-1"></i> すべて
+            </label>
+            
+            <input type="radio" class="btn-check" name="filter" id="filterAnnotated" value="annotated">
+            <label class="btn btn-outline-success" for="filterAnnotated">
+                <i class="fas fa-check-circle me-1"></i> アノテーション済み
+            </label>
+            
+            <input type="radio" class="btn-check" name="filter" id="filterNotAnnotated" value="not_annotated">
+            <label class="btn btn-outline-warning" for="filterNotAnnotated">
+                <i class="fas fa-exclamation-circle me-1"></i> 未アノテーション
+            </label>
+        </div>
+    </div>
+    
+    <!-- アクションバー -->
+    <div class="action-bar" id="actionBar" style="display: none;">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <span id="selectedCount">0</span>枚選択中
+            </div>
+            <div>
+                <button class="btn btn-primary me-2" id="annotateSelectedBtn">
+                    <i class="fas fa-edit me-1"></i> アノテーション編集
+                </button>
+                <button class="btn btn-danger" id="deleteSelectedBtn">
+                    <i class="fas fa-trash me-1"></i> 削除
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 画像グリッド -->
+    <div class="image-grid" id="imageGrid">
+        <!-- 画像カードがここに表示される -->
+    </div>
+    
+    <!-- ページネーション -->
+    <nav>
+        <ul class="pagination" id="pagination">
+        </ul>
+    </nav>
+    
+    <!-- 空状態 -->
+    <div id="emptyState" class="text-center py-5" style="display: none;">
+        <i class="fas fa-folder-open fa-5x text-muted mb-3"></i>
+        <h4 class="text-muted">画像がありません</h4>
+        <p class="text-muted">上のエリアから画像をアップロードしてください</p>
+    </div>
+</div>
+
+<!-- 画像プレビューモーダル -->
+<div class="image-modal" id="imageModal">
+    <span class="image-modal-close">&times;</span>
+    <img class="image-modal-content" id="modalImage">
+</div>
+
+<!-- 削除確認モーダル -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">削除確認</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="deleteConfirmMessage">選択した画像を削除しますか？</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">削除</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script type="module">
+import { showLoading, hideLoading, showSuccessMessage, showErrorMessage } from '/static/js/utilities.js';
+
+// グローバル変数
+let currentPage = 1;
+let currentFilter = 'all';
+let selectedImages = new Set();
+
+// 初期化
+document.addEventListener('DOMContentLoaded', function() {
+    setupEventListeners();
+    loadImages();
+});
+
+// イベントリスナーのセットアップ
+function setupEventListeners() {
+    // ファイル入力
+    document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+    
+    // ドラッグ&ドロップ
+    const uploadZone = document.getElementById('uploadZone');
+    uploadZone.addEventListener('dragover', handleDragOver);
+    uploadZone.addEventListener('dragleave', handleDragLeave);
+    uploadZone.addEventListener('drop', handleDrop);
+    
+    // フィルター
+    document.querySelectorAll('input[name="filter"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            currentFilter = this.value;
+            currentPage = 1;
+            loadImages();
+        });
+    });
+    
+    // アクションボタン
+    document.getElementById('annotateSelectedBtn').addEventListener('click', annotateSelected);
+    document.getElementById('deleteSelectedBtn').addEventListener('click', deleteSelected);
+    
+    // モーダル
+    document.querySelector('.image-modal-close').addEventListener('click', function() {
+        document.getElementById('imageModal').style.display = 'none';
+    });
+}
+
+// ファイル処理
+async function handleFileSelect(e) {
+    const files = Array.from(e.target.files);
+    await uploadFiles(files);
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('dragover');
+}
+
+function handleDragLeave(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('dragover');
+}
+
+async function handleDrop(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('dragover');
+    
+    const files = Array.from(e.dataTransfer.files).filter(file => 
+        file.type.startsWith('image/')
+    );
+    
+    if (files.length > 0) {
+        await uploadFiles(files);
+    }
+}
+
+// アップロード処理
+async function uploadFiles(files) {
+    if (files.length === 0) return;
+    
+    const formData = new FormData();
+    files.forEach(file => formData.append('images', file));
+    
+    try {
+        showLoading('画像をアップロード中...');
+        
+        const response = await fetch('/annotation/images/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        hideLoading();
+        
+        if (data.success) {
+            showSuccessMessage(data.message);
+            loadImages();
+        } else {
+            showErrorMessage(data.error || 'アップロードに失敗しました');
+        }
+    } catch (error) {
+        hideLoading();
+        showErrorMessage('アップロードエラー: ' + error.message);
+    }
+}
+
+// 画像一覧の読み込み
+async function loadImages() {
+    try {
+        const response = await fetch(`/annotation/images/list?page=${currentPage}&status=${currentFilter}`);
+        const data = await response.json();
+        
+        updateUI(data);
+    } catch (error) {
+        showErrorMessage('画像の読み込みエラー: ' + error.message);
+    }
+}
+
+// UI更新
+function updateUI(data) {
+    // 統計情報
+    const stats = data.statistics || {};
+    document.getElementById('totalImages').textContent = stats.total_images || 0;
+    document.getElementById('annotatedImages').textContent = stats.annotated_images || 0;
+    document.getElementById('notAnnotatedImages').textContent = (stats.total_images || 0) - (stats.annotated_images || 0);
+    document.getElementById('totalAnnotations').textContent = stats.total_annotations || 0;
+    
+    // 画像グリッド
+    const grid = document.getElementById('imageGrid');
+    const emptyState = document.getElementById('emptyState');
+    
+    if (data.images.length === 0) {
+        grid.style.display = 'none';
+        emptyState.style.display = 'block';
+        return;
+    }
+    
+    grid.style.display = 'grid';
+    emptyState.style.display = 'none';
+    grid.innerHTML = '';
+    
+    data.images.forEach(image => {
+        const card = createImageCard(image);
+        grid.appendChild(card);
+    });
+    
+    // ページネーション
+    updatePagination(data.pages, data.page);
+}
+
+// 画像カードの作成
+function createImageCard(image) {
+    const card = document.createElement('div');
+    card.className = 'image-card';
+    card.dataset.imageId = image.id;
+    
+    const isSelected = selectedImages.has(image.id);
+    if (isSelected) {
+        card.classList.add('selected');
+    }
+    
+    card.innerHTML = `
+        <input type="checkbox" class="image-checkbox" ${isSelected ? 'checked' : ''}>
+        <div class="annotation-status ${image.annotated ? 'annotated' : 'not-annotated'}">
+            ${image.annotated ? `${image.annotation_count}個` : '未'}
+        </div>
+        <img src="/annotation/images/image/${image.id}" class="image-preview" alt="${image.original_name}">
+        <div class="image-info">
+            <h6 class="text-truncate mb-2">${image.original_name}</h6>
+            <div class="d-flex justify-content-between">
+                <button class="btn btn-sm btn-primary" onclick="editAnnotation('${image.id}')">
+                    <i class="fas fa-edit"></i> 編集
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="showPreview('${image.id}')">
+                    <i class="fas fa-eye"></i> 表示
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // チェックボックスイベント
+    const checkbox = card.querySelector('.image-checkbox');
+    checkbox.addEventListener('change', function(e) {
+        e.stopPropagation();
+        toggleSelection(image.id);
+    });
+    
+    // カードクリック（プレビュー）
+    card.querySelector('.image-preview').addEventListener('click', function() {
+        showPreview(image.id);
+    });
+    
+    return card;
+}
+
+// 選択の切り替え
+function toggleSelection(imageId) {
+    if (selectedImages.has(imageId)) {
+        selectedImages.delete(imageId);
+    } else {
+        selectedImages.add(imageId);
+    }
+    
+    updateSelectionUI();
+}
+
+// 選択UI更新
+function updateSelectionUI() {
+    const actionBar = document.getElementById('actionBar');
+    const selectedCount = document.getElementById('selectedCount');
+    
+    if (selectedImages.size > 0) {
+        actionBar.style.display = 'block';
+        selectedCount.textContent = selectedImages.size;
+    } else {
+        actionBar.style.display = 'none';
+    }
+    
+    // カードの選択状態を更新
+    document.querySelectorAll('.image-card').forEach(card => {
+        const imageId = card.dataset.imageId;
+        const checkbox = card.querySelector('.image-checkbox');
+        
+        if (selectedImages.has(imageId)) {
+            card.classList.add('selected');
+            checkbox.checked = true;
+        } else {
+            card.classList.remove('selected');
+            checkbox.checked = false;
+        }
+    });
+}
+
+// アノテーション編集へ遷移
+window.editAnnotation = function(imageId) {
+    window.location.href = `/annotation/editor/?image_id=${imageId}`;
+};
+
+// 選択画像のアノテーション編集
+function annotateSelected() {
+    if (selectedImages.size === 0) return;
+    
+    // 最初の画像でエディタを開く
+    const firstImageId = Array.from(selectedImages)[0];
+    window.location.href = `/annotation/editor/?image_id=${firstImageId}`;
+}
+
+// 選択画像の削除
+function deleteSelected() {
+    if (selectedImages.size === 0) return;
+    
+    const modal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+    document.getElementById('deleteConfirmMessage').textContent = 
+        `選択した${selectedImages.size}枚の画像を削除しますか？`;
+    
+    document.getElementById('confirmDeleteBtn').onclick = async function() {
+        modal.hide();
+        
+        try {
+            showLoading('削除中...');
+            
+            const response = await fetch('/annotation/images/delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    image_ids: Array.from(selectedImages)
+                })
+            });
+            
+            const data = await response.json();
+            hideLoading();
+            
+            if (data.success) {
+                showSuccessMessage(`${data.deleted_count}枚の画像を削除しました`);
+                selectedImages.clear();
+                updateSelectionUI();
+                loadImages();
+            } else {
+                showErrorMessage('削除に失敗しました');
+            }
+        } catch (error) {
+            hideLoading();
+            showErrorMessage('削除エラー: ' + error.message);
+        }
+    };
+    
+    modal.show();
+}
+
+// 画像プレビュー
+window.showPreview = function(imageId) {
+    const modal = document.getElementById('imageModal');
+    const modalImg = document.getElementById('modalImage');
+    
+    modal.style.display = 'block';
+    modalImg.src = `/annotation/images/image/${imageId}`;
+};
+
+// ページネーション更新
+function updatePagination(totalPages, currentPageNum) {
+    const pagination = document.getElementById('pagination');
+    pagination.innerHTML = '';
+    
+    if (totalPages <= 1) return;
+    
+    // 前へボタン
+    const prevLi = document.createElement('li');
+    prevLi.className = `page-item ${currentPageNum === 1 ? 'disabled' : ''}`;
+    prevLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(${currentPageNum - 1})">前へ</a>`;
+    pagination.appendChild(prevLi);
+    
+    // ページ番号
+    for (let i = 1; i <= totalPages; i++) {
+        const li = document.createElement('li');
+        li.className = `page-item ${i === currentPageNum ? 'active' : ''}`;
+        li.innerHTML = `<a class="page-link" href="#" onclick="changePage(${i})">${i}</a>`;
+        pagination.appendChild(li);
+    }
+    
+    // 次へボタン
+    const nextLi = document.createElement('li');
+    nextLi.className = `page-item ${currentPageNum === totalPages ? 'disabled' : ''}`;
+    nextLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(${currentPageNum + 1})">次へ</a>`;
+    pagination.appendChild(nextLi);
+}
+
+// ページ変更
+window.changePage = function(page) {
+    currentPage = page;
+    loadImages();
+};
+
+</script>
+{% endblock %}

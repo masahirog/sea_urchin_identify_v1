@@ -7,8 +7,9 @@ import queue
 from utils.file_cleanup import cleanup_temp_files, schedule_cleanup
 from config import * 
 from routes.yolo import yolo_bp
-from routes.annotation import annotation_bp
 from routes.training import training_bp
+from routes.annotation_images import annotation_images_bp
+from routes.annotation_editor import annotation_editor_bp
 
 
 
@@ -61,9 +62,10 @@ from routes.learning import learning_bp
 
 app.register_blueprint(main_bp)
 app.register_blueprint(learning_bp, url_prefix='/learning')
-app.register_blueprint(yolo_bp)  # YOLOルートの登録
-app.register_blueprint(annotation_bp)
+app.register_blueprint(yolo_bp)
 app.register_blueprint(training_bp)  
+app.register_blueprint(annotation_images_bp)
+app.register_blueprint(annotation_editor_bp)
 
 
 
