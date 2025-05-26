@@ -84,10 +84,3 @@ def get_relative_path(absolute_path, base_dir):
         return os.path.relpath(absolute_path, base_dir)
     except ValueError:
         return absolute_path
-
-if __name__ == "__main__":
-    print("ディレクトリ構造の統一を開始...")
-    ensure_directories()
-    migrate_legacy_directories()
-    cleanup_legacy_paths()
-    print("完了。関連ファイルの修正を行ってください。")

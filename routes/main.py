@@ -6,7 +6,6 @@ routes/main.py - 統合メインルート
 from flask import Blueprint, render_template, jsonify, request, url_for, send_from_directory, current_app
 from werkzeug.utils import secure_filename
 import os
-import base64
 import uuid
 import traceback
 import cv2
@@ -14,18 +13,11 @@ from datetime import datetime
 
 main_bp = Blueprint('main', __name__)
 
-# ================================
-# ページルート
-# ================================
-
 @main_bp.route('/')
 def index():
     """メインページ（雌雄判定）を表示"""
     return render_template('index.html')
 
-# ================================
-# 雌雄判定機能 (メイン機能)
-# ================================
 
 @main_bp.route('/classify', methods=['POST'])
 def classify_image():
