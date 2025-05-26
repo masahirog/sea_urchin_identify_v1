@@ -123,31 +123,38 @@ export class YoloAnnotator {
             const dy = y - this.moveStartY;
             
             const ann = this.annotations[this.selectedAnnotation];
-            ann.x1 = this.originalBox.x1 + dx;
-            ann.y1 = this.originalBox.y1 + dy;
-            ann.x2 = this.originalBox.x2 + dx;
-            ann.y2 = this.originalBox.y2 + dy;
-            
-            // キャンバスの境界内に制限
             const width = ann.x2 - ann.x1;
             const height = ann.y2 - ann.y1;
             
-            if (ann.x1 < 0) {
-                ann.x1 = 0;
-                ann.x2 = width;
+            // 新しい位置を計算（originalBoxから計算するのではなく、現在位置から計算）
+            let newX1 = this.originalBox.x1 + dx;
+            let newY1 = this.originalBox.y1 + dy;
+            let newX2 = newX1 + width;
+            let newY2 = newY1 + height;
+            
+            // キャンバスの境界内に制限
+            if (newX1 < 0) {
+                newX1 = 0;
+                newX2 = width;
             }
-            if (ann.y1 < 0) {
-                ann.y1 = 0;
-                ann.y2 = height;
+            if (newY1 < 0) {
+                newY1 = 0;
+                newY2 = height;
             }
-            if (ann.x2 > this.canvas.width) {
-                ann.x2 = this.canvas.width;
-                ann.x1 = this.canvas.width - width;
+            if (newX2 > this.canvas.width) {
+                newX2 = this.canvas.width;
+                newX1 = this.canvas.width - width;
             }
-            if (ann.y2 > this.canvas.height) {
-                ann.y2 = this.canvas.height;
-                ann.y1 = this.canvas.height - height;
+            if (newY2 > this.canvas.height) {
+                newY2 = this.canvas.height;
+                newY1 = this.canvas.height - height;
             }
+            
+            // 位置を更新
+            ann.x1 = newX1;
+            ann.y1 = newY1;
+            ann.x2 = newX2;
+            ann.y2 = newY2;
             
             this.redraw();
         } else if (this.mode === 'edit') {
@@ -180,15 +187,20 @@ export class YoloAnnotator {
             // 移動完了
             this.isMoving = false;
             if (this.originalBox) {
-                // 実際に移動があった場合のみ履歴に保存
+                // 実際に移動があった場合のみ変更通知
                 const ann = this.annotations[this.selectedAnnotation];
-                if (ann.x1 !== this.originalBox.x1 || ann.y1 !== this.originalBox.y1) {
-                    if (this.onAnnotationsChanged) {
-                        this.onAnnotationsChanged();
-                    }
+                const moved = ann.x1 !== this.originalBox.x1 || 
+                             ann.y1 !== this.originalBox.y1 ||
+                             ann.x2 !== this.originalBox.x2 ||
+                             ann.y2 !== this.originalBox.y2;
+                
+                if (moved && this.onAnnotationsChanged) {
+                    this.onAnnotationsChanged();
                 }
             }
             this.originalBox = null;
+            this.moveStartX = 0;
+            this.moveStartY = 0;
         }
     }
     
