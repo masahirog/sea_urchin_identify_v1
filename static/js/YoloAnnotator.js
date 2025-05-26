@@ -40,27 +40,86 @@ export class YoloAnnotator {
         // コールバック
         this.onAnnotationsChanged = null;
         
+        // クリーンアップ用のフラグ
+        this.isDestroyed = false;
+        
         // イベントリスナーの設定
         this.setupEventListeners();
     }
     
     setupEventListeners() {
+        // バインドした関数を保存して後で削除できるようにする
+        this._handleMouseDown = this.handleMouseDown.bind(this);
+        this._handleMouseMove = this.handleMouseMove.bind(this);
+        this._handleMouseUp = this.handleMouseUp.bind(this);
+        this._handleMouseOut = this.handleMouseOut.bind(this);
+        this._handleTouchStart = this.handleTouchStart.bind(this);
+        this._handleTouchMove = this.handleTouchMove.bind(this);
+        this._handleTouchEnd = this.handleTouchEnd.bind(this);
+        this._handleKeyDown = this.handleKeyDown.bind(this);
+        
         // マウスイベント
-        this.canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
-        this.canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
-        this.canvas.addEventListener('mouseup', this.handleMouseUp.bind(this));
-        this.canvas.addEventListener('mouseout', this.handleMouseOut.bind(this));
+        this.canvas.addEventListener('mousedown', this._handleMouseDown);
+        this.canvas.addEventListener('mousemove', this._handleMouseMove);
+        this.canvas.addEventListener('mouseup', this._handleMouseUp);
+        this.canvas.addEventListener('mouseout', this._handleMouseOut);
         
         // タッチイベント
-        this.canvas.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
-        this.canvas.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
-        this.canvas.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: false });
+        this.canvas.addEventListener('touchstart', this._handleTouchStart, { passive: false });
+        this.canvas.addEventListener('touchmove', this._handleTouchMove, { passive: false });
+        this.canvas.addEventListener('touchend', this._handleTouchEnd, { passive: false });
         
         // キーボードイベント
-        document.addEventListener('keydown', this.handleKeyDown.bind(this));
+        document.addEventListener('keydown', this._handleKeyDown);
+    }
+    
+    destroy() {
+        this.isDestroyed = true;
+        
+        // 描画状態の完全リセット
+        this.isDrawing = false;
+        this.isMoving = false;
+        this.startX = 0;
+        this.startY = 0;
+        this.currentX = 0;
+        this.currentY = 0;
+        this.moveStartX = 0;
+        this.moveStartY = 0;
+        this.originalBox = null;
+        this.selectedAnnotation = -1;
+        
+        // カーソルをデフォルトに戻す
+        this.canvas.style.cursor = 'default';
+        
+        // イベントリスナーの削除
+        if (this._handleMouseDown) {
+            this.canvas.removeEventListener('mousedown', this._handleMouseDown);
+            this.canvas.removeEventListener('mousemove', this._handleMouseMove);
+            this.canvas.removeEventListener('mouseup', this._handleMouseUp);
+            this.canvas.removeEventListener('mouseout', this._handleMouseOut);
+            
+            this.canvas.removeEventListener('touchstart', this._handleTouchStart);
+            this.canvas.removeEventListener('touchmove', this._handleTouchMove);
+            this.canvas.removeEventListener('touchend', this._handleTouchEnd);
+            
+            document.removeEventListener('keydown', this._handleKeyDown);
+        }
+        
+        // コールバックもクリア
+        this.onAnnotationsChanged = null;
+        
+        // キャンバスをクリア
+        if (this.ctx) {
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        }
+        
+        // 配列をクリア
+        this.annotations = [];
     }
     
     handleMouseDown(e) {
+        if (this.isDestroyed) return;
+        
         e.preventDefault();
         const rect = this.canvas.getBoundingClientRect();
         const x = (e.clientX - rect.left) * (this.canvas.width / rect.width);
@@ -113,6 +172,8 @@ export class YoloAnnotator {
     }
     
     handleMouseMove(e) {
+        if (this.isDestroyed) return;
+        
         e.preventDefault();
         const rect = this.canvas.getBoundingClientRect();
         const x = (e.clientX - rect.left) * (this.canvas.width / rect.width);
@@ -123,16 +184,24 @@ export class YoloAnnotator {
             this.currentY = y;
             this.redraw();
             this.drawTempBox();
-        } else if (this.mode === 'edit' && this.isMoving && this.selectedAnnotation !== -1) {
-            // ボックスを移動
+        } else if (this.mode === 'edit' && this.isMoving && this.selectedAnnotation !== -1 && 
+                   this.originalBox && this.selectedAnnotation < this.annotations.length) {
+            // ボックスを移動（配列範囲チェック追加）
             const dx = x - this.moveStartX;
             const dy = y - this.moveStartY;
             
             const ann = this.annotations[this.selectedAnnotation];
-            const width = ann.x2 - ann.x1;
-            const height = ann.y2 - ann.y1;
+            if (!ann) {
+                // アノテーションが存在しない場合は移動を中止
+                this.isMoving = false;
+                this.originalBox = null;
+                return;
+            }
             
-            // 新しい位置を計算（originalBoxから計算するのではなく、現在位置から計算）
+            const width = this.originalBox.x2 - this.originalBox.x1;
+            const height = this.originalBox.y2 - this.originalBox.y1;
+            
+            // 新しい位置を計算
             let newX1 = this.originalBox.x1 + dx;
             let newY1 = this.originalBox.y1 + dy;
             let newX2 = newX1 + width;
@@ -163,7 +232,7 @@ export class YoloAnnotator {
             ann.y2 = newY2;
             
             this.redraw();
-        } else if (this.mode === 'edit') {
+        } else if (this.mode === 'edit' && !this.isMoving) {
             // カーソルの変更（ホバー時）
             const index = this.findAnnotationAt(x, y);
             this.canvas.style.cursor = index !== -1 ? 'move' : 'default';
@@ -171,6 +240,8 @@ export class YoloAnnotator {
     }
     
     handleMouseUp(e) {
+        if (this.isDestroyed) return;
+        
         e.preventDefault();
         
         if (this.mode === 'create' && this.isDrawing) {
@@ -192,7 +263,7 @@ export class YoloAnnotator {
         } else if (this.mode === 'edit' && this.isMoving) {
             // 移動完了
             this.isMoving = false;
-            if (this.originalBox) {
+            if (this.originalBox && this.selectedAnnotation !== -1 && this.selectedAnnotation < this.annotations.length) {
                 // 実際に移動があった場合のみ変更通知
                 const ann = this.annotations[this.selectedAnnotation];
                 const moved = ann.x1 !== this.originalBox.x1 || 
@@ -208,15 +279,29 @@ export class YoloAnnotator {
             this.moveStartX = 0;
             this.moveStartY = 0;
         }
+        
+        // カーソルをデフォルトに戻す
+        if (this.mode === 'edit') {
+            this.canvas.style.cursor = 'default';
+        }
     }
     
     handleMouseOut(e) {
+        if (this.isDestroyed) return;
+        
         if (this.isDrawing) {
             this.handleMouseUp(e);
+        }
+        // 移動中の場合もリセット
+        if (this.isMoving) {
+            this.isMoving = false;
+            this.originalBox = null;
         }
     }
     
     handleTouchStart(e) {
+        if (this.isDestroyed) return;
+        
         e.preventDefault();
         if (e.touches.length === 1) {
             const touch = e.touches[0];
@@ -229,6 +314,8 @@ export class YoloAnnotator {
     }
     
     handleTouchMove(e) {
+        if (this.isDestroyed) return;
+        
         e.preventDefault();
         if (e.touches.length === 1) {
             const touch = e.touches[0];
@@ -241,11 +328,15 @@ export class YoloAnnotator {
     }
     
     handleTouchEnd(e) {
+        if (this.isDestroyed) return;
+        
         e.preventDefault();
         this.handleMouseUp(new MouseEvent('mouseup'));
     }
     
     handleKeyDown(e) {
+        if (this.isDestroyed) return;
+        
         if (e.key === 'Delete' && this.selectedAnnotation !== -1) {
             this.annotations.splice(this.selectedAnnotation, 1);
             this.selectedAnnotation = -1;
@@ -371,6 +462,7 @@ export class YoloAnnotator {
         // ラベル表示の改善
         this.drawLabel(ann, classInfo, isSelected);
     }
+    
     drawLabel(ann, classInfo, isSelected) {
         const label = classInfo.name;
         this.ctx.font = 'bold 16px Arial';  // フォントサイズを大きく
@@ -396,6 +488,7 @@ export class YoloAnnotator {
         this.ctx.fillStyle = isSelected ? 'black' : 'white';
         this.ctx.fillText(label, labelX + padding, labelY + labelHeight - 6);
     }
+    
     // コーナーハンドルの描画（将来的なリサイズ機能用）
     drawCornerHandles(ann) {
         const handleSize = 8;
@@ -431,9 +524,19 @@ export class YoloAnnotator {
         this.ctx.closePath();
     }
     
+    clearAnnotations() {
+        this.annotations = [];
+        this.selectedAnnotation = -1;
+        this.isMoving = false;
+        this.originalBox = null;
+        this.redraw();
+    }
+    
     loadAnnotations(annotations) {
         this.annotations = annotations;
         this.selectedAnnotation = -1;
+        this.isMoving = false;
+        this.originalBox = null;
         this.redraw();
     }
     
@@ -504,10 +607,19 @@ export class YoloAnnotator {
     }
     
     setMode(mode) {
+        if (this.isDestroyed) return;
+        
         if (['create', 'edit', 'delete'].includes(mode)) {
+            // モード変更時に移動状態をリセット
+            if (this.isMoving) {
+                this.isMoving = false;
+                this.originalBox = null;
+                this.moveStartX = 0;
+                this.moveStartY = 0;
+            }
+            
             this.mode = mode;
             this.selectedAnnotation = -1;
-            this.isMoving = false;
             this.redraw();
             
             // カーソルの変更
