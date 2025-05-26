@@ -62,6 +62,7 @@ from routes.learning import learning_bp
 
 app.register_blueprint(main_bp)
 app.register_blueprint(yolo_bp)
+app.register_blueprint(learning_bp)
 app.register_blueprint(training_bp)  
 app.register_blueprint(annotation_images_bp)
 app.register_blueprint(annotation_editor_bp)

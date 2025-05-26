@@ -1,17 +1,6 @@
 """
 routes/main.py - 統合メインルート
 
-統合対象:
-- routes/main_routes.py (メイン機能)
-- routes/image_routes.py (画像処理機能)
-→ 雌雄判定システムの完全版
-
-機能:
-- 雌雄判定 (メイン機能)
-- 画像アップロード・管理
-- 処理状況監視
-- データセット情報
-- システム統計
 """
 
 from flask import Blueprint, render_template, jsonify, request, url_for, send_from_directory, current_app
