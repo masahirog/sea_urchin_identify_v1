@@ -61,7 +61,6 @@ from routes.main import main_bp
 from routes.learning import learning_bp
 
 app.register_blueprint(main_bp)
-app.register_blueprint(learning_bp, url_prefix='/learning')
 app.register_blueprint(yolo_bp)
 app.register_blueprint(training_bp)  
 app.register_blueprint(annotation_images_bp)

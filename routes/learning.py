@@ -20,14 +20,6 @@ from utils.file_handlers import handle_multiple_image_upload
 
 learning_bp = Blueprint('learning', __name__)
 
-# ================================
-# ページルート
-# ================================
-
-@learning_bp.route('/')
-def learning_page():
-    """統合学習システムのメインページ"""
-    return render_template('learning_management.html')
 
 # ================================
 # データ管理API
@@ -1659,7 +1651,6 @@ def learning_dashboard():
                              current_model={'type': 'YOLOv5', 'accuracy': 0, 'is_active': False, 'last_update': '未学習'},
                              recent_trainings=[],
                              recommendations=[{'type': 'info', 'icon': 'info-circle', 'message': 'データの読み込みに失敗しました。'}])
-
 
 def get_dataset_info():
     """データセット情報を取得"""

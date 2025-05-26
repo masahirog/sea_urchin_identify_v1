@@ -45,31 +45,40 @@
                             <span class="d-none d-md-inline">雌雄</span>判定
                         </a>
                     </li>
-                    
-                    <!-- 統合学習システム -->
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'learning.learning_page' %}active{% endif %}" 
-                           href="/learning">
-                            <i class="fas fa-graduation-cap me-1"></i> 
-                            <span class="d-none d-md-inline">AI</span>学習
-                        </a>
-                    </li>
-                    
+                    <!-- アノテーション -->
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle {% if 'annotation' in request.endpoint %}active{% endif %}" 
                            href="#" id="annotationDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-draw-polygon me-1"></i> 画像処理
+                            <i class="fas fa-draw-polygon me-1"></i> アノテーション
                         </a>
                         <ul class="dropdown-menu" aria-labelledby="annotationDropdown">
                             <li><a class="dropdown-item {% if request.endpoint == 'annotation_images.images_management_page' %}active{% endif %}" 
                                    href="{{ url_for('annotation_images.images_management_page') }}">
-                                <i class="fas fa-images me-1"></i> 画像一覧
+                                <i class="fas fa-images me-1"></i> 画像管理
                             </a></li>
                             <li><a class="dropdown-item {% if request.endpoint == 'annotation_editor.editor_page' %}active{% endif %}" 
                                    href="{{ url_for('annotation_editor.editor_page') }}">
-                                <i class="fas fa-edit me-1"></i> アノテーション編集
+                                <i class="fas fa-edit me-1"></i> エディタ
                             </a></li>
                         </ul>
+                    </li>
+                    
+                    <!-- YOLO学習実行（新規追加） -->
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'training.training_page' %}active{% endif %}" 
+                           href="{{ url_for('training.training_page') }}">
+                            <i class="fas fa-rocket me-1"></i> 
+                            <span class="d-none d-md-inline">YOLO</span>学習実行
+                        </a>
+                    </li>
+                    
+                    <!-- 学習ダッシュボード（オプション：必要に応じて追加） -->
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'learning.learning_dashboard' %}active{% endif %}" 
+                           href="{{ url_for('learning.learning_dashboard') }}">
+                            <i class="fas fa-tachometer-alt me-1"></i> 
+                            <span class="d-none d-md-inline">学習</span>ダッシュボード
+                        </a>
                     </li>
                 </ul>
             </div>
