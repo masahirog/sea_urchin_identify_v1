@@ -735,6 +735,15 @@ async function loadImageAndAnnotations(imageId) {
     try {
         showLoading('画像を読み込み中...');
         
+        // 既存のアノテーターがある場合は破棄
+        if (annotator) {
+            // destroyメソッドが存在する場合のみ呼び出す
+            if (typeof annotator.destroy === 'function') {
+                annotator.destroy();
+            }
+            annotator = null;
+        }
+        
         const response = await fetch(`/annotation/editor/load/${imageId}`);
         const data = await response.json();
         
@@ -761,6 +770,8 @@ async function loadImageAndAnnotations(imageId) {
             canvas.style.width = (canvas.width * scale) + 'px';
             canvas.style.height = (canvas.height * scale) + 'px';
             
+            // キャンバスをクリア
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(img, 0, 0);
             
             // アノテーターを初期化

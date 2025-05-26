@@ -90,8 +90,14 @@ export class YoloAnnotator {
                 };
                 this.redraw();
             } else {
-                this.selectedAnnotation = -1;
-                this.redraw();
+                // 何もない場所をクリックした場合は選択解除のみ
+                if (this.selectedAnnotation !== -1) {
+                    this.selectedAnnotation = -1;
+                    this.redraw();
+                }
+                // 重要：isMovingとoriginalBoxをリセット
+                this.isMoving = false;
+                this.originalBox = null;
             }
         } else if (this.mode === 'delete') {
             const index = this.findAnnotationAt(x, y);
