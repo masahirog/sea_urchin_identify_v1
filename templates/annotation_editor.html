@@ -4,142 +4,96 @@
 
 {% block extra_css %}
 <style>
-    /* レイアウト修正 */
-    .editor-container {
-        display: flex;
-        gap: 15px;
-        height: calc(100vh - 220px);
-        margin-bottom: 80px;
-    }
-    
-    /* 左サイドバー：画像リスト（さらにコンパクト化） */
-    .image-sidebar {
-        width: 180px;
-        background: white;
-        border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    /* メインコンテナ */
+    .editor-main-container {
         display: flex;
         flex-direction: column;
+        height: 90vh;
+        gap: 0;
+        padding: 0;
     }
     
-    .sidebar-header {
-        padding: 12px;
-        border-bottom: 1px solid #dee2e6;
-        font-weight: bold;
-        font-size: 0.9rem;
-    }
-    
-    .image-list {
-        flex: 1;
-        overflow-y: auto;
-        padding: 8px;
-    }
-    
-    .image-list-item {
+    /* 上部コンテンツエリア */
+    .top-content {
         display: flex;
-        align-items: center;
-        padding: 6px;
-        margin-bottom: 4px;
-        border-radius: 6px;
-        cursor: pointer;
-        transition: all 0.2s;
-        border: 2px solid transparent;
-    }
-    
-    .image-list-item:hover {
-        background: #f8f9fa;
-    }
-    
-    .image-list-item.active {
-        background: #e7f3ff;
-        border-color: #007bff;
-    }
-    
-    .image-thumbnail {
-        width: 60px;
-        height: 60px;
-        object-fit: cover;
-        border-radius: 4px;
-        margin-right: 8px;
-    }
-    
-    .image-list-info {
         flex: 1;
-        min-width: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        min-height: 0;
     }
     
-    .annotation-count-badge {
-        background: #28a745;
-        color: white;
-        padding: 3px 10px;
-        border-radius: 12px;
-        font-size: 0.75rem;
-        font-weight: bold;
-    }
-    
-    .not-annotated-text {
-        font-size: 0.7rem;
-        color: #6c757d;
-    }
-    
-    /* 中央：キャンバスエリア（最大化） */
+    /* キャンバスエリア（最大化） */
     .canvas-area {
         flex: 1;
-        background: white;
-        border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         display: flex;
         flex-direction: column;
-    }
-    
-    .canvas-header {
-        padding: 12px 20px;
-        border-bottom: 1px solid #dee2e6;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    
-    .canvas-title {
-        font-weight: bold;
-        font-size: 1rem;
+        position: relative;
+        overflow: hidden;
     }
     
     .canvas-container {
         flex: 1;
-        padding: 15px;
-        overflow: auto;
         display: flex;
         justify-content: center;
         align-items: center;
         background: #f8f9fa;
+        position: relative;
+        overflow: hidden;
     }
     
     .annotation-canvas {
         max-width: 100%;
         max-height: 100%;
-        border: 3px solid #dee2e6;
         cursor: crosshair;
         background: white;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
     
-    /* ツールバー */
-    .annotation-toolbar {
-        display: flex;
-        gap: 10px;
-        padding: 12px 20px;
+    /* 右サイドバー */
+    .control-sidebar {
+        width: 280px;
         background: white;
+        box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+    
+    .sidebar-header {
+        padding: 15px 20px;
         border-bottom: 1px solid #dee2e6;
+        font-weight: bold;
+        display: flex;
+        justify-content: space-between;
         align-items: center;
     }
     
+    .sidebar-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        padding-bottom: 0;
+    }
+    
+    /* ツールボタン */
+    .tool-section {
+        margin-bottom: 25px;
+    }
+    
+    .tool-section h6 {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-bottom: 12px;
+        font-weight: normal;
+    }
+    
+    .tool-buttons {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 15px;
+    }
+    
     .tool-btn {
-        width: 42px;
-        height: 42px;
+        flex: 1;
+        height: 50px;
         border: 2px solid #dee2e6;
         background: white;
         border-radius: 8px;
@@ -148,11 +102,11 @@
         justify-content: center;
         cursor: pointer;
         transition: all 0.2s;
-        font-size: 1rem;
+        font-size: 1.2rem;
     }
 
     .tool-btn:hover {
-        background: #e9ecef;
+        background: #f8f9fa;
         transform: translateY(-2px);
         border-color: #adb5bd;
     }
@@ -164,239 +118,399 @@
         box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
     }
     
-    /* 右サイドバー：コントロール（最小限に） */
-    .control-sidebar {
-        width: 240px;
-        background: white;
-        border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        padding: 20px;
+    /* クラス選択 */
+    .class-buttons {
         display: flex;
         flex-direction: column;
+        gap: 8px;
     }
     
-    .control-section {
-        margin-bottom: 20px;
+    .class-btn {
+        padding: 10px 15px;
+        border: 2px solid #dee2e6;
+        background: white;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.875rem;
     }
     
-    .control-section h6 {
-        font-weight: bold;
-        margin-bottom: 10px;
-        color: #495057;
-        font-size: 0.9rem;
+    .class-btn:hover {
+        background: #f8f9fa;
     }
     
+    .class-btn.active {
+        background: #e7f3ff;
+        border-color: #007bff;
+    }
+    
+    .class-icon {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    
+    .class-icon.male { background: #007bff; }
+    .class-icon.female { background: #dc3545; }
+    .class-icon.madreporite { background: #28a745; }
+    
+    /* アノテーション統計 */
     .annotation-stats {
         background: #f8f9fa;
-        padding: 12px;
+        padding: 15px;
         border-radius: 8px;
     }
     
     .stat-row {
         display: flex;
         justify-content: space-between;
-        margin-bottom: 8px;
-        font-size: 0.85rem;
+        margin-bottom: 10px;
+        font-size: 0.875rem;
     }
     
     .stat-row:last-child {
         margin-bottom: 0;
-        padding-top: 8px;
+        padding-top: 10px;
         border-top: 1px solid #dee2e6;
         font-weight: bold;
     }
     
-    /* プログレスバー（固定位置） */
-    .progress-section {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background: white;
-        padding: 10px 20px;
+    /* 保存ボタンセクション */
+    .save-section {
+        margin-top: 20px;
+        padding-top: 20px;
+        padding-bottom: 20px;
         border-top: 1px solid #dee2e6;
-        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-        z-index: 1000;
     }
     
-    .progress-info {
+    .btn-save-next {
+        background: #5b72ee;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        width: 100%;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
         display: flex;
-        justify-content: space-between;
-        margin-bottom: 6px;
-        font-size: 0.85rem;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+    
+    .btn-save-next:hover {
+        background: #4a5fdb;
+        transform: translateY(-1px);
+    }
+    
+    /* 下部画像リスト */
+    .bottom-panel {
+        background: white;
+        border-top: 1px solid #dee2e6;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        flex-shrink: 0;
+    }
+    
+    /* 画像リストスクローラー */
+    .image-list-container {
+        position: relative;
+        background: white;
+        display: flex;
+        align-items: center;
+        padding: 10px 0;
+    }
+    
+    /* 左側のコントロール */
+    .list-controls {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding: 0 15px;
+        min-width: 150px;
+        border-right: 1px solid #dee2e6;
+        margin-right: 15px;
+    }
+    
+    .list-info {
+        font-size: 0.875rem;
+        color: #495057;
+    }
+    
+    .progress-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+    
+    .progress-text {
+        font-size: 0.75rem;
+        color: #6c757d;
     }
     
     .progress {
+        width: 100px;
+        height: 6px;
+        background: #e9ecef;
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    
+    .progress-bar {
+        height: 100%;
+        background: #28a745;
+        transition: width 0.3s ease;
+    }
+    
+    .nav-buttons {
+        display: flex;
+        gap: 5px;
+    }
+    
+    .nav-btn {
+        padding: 5px 10px;
+        background: #6c757d;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        transition: all 0.2s;
+    }
+    
+    .nav-btn:hover:not(:disabled) {
+        background: #5a6268;
+        transform: translateY(-1px);
+    }
+    
+    .nav-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    /* 画像スクロール部分 */
+    .image-list-scroll {
+        display: flex;
+        gap: 5px;
+        overflow-x: auto;
+        padding: 0 10px;
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch;
+        flex: 1;
+    }
+    
+    .image-list-scroll::-webkit-scrollbar {
         height: 6px;
     }
     
-    /* レスポンシブ */
-    @media (max-width: 1400px) {
-        .image-sidebar {
-            width: 160px;
-        }
-        
-        .image-thumbnail {
-            width: 50px;
-            height: 50px;
-        }
+    .image-list-scroll::-webkit-scrollbar-track {
+        background: #f1f1f1;
     }
     
+    .image-list-scroll::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 3px;
+    }
+    
+    /* 画像サムネイル */
+    .image-thumbnail-card {
+        flex-shrink: 0;
+        width: 120px;
+        height: 80px;
+        border: 3px solid transparent;
+        border-radius: 8px;
+        overflow: hidden;
+        cursor: pointer;
+        transition: all 0.2s;
+        position: relative;
+        background: #f8f9fa;
+    }
+    
+    .image-thumbnail-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .image-thumbnail-card.active {
+        border-color: #007bff;
+        box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+    }
+    
+    .thumbnail-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+    
+    /* アノテーション状態インジケーター */
+    .annotation-indicator {
+        position: absolute;
+        bottom: 5px;
+        right: 5px;
+        background: #28a745;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        font-weight: bold;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    
+    .no-annotation-indicator {
+        position: absolute;
+        bottom: 5px;
+        right: 5px;
+        width: 10px;
+        height: 10px;
+        background: #ffc107;
+        border-radius: 50%;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+    
+    /* レスポンシブ */
     @media (max-width: 1200px) {
         .control-sidebar {
-            width: 220px;
+            width: 240px;
         }
     }
     
     @media (max-width: 992px) {
-        .editor-container {
+        .editor-main-container {
             flex-direction: column;
-            height: auto;
-            margin-bottom: 100px;
         }
         
-        .image-sidebar, .control-sidebar {
+        .control-sidebar {
             width: 100%;
+            max-height: 300px;
         }
         
-        .image-list {
-            max-height: 150px;
-        }
-        
-        .image-list-item {
-            padding: 8px;
-        }
-        
-        .image-thumbnail {
-            width: 40px;
-            height: 40px;
+        .image-thumbnail-card {
+            width: 100px;
+            height: 75px;
         }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid py-2">
-    <!-- ヘッダー -->
-    <div class="d-flex justify-content-between align-items-center mb-2">
-        <h4>
-            <i class="fas fa-edit me-2"></i>アノテーション編集
-        </h4>
-        <div>
-            <button class="btn btn-outline-secondary btn-sm" onclick="window.location.href='/annotation/images/'">
-                <i class="fas fa-arrow-left me-1"></i> 画像管理に戻る
-            </button>
-        </div>
-    </div>
-    
-    <!-- エディタコンテナ -->
-    <div class="editor-container">
-        <!-- 左サイドバー：画像リスト -->
-        <div class="image-sidebar">
-            <div class="sidebar-header">
-                画像一覧
-                <span class="badge bg-secondary float-end" id="imageCount">0</span>
-            </div>
-            <div class="image-list" id="imageList">
-                <!-- 画像リストがここに表示される -->
-            </div>
-        </div>
-        
-        <!-- 中央：キャンバスエリア -->
+<div class="editor-main-container">
+    <!-- 上部コンテンツ -->
+    <div class="top-content">
+        <!-- メインキャンバスエリア -->
         <div class="canvas-area">
-            <div class="canvas-header">
-                <div class="canvas-title" id="currentImageName">画像を選択してください</div>
-                <div>
-                    <button class="btn btn-sm btn-outline-secondary" id="prevImageBtn" disabled>
-                        <i class="fas fa-chevron-left"></i> 前へ
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary" id="nextImageBtn" disabled>
-                        次へ <i class="fas fa-chevron-right"></i>
-                    </button>
-                </div>
-            </div>
-            
-            <!-- ツールバー -->
-            <div class="annotation-toolbar">
-                <button class="tool-btn active" data-tool="draw" title="新しいバウンディングボックスを描画">
-                    <i class="fas fa-pencil-alt"></i>
-                </button>
-                <button class="tool-btn" data-tool="select" title="既存のボックスを選択・移動">
-                    <i class="fas fa-mouse-pointer"></i>
-                </button>
-                <button class="tool-btn" data-tool="delete" title="クリックでボックスを削除">
-                    <i class="fas fa-eraser"></i>
-                </button>
-            </div>
-            
+            <!-- キャンバスコンテナ -->
             <div class="canvas-container">
                 <canvas id="annotationCanvas" class="annotation-canvas"></canvas>
             </div>
         </div>
         
-        <!-- 右サイドバー：コントロール -->
+        <!-- 右サイドバー -->
         <div class="control-sidebar">
-            <!-- クラス選択 -->
-            <div class="control-section">
-                <h6>クラス選択</h6>
-                <div class="btn-group-vertical w-100" role="group">
-                    <input type="radio" class="btn-check" name="classType" id="classMale" value="0" checked>
-                    <label class="btn btn-outline-primary btn-sm" for="classMale">
-                        <i class="fas fa-mars"></i> 雄の生殖乳頭
-                    </label>
-                    
-                    <input type="radio" class="btn-check" name="classType" id="classFemale" value="1">
-                    <label class="btn btn-outline-danger btn-sm" for="classFemale">
-                        <i class="fas fa-venus"></i> 雌の生殖乳頭
-                    </label>
-                    
-                    <input type="radio" class="btn-check" name="classType" id="classMadreporite" value="2">
-                    <label class="btn btn-outline-success btn-sm" for="classMadreporite">
-                        <i class="fas fa-shapes"></i> 多孔板
-                    </label>
-                </div>
+            <div class="sidebar-header">
+                <span id="currentImageName">画像を選択してください</span>
+                <button class="btn-close btn-sm" onclick="window.location.href='/annotation/images/'"></button>
             </div>
             
-            <!-- アノテーション統計 -->
-            <div class="control-section">
-                <h6>アノテーション数</h6>
-                <div class="annotation-stats">
-                    <div class="stat-row">
-                        <span>雄の生殖乳頭</span>
-                        <span class="badge bg-primary" id="maleCount">0</span>
-                    </div>
-                    <div class="stat-row">
-                        <span>雌の生殖乳頭</span>
-                        <span class="badge bg-danger" id="femaleCount">0</span>
-                    </div>
-                    <div class="stat-row">
-                        <span>多孔板</span>
-                        <span class="badge bg-success" id="madreporiteCount">0</span>
-                    </div>
-                    <div class="stat-row">
-                        <span>合計</span>
-                        <span class="badge bg-secondary" id="totalAnnotations">0</span>
+            <div class="sidebar-content">
+                <!-- ツールセクション -->
+                <div class="tool-section">
+                    <div class="tool-buttons">
+                        <button class="tool-btn active" data-tool="draw" title="新規作成">
+                            <i class="fas fa-pencil-alt"></i>
+                        </button>
+                        <button class="tool-btn" data-tool="select" title="移動">
+                            <i class="fas fa-arrows-alt"></i>
+                        </button>
+                        <button class="tool-btn" data-tool="delete" title="削除">
+                            <i class="fas fa-eraser"></i>
+                        </button>
                     </div>
                 </div>
-            </div>
-            
-            <!-- アクションボタン -->
-            <div class="control-section mt-auto">
-                <button class="btn btn-primary w-100" id="saveCurrentBtn">
-                    <i class="fas fa-save"></i> 保存して次へ
-                </button>
+                
+                <!-- クラス選択 -->
+                <div class="tool-section">
+                    <h6>クラス選択</h6>
+                    <div class="class-buttons">
+                        <div class="class-btn active" data-class="0">
+                            <span class="class-icon male"></span>
+                            <span>雄の生殖乳頭</span>
+                        </div>
+                        <div class="class-btn" data-class="1">
+                            <span class="class-icon female"></span>
+                            <span>雌の生殖乳頭</span>
+                        </div>
+                        <div class="class-btn" data-class="2">
+                            <span class="class-icon madreporite"></span>
+                            <span>多孔板</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- アノテーション数 -->
+                <div class="tool-section">
+                    <h6>アノテーション数</h6>
+                    <div class="annotation-stats">
+                        <div class="stat-row">
+                            <span>雄の生殖乳頭</span>
+                            <span class="badge bg-primary" id="maleCount">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span>雌の生殖乳頭</span>
+                            <span class="badge bg-danger" id="femaleCount">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span>多孔板</span>
+                            <span class="badge bg-success" id="madreporiteCount">0</span>
+                        </div>
+                        <div class="stat-row">
+                            <span>合計</span>
+                            <span id="totalAnnotations">0</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 保存ボタン -->
+                <div class="save-section">
+                    <button class="btn-save-next" id="saveCurrentBtn">
+                        <i class="fas fa-save"></i> 保存して次へ
+                    </button>
+                </div>
             </div>
         </div>
     </div>
     
-    <!-- プログレスバー -->
-    <div class="progress-section">
-        <div class="progress-info">
-            <span>進捗: <strong id="completedCount">0</strong> / <strong id="totalCount">0</strong></span>
-            <span>完了率: <strong id="completionRate">0%</strong></span>
-        </div>
-        <div class="progress">
-            <div class="progress-bar bg-success" id="progressBar" style="width: 0%"></div>
+    <!-- 下部画像リストパネル -->
+    <div class="bottom-panel">
+        <div class="image-list-container">
+            <!-- 左側のコントロール -->
+            <div class="list-controls">
+                <div class="progress-wrapper">
+                    <div class="progress-text">
+                        進歩: <strong id="completedCount">0</strong> / <strong id="totalCount">0</strong>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="nav-buttons">
+                    <button class="nav-btn" id="prevImageBtn" disabled>
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <button class="nav-btn" id="nextImageBtn" disabled>
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 画像リスト -->
+            <div class="image-list-scroll" id="imageListScroll">
+                <!-- 画像サムネイルがここに表示される -->
+            </div>
         </div>
     </div>
 </div>
@@ -412,6 +526,7 @@ let imageList = [];
 let currentImageIndex = -1;
 let annotator = null;
 let hasUnsavedChanges = false;
+let currentClass = 0;
 
 // 初期画像ID（URLパラメータから取得）
 const urlParams = new URLSearchParams(window.location.search);
@@ -419,6 +534,16 @@ const initialImageId = urlParams.get('image_id');
 
 // 初期化
 document.addEventListener('DOMContentLoaded', function() {
+    // DOM要素の存在確認
+    const requiredElements = ['completedCount', 'totalCount', 'progressBar'];
+    const missingElements = requiredElements.filter(id => !document.getElementById(id));
+    
+    if (missingElements.length > 0) {
+        console.error('必要な要素が見つかりません:', missingElements);
+        showErrorMessage('ページの初期化エラーが発生しました');
+        return;
+    }
+    
     setupEventListeners();
     loadImageList();
     setupKeyboardShortcuts();
@@ -444,11 +569,14 @@ function setupEventListeners() {
         });
     });
     
-    // クラス選択
-    document.querySelectorAll('input[name="classType"]').forEach(radio => {
-        radio.addEventListener('change', function() {
+    // クラス選択（新しい実装）
+    document.querySelectorAll('.class-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.class-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            currentClass = parseInt(this.dataset.class);
             if (annotator) {
-                annotator.setCurrentClass(parseInt(this.value));
+                annotator.setCurrentClass(currentClass);
             }
         });
     });
@@ -484,6 +612,16 @@ function setupKeyboardShortcuts() {
         else if (e.key === 'ArrowRight' && !e.ctrlKey && !e.shiftKey) {
             navigateImage(1);
         }
+        // 数字キー: クラス選択
+        else if (e.key === '1') {
+            document.querySelector('.class-btn[data-class="0"]').click();
+        }
+        else if (e.key === '2') {
+            document.querySelector('.class-btn[data-class="1"]').click();
+        }
+        else if (e.key === '3') {
+            document.querySelector('.class-btn[data-class="2"]').click();
+        }
     });
 }
 
@@ -493,7 +631,15 @@ async function loadImageList() {
         showLoading('画像一覧を読み込み中...');
         
         const response = await fetch('/annotation/editor/list-for-edit');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
+        
+        if (!data.images) {
+            throw new Error('画像データが取得できませんでした');
+        }
         
         imageList = data.images;
         updateImageListUI();
@@ -503,6 +649,8 @@ async function loadImageList() {
             const index = imageList.findIndex(img => img.id === initialImageId);
             if (index !== -1) {
                 selectImage(index);
+            } else if (imageList.length > 0) {
+                selectImage(0);
             }
         } else if (imageList.length > 0) {
             selectImage(0);
@@ -511,35 +659,38 @@ async function loadImageList() {
         hideLoading();
     } catch (error) {
         hideLoading();
+        console.error('画像リスト読み込みエラー:', error);
         showErrorMessage('画像一覧の読み込みエラー: ' + error.message);
     }
 }
 
-// 画像リストUI更新（ファイル名を表示しない）
+// 画像リストUI更新
 function updateImageListUI() {
-    const listContainer = document.getElementById('imageList');
-    const imageCount = document.getElementById('imageCount');
+    const listContainer = document.getElementById('imageListScroll');
     
-    imageCount.textContent = imageList.length;
+    if (!listContainer) {
+        console.error('画像リストコンテナが見つかりません');
+        return;
+    }
+    
     listContainer.innerHTML = '';
     
     imageList.forEach((image, index) => {
-        const item = document.createElement('div');
-        item.className = 'image-list-item';
-        item.dataset.index = index;
+        const card = document.createElement('div');
+        card.className = 'image-thumbnail-card';
+        card.dataset.index = index;
         
-        item.innerHTML = `
-            <img src="${image.thumbnail_url}" class="image-thumbnail" alt="${image.original_name}">
-            <div class="image-list-info">
-                ${image.annotated ? 
-                    `<span class="annotation-count-badge">${image.annotation_count}</span>` : 
-                    '<span class="not-annotated-text">未</span>'
-                }
-            </div>
+        const indicator = image.annotated ? 
+            `<span class="annotation-indicator">${image.annotation_count}</span>` : 
+            '<span class="no-annotation-indicator"></span>';
+        
+        card.innerHTML = `
+            <img src="${image.thumbnail_url}" class="thumbnail-img" alt="${image.original_name}">
+            ${indicator}
         `;
         
-        item.addEventListener('click', () => selectImage(index));
-        listContainer.appendChild(item);
+        card.addEventListener('click', () => selectImage(index));
+        listContainer.appendChild(card);
     });
     
     updateProgress();
@@ -557,13 +708,14 @@ async function selectImage(index) {
     currentImageIndex = index;
     const image = imageList[index];
     
-    // リストのアクティブ状態を更新
-    document.querySelectorAll('.image-list-item').forEach((item, i) => {
+    // サムネイルのアクティブ状態を更新
+    document.querySelectorAll('.image-thumbnail-card').forEach((card, i) => {
         if (i === index) {
-            item.classList.add('active');
-            item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            card.classList.add('active');
+            // 選択した画像を表示領域の中央に
+            card.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
         } else {
-            item.classList.remove('active');
+            card.classList.remove('active');
         }
     });
     
@@ -578,7 +730,7 @@ async function selectImage(index) {
     await loadImageAndAnnotations(image.id);
 }
 
-// 画像とアノテーションの読み込み（キャンバスサイズを最大化）
+// 画像とアノテーションの読み込み
 async function loadImageAndAnnotations(imageId) {
     try {
         showLoading('画像を読み込み中...');
@@ -600,15 +752,11 @@ async function loadImageAndAnnotations(imageId) {
             
             // コンテナのサイズを取得
             const container = document.querySelector('.canvas-container');
-            const containerWidth = container.clientWidth - 40; // パディング分を引く
-            const containerHeight = container.clientHeight - 40;
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
             
-            // 最大サイズを画面の80%に設定（より大きく表示）
-            const maxWidth = Math.min(containerWidth, window.innerWidth * 0.8);
-            const maxHeight = Math.min(containerHeight, window.innerHeight * 0.75);
-            
-            // アスペクト比を保持してスケール
-            const scale = Math.min(maxWidth / canvas.width, maxHeight / canvas.height, 1);
+            // アスペクト比を保持してスケール（最大限に拡大）
+            const scale = Math.min(containerWidth / canvas.width, containerHeight / canvas.height);
             
             canvas.style.width = (canvas.width * scale) + 'px';
             canvas.style.height = (canvas.height * scale) + 'px';
@@ -618,7 +766,7 @@ async function loadImageAndAnnotations(imageId) {
             // アノテーターを初期化
             annotator = new YoloAnnotator(canvas, img);
             annotator.setMode('create');
-            annotator.setCurrentClass(parseInt(document.querySelector('input[name="classType"]:checked').value));
+            annotator.setCurrentClass(currentClass);
             
             // 既存のアノテーションを読み込み
             if (data.annotations) {
@@ -732,14 +880,22 @@ function navigateImage(direction) {
 
 // 進捗更新
 function updateProgress() {
+    const completedCountEl = document.getElementById('completedCount');
+    const totalCountEl = document.getElementById('totalCount');
+    const progressBarEl = document.getElementById('progressBar');
+    
+    if (!completedCountEl || !totalCountEl || !progressBarEl) {
+        console.error('進捗表示要素が見つかりません');
+        return;
+    }
+    
     const annotatedCount = imageList.filter(img => img.annotated).length;
     const totalCount = imageList.length;
     const rate = totalCount > 0 ? Math.round((annotatedCount / totalCount) * 100) : 0;
     
-    document.getElementById('completedCount').textContent = annotatedCount;
-    document.getElementById('totalCount').textContent = totalCount;
-    document.getElementById('completionRate').textContent = rate + '%';
-    document.getElementById('progressBar').style.width = rate + '%';
+    completedCountEl.textContent = annotatedCount;
+    totalCountEl.textContent = totalCount;
+    progressBarEl.style.width = rate + '%';
 }
 
 </script>
