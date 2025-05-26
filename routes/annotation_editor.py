@@ -104,37 +104,66 @@ def save_annotation(image_id):
 
 @annotation_editor_bp.route('/list-for-edit')
 def list_for_edit():
-    """エディタ用の画像リストを取得"""
+    """エディタ用の画像リストを取得（全画像を取得）"""
     # 全画像のサムネイル情報を返す
     metadata = load_annotation_metadata()
     images = []
     
     images_dir = os.path.join(ANNOTATED_IMAGES_DIR, 'images')
     if os.path.exists(images_dir):
+        # すべての画像ファイルを取得
+        all_image_files = []
         for image_file in os.listdir(images_dir):
             if image_file.lower().endswith(('.png', '.jpg', '.jpeg')):
-                image_info = metadata.get(image_file, {})
-                
-                # アノテーション数を確認
-                label_path = os.path.join(ANNOTATED_IMAGES_DIR, 'labels', 
-                                         os.path.splitext(image_file)[0] + '.txt')
-                annotation_count = 0
-                if os.path.exists(label_path):
-                    with open(label_path, 'r') as f:
-                        annotation_count = len([line for line in f.readlines() if line.strip()])
-                
-                images.append({
-                    'id': image_file,
-                    'original_name': image_info.get('original_name', image_file),
-                    'annotated': annotation_count > 0,
-                    'annotation_count': annotation_count,
-                    'thumbnail_url': f'/annotation/images/image/{image_file}'
-                })
+                all_image_files.append(image_file)
+        
+        # ファイル名でソート（新しい順）
+        all_image_files.sort(reverse=True)
+        
+        # 各画像の情報を構築
+        for image_file in all_image_files:
+            image_info = metadata.get(image_file, {})
+            
+            # アノテーション数を確認
+            label_path = os.path.join(ANNOTATED_IMAGES_DIR, 'labels', 
+                                     os.path.splitext(image_file)[0] + '.txt')
+            annotation_count = 0
+            if os.path.exists(label_path):
+                with open(label_path, 'r') as f:
+                    annotation_count = len([line for line in f.readlines() if line.strip()])
+            
+            images.append({
+                'id': image_file,
+                'original_name': image_info.get('original_name', image_file),
+                'annotated': annotation_count > 0,
+                'annotation_count': annotation_count,
+                'thumbnail_url': f'/annotation/images/image/{image_file}',
+                'upload_time': image_info.get('upload_time', '')  # ソート用
+            })
     
-    # 新しい順にソート
-    images.sort(key=lambda x: x.get('id', ''), reverse=True)
+    # ページネーションパラメータの取得（オプション）
+    page = request.args.get('page', type=int)
+    per_page = request.args.get('per_page', type=int)
     
-    return jsonify({'images': images})
+    # ページネーションが指定されていない場合は全件返す
+    if page is None or per_page is None:
+        return jsonify({
+            'images': images,
+            'total': len(images)
+        })
+    
+    # ページネーションが指定されている場合
+    start = (page - 1) * per_page
+    end = start + per_page
+    paginated_images = images[start:end]
+    
+    return jsonify({
+        'images': paginated_images,
+        'total': len(images),
+        'page': page,
+        'per_page': per_page,
+        'pages': (len(images) + per_page - 1) // per_page
+    })
 
 # ヘルパー関数（annotation_images.pyと共通）
 def load_annotation_metadata():

@@ -18,7 +18,7 @@
     <!-- ページ固有CSS -->
     {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body style="padding-top: 0;">
     <!-- ナビゲーションバー -->
     <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom mb-4">
         <div class="container">
@@ -36,14 +36,7 @@
             
             <!-- メイン機能ナビゲーション -->
             <div class="collapse navbar-collapse" id="navbarNav">
-                <!-- システム状態表示 -->
-                <div class="navbar-text me-auto d-none d-lg-block">
-                    <small id="system-status" class="text-muted">
-                        <i class="fas fa-circle text-success me-1"></i>システム正常
-                    </small>
-                </div>
-                
-                <ul class="navbar-nav">
+                <ul class="navbar-nav ms-auto">
                     <!-- 雌雄判定 -->
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}" 
@@ -55,7 +48,7 @@
                     
                     <!-- 統合学習システム -->
                     <li class="nav-item">
-                        <a class="nav-link  {% if request.endpoint == 'main.learning' %}active{% endif %}" 
+                        <a class="nav-link {% if request.endpoint == 'learning.learning_page' %}active{% endif %}" 
                            href="/learning">
                             <i class="fas fa-graduation-cap me-1"></i> 
                             <span class="d-none d-md-inline">AI</span>学習
@@ -63,14 +56,17 @@
                     </li>
                     
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="annotationDropdown" role="button" data-bs-toggle="dropdown">
+                        <a class="nav-link dropdown-toggle {% if 'annotation' in request.endpoint %}active{% endif %}" 
+                           href="#" id="annotationDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-draw-polygon me-1"></i> 画像処理
                         </a>
                         <ul class="dropdown-menu" aria-labelledby="annotationDropdown">
-                            <li><a class="dropdown-item" href="{{ url_for('annotation_images.images_management_page') }}">
+                            <li><a class="dropdown-item {% if request.endpoint == 'annotation_images.images_management_page' %}active{% endif %}" 
+                                   href="{{ url_for('annotation_images.images_management_page') }}">
                                 <i class="fas fa-images me-1"></i> 画像一覧
                             </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('annotation_editor.editor_page') }}">
+                            <li><a class="dropdown-item {% if request.endpoint == 'annotation_editor.editor_page' %}active{% endif %}" 
+                                   href="{{ url_for('annotation_editor.editor_page') }}">
                                 <i class="fas fa-edit me-1"></i> アノテーション編集
                             </a></li>
                         </ul>

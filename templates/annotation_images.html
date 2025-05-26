@@ -78,6 +78,7 @@
         width: 20px;
         height: 20px;
         cursor: pointer;
+        z-index: 10; /* チェックボックスを前面に */
     }
     
     .annotation-status {
@@ -355,9 +356,29 @@ function setupEventListeners() {
     document.getElementById('deleteSelectedBtn').addEventListener('click', deleteSelected);
     
     // モーダル
-    document.querySelector('.image-modal-close').addEventListener('click', function() {
-        document.getElementById('imageModal').style.display = 'none';
+    const modal = document.getElementById('imageModal');
+    const modalClose = document.querySelector('.image-modal-close');
+    
+    modalClose.addEventListener('click', closeImageModal);
+    
+    // モーダル外クリックで閉じる
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeImageModal();
+        }
     });
+    
+    // ESCキーで閉じる
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modal.style.display === 'block') {
+            closeImageModal();
+        }
+    });
+}
+
+// モーダルを閉じる
+function closeImageModal() {
+    document.getElementById('imageModal').style.display = 'none';
 }
 
 // ファイル処理
@@ -482,12 +503,9 @@ function createImageCard(image) {
         <img src="/annotation/images/image/${image.id}" class="image-preview" alt="${image.original_name}">
         <div class="image-info">
             <h6 class="text-truncate mb-2">${image.original_name}</h6>
-            <div class="d-flex justify-content-between">
+            <div class="text-center">
                 <button class="btn btn-sm btn-primary" onclick="editAnnotation('${image.id}')">
                     <i class="fas fa-edit"></i> 編集
-                </button>
-                <button class="btn btn-sm btn-outline-secondary" onclick="showPreview('${image.id}')">
-                    <i class="fas fa-eye"></i> 表示
                 </button>
             </div>
         </div>
@@ -495,13 +513,17 @@ function createImageCard(image) {
     
     // チェックボックスイベント
     const checkbox = card.querySelector('.image-checkbox');
+    checkbox.addEventListener('click', function(e) {
+        e.stopPropagation(); // 親要素へのイベント伝播を停止
+    });
     checkbox.addEventListener('change', function(e) {
         e.stopPropagation();
         toggleSelection(image.id);
     });
     
-    // カードクリック（プレビュー）
-    card.querySelector('.image-preview').addEventListener('click', function() {
+    // 画像クリック（プレビュー）
+    card.querySelector('.image-preview').addEventListener('click', function(e) {
+        e.stopPropagation(); // チェックボックスとの競合を防ぐ
         showPreview(image.id);
     });
     

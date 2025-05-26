@@ -39,6 +39,22 @@ h1 {
     color: #0d6efd !important;
 }
 
+/* ドロップダウン内のアクティブ状態 */
+.dropdown-item.active {
+    background-color: #0d6efd;
+    color: white !important;
+}
+
+.dropdown-item.active i {
+    color: white !important;
+}
+
+/* ドロップダウンのアクティブ親要素 */
+.navbar-nav .dropdown-toggle.active {
+    color: #0d6efd !important;
+    font-weight: 600;
+}
+
 /* ==================== ボタン統一 ==================== */
 .btn {
     border-radius: 8px;
