@@ -1,97 +1,69 @@
-# reset_all_data.py として保存
+# reset_annotations.py
 import os
 import shutil
+import json
 
-def reset_all_data():
-    """すべてのデータをリセットし、ディレクトリ構造を再作成"""
+def reset_annotations(confirm=False):
+    """アノテーションデータを完全にリセット"""
     
-    print("データリセットを開始します...")
+    if not confirm:
+        response = input("本当に全てのアノテーションデータを削除しますか？ (yes/no): ")
+        if response.lower() != 'yes':
+            print("キャンセルしました")
+            return
     
-    # 1. データディレクトリの削除
-    directories_to_remove = [
-        'data',
-        'yolov5/runs',
-        'logs'
+    print("アノテーションデータをリセット中...")
+    
+    # 削除対象
+    targets = [
+        # アノテーション画像
+        ('static/images/annotations', 'dir'),
+        # メタデータ
+        ('static/annotation_metadata.json', 'file'),
+        ('data/annotation_metadata.json', 'file'),
+        # YOLOデータセット
+        ('data/yolo_dataset/images', 'dir'),
+        ('data/yolo_dataset/labels', 'dir'),
+        # アップロード画像（オプション）
+        # ('data/uploads', 'dir'),
     ]
     
-    for dir_path in directories_to_remove:
-        if os.path.exists(dir_path):
-            try:
-                shutil.rmtree(dir_path)
-                print(f"削除: {dir_path}")
-            except Exception as e:
-                print(f"削除エラー: {dir_path} - {e}")
+    deleted_count = 0
     
-    # 2. 静的ファイルのクリーンアップ
-    static_dirs_to_clean = [
-        'static/images/detection_results',
-        'static/images/annotations',
-        'static/images/evaluations',
-        'static/images/samples/papillae/male',
-        'static/images/samples/papillae/female',
-        'static/images/samples/papillae/unknown'
-    ]
+    for target, target_type in targets:
+        try:
+            if target_type == 'dir' and os.path.exists(target):
+                # ディレクトリ内のファイルを削除（.gitkeepは残す）
+                for item in os.listdir(target):
+                    if item != '.gitkeep':
+                        item_path = os.path.join(target, item)
+                        if os.path.isfile(item_path):
+                            os.remove(item_path)
+                        elif os.path.isdir(item_path):
+                            shutil.rmtree(item_path)
+                        deleted_count += 1
+                print(f"✓ ディレクトリをクリア: {target}")
+                
+            elif target_type == 'file' and os.path.exists(target):
+                os.remove(target)
+                deleted_count += 1
+                print(f"✓ ファイルを削除: {target}")
+                
+        except Exception as e:
+            print(f"✗ エラー ({target}): {e}")
     
-    for dir_path in static_dirs_to_clean:
-        if os.path.exists(dir_path):
-            # ディレクトリ内のファイルを削除（.gitkeepは残す）
-            for file in os.listdir(dir_path):
-                if file != '.gitkeep':
-                    file_path = os.path.join(dir_path, file)
-                    try:
-                        if os.path.isfile(file_path):
-                            os.remove(file_path)
-                            print(f"削除: {file_path}")
-                    except Exception as e:
-                        print(f"ファイル削除エラー: {file_path} - {e}")
+    # 空のメタデータファイルを作成
+    for metadata_file in ['static/annotation_metadata.json', 'data/annotation_metadata.json']:
+        try:
+            os.makedirs(os.path.dirname(metadata_file), exist_ok=True)
+            with open(metadata_file, 'w') as f:
+                json.dump({}, f)
+            print(f"✓ 空のメタデータファイルを作成: {metadata_file}")
+        except Exception as e:
+            print(f"✗ メタデータ作成エラー: {e}")
     
-    # 3. アノテーションマッピングのリセット
-    annotation_file = 'static/annotation_mapping.json'
-    with open(annotation_file, 'w') as f:
-        f.write('{}')
-    print(f"リセット: {annotation_file}")
-    
-    # 4. 必要なディレクトリの再作成
-    from config import ensure_directories
-    ensure_directories()
-    print("ディレクトリ構造を再作成しました")
-    
-    # 5. .gitkeepファイルの作成
-    gitkeep_dirs = [
-        'data/uploads',
-        'data/extracted_frames',
-        'data/models/saved',
-        'data/evaluations',
-        'data/yolo_dataset/images/train',
-        'data/yolo_dataset/images/val',
-        'data/yolo_dataset/labels/train',
-        'data/yolo_dataset/labels/val',
-        'static/images/detection_results',
-        'static/images/annotations',
-        'static/images/evaluations',
-        'static/images/samples/papillae/male',
-        'static/images/samples/papillae/female',
-        'static/images/samples/papillae/unknown',
-        'static/annotations/yolo',
-        'logs'
-    ]
-    
-    for dir_path in gitkeep_dirs:
-        os.makedirs(dir_path, exist_ok=True)
-        gitkeep_path = os.path.join(dir_path, '.gitkeep')
-        if not os.path.exists(gitkeep_path):
-            with open(gitkeep_path, 'w') as f:
-                f.write('')
-            print(f"作成: {gitkeep_path}")
-    
-    print("\nデータリセットが完了しました！")
-    print("すべての学習データ、モデル、結果が削除されました。")
-    print("アプリケーションを再起動して、新しく始めることができます。")
+    print(f"\n完了: {deleted_count}個のアイテムを削除しました")
+    print("アノテーションデータがリセットされました")
 
 if __name__ == "__main__":
-    # 確認プロンプト
-    response = input("警告: すべてのデータが削除されます。続行しますか？ (yes/no): ")
-    if response.lower() == 'yes':
-        reset_all_data()
-    else:
-        print("キャンセルしました。")
+    reset_annotations()

@@ -268,7 +268,8 @@ class DatasetManager:
             "",
             "names:",
             "  0: male_papillae",
-            "  1: female_papillae"
+            "  1: female_papillae",
+            "  2: madreporite"
         ]
         
         yaml_content = '\n'.join(yaml_lines) + '\n'

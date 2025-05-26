@@ -125,14 +125,14 @@ class YoloDetector:
                 cv2.rectangle(annotated_image, 
                             (bbox[0], bbox[1]), 
                             (bbox[2], bbox[3]), 
-                            (0, 255, 0), 2)
+                            (0, 255, 0), 4)
                 
                 # 信頼度の表示
                 label = f"Papillae: {conf:.2f}"
                 cv2.putText(annotated_image, label, 
                           (bbox[0], bbox[1] - 10), 
                           cv2.FONT_HERSHEY_SIMPLEX, 
-                          0.5, (0, 255, 0), 2)
+                          0.5, (0, 255, 0), 3)
             
             return {
                 'detections': detections,
@@ -217,10 +217,10 @@ class YoloDetector:
                         })
                         
                         # 描画
-                        cv2.rectangle(annotated_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                        cv2.rectangle(annotated_image, (x, y), (x + w, y + h), (0, 255, 0), 4)
                         cv2.putText(annotated_image, "Papillae (fallback)", 
                                   (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 
-                                  0.5, (0, 255, 0), 2)
+                                  0.5, (0, 255, 0), 3)
             
             return {
                 'detections': detections,

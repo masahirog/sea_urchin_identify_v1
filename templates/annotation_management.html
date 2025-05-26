@@ -446,13 +446,19 @@
                                     <label class="btn btn-outline-danger" for="classFemale">
                                         <i class="fas fa-venus"></i> 雌の生殖乳頭
                                     </label>
+                                    
+                                    <input type="radio" class="btn-check" name="classType" id="classMadreporite" value="2">
+                                    <label class="btn btn-outline-success" for="classMadreporite">
+                                        <i class="fas fa-shapes"></i> 多孔板
+                                    </label>
                                 </div>
-                                
                                 <h6>アノテーション数</h6>
                                 <div class="mb-3">
-                                    <div>雄: <span class="badge bg-primary" id="maleCount">0</span></div>
-                                    <div>雌: <span class="badge bg-danger" id="femaleCount">0</span></div>
-                                    <div>合計: <span class="badge bg-secondary" id="totalAnnotations">0</span></div>
+                                    <div>　雄　： <span class="badge bg-primary" id="maleCount">0</span></div>
+                                    <div>　雌　： <span class="badge bg-danger" id="femaleCount">0</span></div>
+                                    <div>多孔板： <span class="badge bg-success" id="madreporiteCount">0</span></div>
+
+                                    <div>合　計： <span class="badge bg-secondary" id="totalAnnotations">0</span></div>
                                 </div>
                                 
                                 <div class="d-grid gap-2">
@@ -595,8 +601,10 @@
                     
                     <h6>アノテーション数</h6>
                     <div class="mb-3">
-                        <div>雄: <span class="badge bg-primary" id="editMaleCount">0</span></div>
-                        <div>雌: <span class="badge bg-danger" id="editFemaleCount">0</span></div>
+                        <div>　雄　：<span class="badge bg-primary" id="editMaleCount">0</span></div>
+                        <div>　雌　：<span class="badge bg-danger" id="editFemaleCount">0</span></div>
+                        <div>多孔板：<span class="badge bg-success" id="editMadreporiteCount">0</span></div>
+
                     </div>
                     
                     <div class="d-grid gap-2">
@@ -915,15 +923,18 @@ function updateAnnotationCounts() {
     
     let maleCount = 0;
     let femaleCount = 0;
+    let madreporiteCount = 0;
     
     annotator.annotations.forEach(ann => {
         if (ann.class === 0) maleCount++;
         else if (ann.class === 1) femaleCount++;
+        else if (ann.class === 2) madreporiteCount++;
     });
     
     document.getElementById('maleCount').textContent = maleCount;
     document.getElementById('femaleCount').textContent = femaleCount;
-    document.getElementById('totalAnnotations').textContent = maleCount + femaleCount;
+    document.getElementById('madreporiteCount').textContent = madreporiteCount;
+    document.getElementById('totalAnnotations').textContent = maleCount + femaleCount + madreporiteCount;
 }
 
 // 進捗更新
@@ -1105,9 +1116,18 @@ function updateSavedImagesUI(data) {
     
     // 画像グリッド
     grid.innerHTML = '';
+    grid.innerHTML = '';
     currentPageImages.forEach(image => {
         const card = document.createElement('div');
         card.className = 'saved-image-card';
+        
+        // クラス別カウントを正しく計算
+        let maleCount = 0;
+        let femaleCount = 0;
+        let madreporiteCount = 0;
+        
+        // アノテーションデータから実際のクラスをカウント
+        // ※ image.classes が正しくない可能性があるため、再計算が必要な場合があります
         
         card.innerHTML = `
             <div class="saved-image-actions">
@@ -1124,19 +1144,8 @@ function updateSavedImagesUI(data) {
                  onclick="showImagePreview('/annotation/get-annotated-image/${image.id}')">
             <div class="saved-image-info">
                 <h6 class="text-truncate">${image.original_name}</h6>
-                <div class="annotation-stats">
-                    <div class="stat-item">
-                        <div class="stat-value text-primary">${image.classes?.male || 0}</div>
-                        <div class="stat-label">雄</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value text-danger">${image.classes?.female || 0}</div>
-                        <div class="stat-label">雌</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-value text-secondary">${image.annotation_count}</div>
-                        <div class="stat-label">合計</div>
-                    </div>
+                <div class="text-muted">
+                    <small>アノテーション数: ${image.annotation_count}</small>
                 </div>
                 <small class="text-muted">${new Date(image.annotation_time).toLocaleString()}</small>
             </div>
@@ -1254,14 +1263,17 @@ function updateEditAnnotationCounts() {
     
     let maleCount = 0;
     let femaleCount = 0;
+    let madreporiteCount = 0;
     
     editAnnotator.annotations.forEach(ann => {
         if (ann.class === 0) maleCount++;
         else if (ann.class === 1) femaleCount++;
+        else if (ann.class === 2) madreporiteCount++;
     });
     
     document.getElementById('editMaleCount').textContent = maleCount;
     document.getElementById('editFemaleCount').textContent = femaleCount;
+    document.getElementById('editMadreporiteCount').textContent = madreporiteCount;
 }
 
 // 編集保存

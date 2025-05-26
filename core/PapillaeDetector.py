@@ -124,7 +124,7 @@ class PapillaeDetector:
                         (bbox[0], bbox[1]), 
                         (bbox[2], bbox[3]), 
                         (0, 255, 0), 
-                        2
+                        4
                     )
                     
                     # 信頼度の表示
@@ -136,7 +136,7 @@ class PapillaeDetector:
                         cv2.FONT_HERSHEY_SIMPLEX, 
                         0.5, 
                         (0, 255, 0), 
-                        2
+                        3
                     )
             
             return detections, annotated_image

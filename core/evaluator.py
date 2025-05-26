@@ -373,9 +373,18 @@ class UnifiedEvaluator:
         female_files = [f for f in os.listdir(female_dir) 
                        if f.lower().endswith(('.jpg', '.jpeg', '.png'))] if os.path.exists(female_dir) else []
         
-        # アノテーション数
+        # アノテーション数（パスベースのカウント）
         male_annotated = sum(1 for path in annotation_data.keys() if "/male/" in path)
         female_annotated = sum(1 for path in annotation_data.keys() if "/female/" in path)
+        madreporite_count = 0
+        
+        for annotation_info in annotation_data.values():
+            if isinstance(annotation_info, dict) and 'classes' in annotation_info:
+                madreporite_count += annotation_info['classes'].get('madreporite', 0)
+            elif isinstance(annotation_info, str):
+                # annotation_dataが文字列（ファイルパス）の場合の処理
+                # 実際のアノテーションファイルを読む必要がある場合
+                pass
         
         # 統計計算
         total_images = len(male_files) + len(female_files)
@@ -397,6 +406,7 @@ class UnifiedEvaluator:
             "female_total": len(female_files),
             "male_annotated": male_annotated,
             "female_annotated": female_annotated,
+            "madreporite_count": madreporite_count,
             "annotation_rate": annotation_rate,
             "warning": warning
         }

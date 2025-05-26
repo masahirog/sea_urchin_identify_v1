@@ -119,6 +119,8 @@ def save_annotated_image():
         # クラス別カウント
         male_count = 0
         female_count = 0
+        madreporite_count = 0
+
         if yolo_annotations:
             for line in yolo_annotations.strip().split('\n'):
                 if line:
@@ -127,6 +129,8 @@ def save_annotated_image():
                         male_count += 1
                     elif class_id == 1:
                         female_count += 1
+                    elif class_id == 2:
+                        madreporite_count += 1
         
         # メタデータを更新
         update_annotation_metadata(image_id, {
@@ -136,7 +140,7 @@ def save_annotated_image():
             'image_path': image_dest,
             'label_path': label_dest,
             'original_name': data.get('original_name', image_id),
-            'classes': {'male': male_count, 'female': female_count}
+            'classes': {'male': male_count, 'female': female_count,'madreporite': madreporite_count}
         })
         
         return jsonify({
@@ -178,7 +182,7 @@ def get_annotated_images():
                         'original_name': image_info.get('original_name', image_file),
                         'annotation_count': annotation_count,
                         'annotation_time': image_info.get('annotation_time', ''),
-                        'classes': image_info.get('classes', {'male': 0, 'female': 0})
+                        'classes': image_info.get('classes', {'male': 0, 'female': 1, 'madreporite': 2})
                     })
     
     # 新しい順にソート
@@ -309,20 +313,26 @@ def get_annotated_image(image_id):
                             x2 = int(x_center + box_width / 2)
                             y2 = int(y_center + box_height / 2)
                             
-                            # クラスに応じた色とラベル（修正: 0=雄、1=雌）
+                            # クラスに応じた色とラベル（修正版：3クラス対応）
                             if class_id == 0:
                                 color = (255, 0, 0)  # 青（BGR形式）
                                 label = "Male"
-                            else:
+                            elif class_id == 1:
                                 color = (0, 0, 255)  # 赤（BGR形式）
                                 label = "Female"
+                            elif class_id == 2:
+                                color = (0, 255, 0)  # 緑（BGR形式）
+                                label = "Madreporite"  # 多孔板
+                            else:
+                                color = (128, 128, 128)  # グレー（未知のクラス）
+                                label = f"Class {class_id}"
                             
                             # バウンディングボックス描画
-                            cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
+                            cv2.rectangle(image, (x1, y1), (x2, y2), color, 4)
                             
                             # ラベル描画
                             cv2.putText(image, label, (x1, y1 - 10), 
-                                      cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                                      cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 3)
         
         # 画像をエンコードして返す
         _, buffer = cv2.imencode('.png', image)
