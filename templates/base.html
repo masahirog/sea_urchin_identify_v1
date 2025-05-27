@@ -25,7 +25,7 @@
             <!-- ブランドロゴ -->
             <span class="navbar-brand fw-bold">
                 <i class="fas fa-microscope me-2 text-primary"></i>
-                ウニ生殖乳頭分析システム
+                ウニ雌雄判別
             </span>
             
             <!-- モバイル用ハンバーガーメニュー -->
@@ -45,30 +45,23 @@
                             <span class="d-none d-md-inline">雌雄</span>判定
                         </a>
                     </li>
-                    <!-- アノテーション -->
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle {% if 'annotation' in request.endpoint %}active{% endif %}" 
-                           href="#" id="annotationDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-draw-polygon me-1"></i> アノテーション
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'annotation_images.images_management_page' %}active{% endif %}" href="{{ url_for('annotation_images.images_management_page') }}" title="画像管理">
+                            <i class="fas fa-images me-1"></i> 学習データ
                         </a>
-                        <ul class="dropdown-menu" aria-labelledby="annotationDropdown">
-                            <li><a class="dropdown-item {% if request.endpoint == 'annotation_images.images_management_page' %}active{% endif %}" 
-                                   href="{{ url_for('annotation_images.images_management_page') }}">
-                                <i class="fas fa-images me-1"></i> 画像管理
-                            </a></li>
-                            <li><a class="dropdown-item {% if request.endpoint == 'annotation_editor.editor_page' %}active{% endif %}" 
-                                   href="{{ url_for('annotation_editor.editor_page') }}">
-                                <i class="fas fa-edit me-1"></i> エディタ
-                            </a></li>
-                        </ul>
                     </li>
-                    
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'annotation_editor.editor_page' %}active{% endif %}" 
+                           href="{{ url_for('annotation_editor.editor_page') }}" title="アノテーション">
+                           <i class="fas fa-edit me-1"></i> アノテーション
+                        </a>
+                    </li>
                     <!-- YOLO学習実行（新規追加） -->
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'training.training_page' %}active{% endif %}" 
                            href="{{ url_for('training.training_page') }}">
                             <i class="fas fa-rocket me-1"></i> 
-                            <span class="d-none d-md-inline">YOLO</span>学習実行
+                            <span class="d-none d-md-inline">機械</span>学習
                         </a>
                     </li>
                     
@@ -77,7 +70,7 @@
                         <a class="nav-link {% if request.endpoint == 'learning.learning_dashboard' %}active{% endif %}" 
                            href="{{ url_for('learning.learning_dashboard') }}">
                             <i class="fas fa-tachometer-alt me-1"></i> 
-                            <span class="d-none d-md-inline">学習</span>ダッシュボード
+                            <span class="d-none d-md-inline">学習</span>状況
                         </a>
                     </li>
                 </ul>

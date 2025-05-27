@@ -429,7 +429,7 @@ def save_annotation():
         
         return jsonify({
             "success": True, 
-            "message": "アノテーションを保存しました",
+            # "message": "アノテーションを保存しました",
             "annotation_path": save_path,
             "filename": new_filename,
             "mapping_updated": True

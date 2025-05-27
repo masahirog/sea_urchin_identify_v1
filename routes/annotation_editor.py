@@ -95,7 +95,7 @@ def save_annotation(image_id):
         
         return jsonify({
             'success': True,
-            'message': 'アノテーションを保存しました',
+            # 'message': 'アノテーションを保存しました',
             'annotation_count': annotation_count
         })
         
