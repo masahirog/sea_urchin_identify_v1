@@ -17,7 +17,7 @@ from datetime import datetime
 from core.YoloDetector import YoloDetector
 from core.YoloTrainer import YoloTrainer
 from core.dataset_manager import DatasetManager
-from utils.file_handlers import find_image_path, handle_multiple_image_upload
+from app_utils.file_handlers import find_image_path, handle_multiple_image_upload
 
 # Blueprintの作成
 yolo_bp = Blueprint('yolo', __name__, url_prefix='/yolo')

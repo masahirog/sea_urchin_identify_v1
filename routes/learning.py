@@ -17,7 +17,7 @@ import uuid
 import traceback
 import base64
 from datetime import datetime
-from utils.file_handlers import handle_multiple_image_upload
+from app_utils.file_handlers import handle_multiple_image_upload
 
 learning_bp = Blueprint('learning', __name__)
 

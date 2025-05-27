@@ -31,7 +31,7 @@ def classify_image():
     - JSON: 判定結果
     """
     from app import app
-    from utils.file_handlers import allowed_file, is_image_file
+    from app_utils.file_handlers import allowed_file, is_image_file
     from core.analyzer import UnifiedAnalyzer
     from core.YoloDetector import YoloDetector
     
@@ -66,6 +66,15 @@ def classify_image():
             
             if "error" in result:
                 current_app.logger.error(f"画像分析エラー: {result['error']}")
+                
+                # YOLOv5関連のエラーの場合、詳細なメッセージを返す
+                if "YOLO" in result["error"] or "検出器" in result["error"]:
+                    return jsonify({
+                        "error": "YOLOv5が利用できません。セットアップが必要です。",
+                        "details": result["error"],
+                        "solution": "python setup_yolo.py を実行してください"
+                    }), 500
+                
                 return jsonify({"error": result["error"]}), 400
             
             # 画像へのURLを追加
@@ -669,7 +678,7 @@ def debug_info():
 def cleanup_temp_files():
     """一時ファイルをクリーンアップ"""
     from app import app
-    from utils.file_cleanup import cleanup_temp_files
+    from app_utils.file_cleanup import cleanup_temp_files
     
     try:
         upload_dir = app.config.get('UPLOAD_FOLDER')

@@ -177,12 +177,21 @@ async function executeClassification() {
     showLoading();
     
     try {
-        const data = await apiRequestFormData('/image/upload', formData);
+        const data = await apiRequestFormData('/classify', formData);
         
         hideLoading();
         
         if (data.error) {
-            showErrorMessage('判定中にエラーが発生しました: ' + data.error);
+            // YOLOv5エラーの場合は詳細な対処法を表示
+            if (data.solution) {
+                showErrorMessage(
+                    `判定エラー: ${data.error}<br>` +
+                    `<small>解決方法: ${data.solution}</small>`,
+                    10000  // 10秒間表示
+                );
+            } else {
+                showErrorMessage('判定中にエラーが発生しました: ' + data.error);
+            }
             return;
         }
         

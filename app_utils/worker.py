@@ -898,5 +898,4 @@ def generate_improvement_suggestions(accuracy, annotation_dataset, sample_count)
     return suggestions
 
 # 必要な関数のインポート
-from utils.model_evaluation import evaluate_model
-from utils.annotation_analysis import analyze_annotation_impact
+from core.evaluator import UnifiedEvaluator

@@ -15,6 +15,7 @@ from skimage.metrics import structural_similarity as ssim
 
 # PapillaeDetector（YOLOv5ベース）のインポート
 from .PapillaeDetector import PapillaeDetector
+from .YoloDetector import YoloDetector
 
 class UnifiedAnalyzer:
     """統合ウニ生殖乳頭分析エンジン"""
@@ -29,10 +30,13 @@ class UnifiedAnalyzer:
         self.scaler = None
         self.load_models()
         
-        # YOLOv5ベースの生殖乳頭検出器を初期化
         try:
-            self.papillae_detector = PapillaeDetector(conf_threshold=0.4)
+            self.yolo_detector = YoloDetector(conf_threshold=0.4)
             print("YOLOv5ベースの生殖乳頭検出器を初期化しました")
+            
+            if self.yolo_detector.model is None:
+                raise Exception("YOLOv5モデルのロードに失敗しました")
+                
         except Exception as e:
             print(f"生殖乳頭検出器の初期化エラー: {e}")
             self.papillae_detector = None
@@ -203,25 +207,54 @@ class UnifiedAnalyzer:
     def _extract_features_from_image(self, image):
         """画像から特徴量を抽出"""
         try:
-            # YOLOv5検出器を使用して生殖乳頭を検出
-            if self.papillae_detector is not None:
-                try:
-                    # 検出実行
-                    detections, _ = self.papillae_detector.detect_papillae(image)
-                    
-                    # 特徴量抽出
-                    if detections:
-                        features = self.papillae_detector.extract_papillae_features(image, detections)
-                        if features and len(features) > 0:
-                            # 特徴量の平均を取る（複数の生殖乳頭が検出された場合）
-                            return np.mean(features, axis=0).tolist()
-                except Exception as e:
-                    print(f"YOLOv5検出エラー: {str(e)}")
-                    # エラー時は従来の手法にフォールバック
+            # YoloDetectorを使用
+            if self.yolo_detector is None:
+                raise Exception("YOLO検出器が利用できません")
             
-            # 従来の特徴量抽出手法（フォールバック）
+            # 検出実行
+            result = self.yolo_detector.detect(image)
+            
+            if result['count'] > 0:
+                # 検出された領域から特徴量を抽出
+                features_list = []
+                for detection in result['detections']:
+                    bbox = detection['bbox']
+                    x1, y1, x2, y2 = bbox
+                    roi = image[y1:y2, x1:x2]
+                    
+                    # 各検出領域から特徴を抽出
+                    feature = self._extract_features_from_roi(roi)
+                    if feature:
+                        features_list.append(feature)
+                
+                if features_list:
+                    return np.mean(features_list, axis=0).tolist()
+            
+            # YOLOで検出されなかった場合、従来の画像処理にフォールバック
+            print("YOLOで検出されなかったため、従来の画像処理を使用します")
+            
+            # 画像全体から特徴を抽出
+            feature = self._extract_features_from_roi(image)
+            if feature:
+                return feature
+            
+            # それでも抽出できない場合はデフォルト値
+            return [1000.0, 150.0, 0.7, 0.8, 1.0]
+                
+        except Exception as e:
+            print(f"特徴量抽出エラー: {str(e)}")
+            # エラー時もデフォルト値を返す
+            return [1000.0, 150.0, 0.7, 0.8, 1.0]
+
+
+    def _extract_features_from_roi(self, roi):
+        """ROI（関心領域）から特徴量を抽出"""
+        try:
+            if roi is None or roi.size == 0:
+                return None
+                
             # グレースケール変換
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
+            gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY) if len(roi.shape) == 3 else roi
             
             # 二値化
             _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
@@ -231,7 +264,7 @@ class UnifiedAnalyzer:
             
             if not contours:
                 return None
-            
+                
             # 最大輪郭から特徴量計算
             largest_contour = max(contours, key=cv2.contourArea)
             
@@ -252,9 +285,8 @@ class UnifiedAnalyzer:
             return [area, perimeter, circularity, solidity, aspect_ratio]
             
         except Exception as e:
-            print(f"特徴量抽出エラー: {str(e)}")
+            print(f"ROI特徴量抽出エラー: {str(e)}")
             return None
-
     # ================================
     # 内部メソッド: モデル関連
     # ================================

@@ -4,7 +4,7 @@ from logging.handlers import RotatingFileHandler
 from flask import Flask, send_from_directory, jsonify, abort
 import threading
 import queue
-from utils.file_cleanup import cleanup_temp_files, schedule_cleanup
+from app_utils.file_cleanup import cleanup_temp_files, schedule_cleanup
 from config import * 
 from routes.yolo import yolo_bp
 from routes.training import training_bp

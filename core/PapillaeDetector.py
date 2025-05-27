@@ -39,11 +39,14 @@ class PapillaeDetector:
         # モデルのロード
         self.model = None
         try:
-            self._load_model(model_path)
+            success = self._load_model(model_path)
+            if not success:
+                raise Exception("YOLOv5モデルのロードに失敗しました")
         except Exception as e:
             logger.error(f"モデルのロード中にエラーが発生しました: {e}")
-            # モデルロードに失敗しても処理は続行（後で再ロード可能）
-    
+            # モデルロードに失敗した場合は例外を再スロー
+            raise
+
     def _load_model(self, model_path=None):
         """
         YOLOv5モデルをロード
@@ -52,13 +55,24 @@ class PapillaeDetector:
         - model_path: モデルのパス
         """
         try:
+            # YOLOv5のインポートエラーを回避するため、環境を整備
+            import sys
+            import os
+            
+            # YOLOv5ディレクトリが存在する場合、パスに追加
+            yolov5_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'yolov5')
+            if os.path.exists(yolov5_path) and yolov5_path not in sys.path:
+                sys.path.insert(0, yolov5_path)
+            
             if model_path and os.path.exists(model_path):
                 # カスタムモデルのロード
-                self.model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path)
+                self.model = torch.hub.load('ultralytics/yolov5', 'custom', 
+                                          path=model_path, force_reload=False, verbose=False)
                 logger.info(f"カスタムYOLOv5モデルをロード: {model_path}")
             else:
                 # 事前学習済みモデルのロード（小型のYOLOv5s）
-                self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s')
+                self.model = torch.hub.load('ultralytics/yolov5', 'yolov5s', 
+                                          force_reload=False, verbose=False)
                 logger.info("事前学習済みのYOLOv5sモデルをロード")
             
             # デバイス設定
@@ -73,7 +87,8 @@ class PapillaeDetector:
             return True
         except Exception as e:
             logger.error(f"モデルロードエラー: {e}")
-            raise e
+            self.model = None
+            return False
     
     def detect_papillae(self, image, draw_results=True):
         """
