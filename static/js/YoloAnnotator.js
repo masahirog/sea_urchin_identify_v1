@@ -46,7 +46,9 @@ export class YoloAnnotator {
         // イベントリスナーの設定
         this.setupEventListeners();
     }
-    
+    getCurrentClass() {
+        return this.currentClass;
+    }
     setupEventListeners() {
         // バインドした関数を保存して後で削除できるようにする
         this._handleMouseDown = this.handleMouseDown.bind(this);
@@ -636,6 +638,8 @@ export class YoloAnnotator {
     setCurrentClass(classId) {
         if (classId >= 0 && classId < this.classes.length) {
             this.currentClass = classId;
+            // デバッグ用ログ
+            console.log(`YoloAnnotator: クラスを${classId}に設定 (${this.classes[classId].name})`);
         }
     }
 }

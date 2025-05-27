@@ -56,88 +56,84 @@ class DatasetManager:
     
     @staticmethod
     def prepare_yolo_dataset():
-        from config import TRAINING_DATA_MALE, TRAINING_DATA_FEMALE, YOLO_DATASET_DIR, STATIC_SAMPLES_DIR
+        from config import TRAINING_IMAGES_DIR, TRAINING_LABELS_DIR, YOLO_DATASET_DIR
         
-        yolo_dataset_dir = 'data/yolo_dataset'
-        
-        # デバッグ: クリア前の状態を確認
         print("=== データセット準備開始 ===")
-        train_labels_dir = os.path.join(yolo_dataset_dir, 'labels/train')
-        if os.path.exists(train_labels_dir):
-            existing_labels = [f for f in os.listdir(train_labels_dir) if f.endswith('.txt')]
-            print(f"既存のラベルファイル: {existing_labels}")
         
-        # ソースディレクトリの設定
-        source_dirs = []
-        
-        # 1. 性別ごとのディレクトリ
-        if os.path.exists(TRAINING_DATA_MALE):
-            source_dirs.append(TRAINING_DATA_MALE)
-        if os.path.exists(TRAINING_DATA_FEMALE):
-            source_dirs.append(TRAINING_DATA_FEMALE)
-        
-        # 2. papillaeディレクトリ直下も含める
-        papillae_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
-        if os.path.exists(papillae_dir):
-            source_dirs.append(papillae_dir)
-        
-        # ディレクトリ作成
+        # YOLOデータセットディレクトリの作成
         dirs_to_create = [
-            'images/train', 'labels/train',
-            'images/val', 'labels/val'
+            os.path.join(YOLO_DATASET_DIR, 'images/train'),
+            os.path.join(YOLO_DATASET_DIR, 'images/val'),
+            os.path.join(YOLO_DATASET_DIR, 'labels/train'),
+            os.path.join(YOLO_DATASET_DIR, 'labels/val')
         ]
         
         for dir_path in dirs_to_create:
-            os.makedirs(os.path.join(yolo_dataset_dir, dir_path), exist_ok=True)
+            os.makedirs(dir_path, exist_ok=True)
         
-        # 既存のデータセットをクリア（画像のみクリア、ラベルは残す）
-        for dir_name in ['images/train', 'images/val']:
-            full_path = os.path.join(yolo_dataset_dir, dir_name)
-            if os.path.exists(full_path):
-                for file in os.listdir(full_path):
-                    if file.lower().endswith(('.jpg', '.jpeg', '.png')):
-                        file_path = os.path.join(full_path, file)
-                        if os.path.isfile(file_path):
-                            os.remove(file_path)
-                            print(f"画像削除: {file_path}")
+        # 既存のデータをクリア
+        for split in ['train', 'val']:
+            for data_type in ['images', 'labels']:
+                dir_path = os.path.join(YOLO_DATASET_DIR, data_type, split)
+                for file in os.listdir(dir_path):
+                    os.remove(os.path.join(dir_path, file))
         
-        # 検証用ラベルディレクトリのみクリア
-        val_labels_dir = os.path.join(yolo_dataset_dir, 'labels/val')
-        if os.path.exists(val_labels_dir):
-            for file in os.listdir(val_labels_dir):
-                if file.endswith('.txt'):
-                    file_path = os.path.join(val_labels_dir, file)
-                    if os.path.isfile(file_path):
-                        os.remove(file_path)
+        # 画像とラベルを収集
+        all_data = []
         
-        # データ分割と配置
-        train_count, val_count = DatasetManager._split_and_copy_data(
-            source_dirs, yolo_dataset_dir
-        )
+        # 訓練データディレクトリから収集
+        if os.path.exists(TRAINING_IMAGES_DIR):
+            for image_file in os.listdir(TRAINING_IMAGES_DIR):
+                if image_file.lower().endswith(('.jpg', '.jpeg', '.png')):
+                    base_name = os.path.splitext(image_file)[0]
+                    label_file = base_name + '.txt'
+                    
+                    image_path = os.path.join(TRAINING_IMAGES_DIR, image_file)
+                    label_path = os.path.join(TRAINING_LABELS_DIR, label_file)
+                    
+                    if os.path.exists(label_path):
+                        all_data.append({
+                            'image': image_path,
+                            'label': label_path,
+                            'name': base_name
+                        })
+        
+        print(f"収集されたデータ数: {len(all_data)}")
+        
+        # データを訓練用と検証用に分割（8:2）
+        import random
+        random.shuffle(all_data)
+        
+        split_idx = int(len(all_data) * 0.8)
+        train_data = all_data[:split_idx]
+        val_data = all_data[split_idx:]
+        
+        # データをコピー
+        for data_list, split in [(train_data, 'train'), (val_data, 'val')]:
+            for item in data_list:
+                # 画像をコピー
+                dst_image = os.path.join(YOLO_DATASET_DIR, 'images', split, 
+                                       os.path.basename(item['image']))
+                shutil.copy2(item['image'], dst_image)
+                
+                # ラベルをコピー
+                dst_label = os.path.join(YOLO_DATASET_DIR, 'labels', split, 
+                                       os.path.basename(item['label']))
+                shutil.copy2(item['label'], dst_label)
         
         # data.yaml生成
-        DatasetManager._generate_data_yaml(yolo_dataset_dir)
-        
-        # 検証
-        train_images_dir = os.path.join(yolo_dataset_dir, 'images/train')
-        train_labels_dir = os.path.join(yolo_dataset_dir, 'labels/train')
-        
-        actual_train_images = len([f for f in os.listdir(train_images_dir) 
-                                 if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(train_images_dir) else 0
-        actual_train_labels = len([f for f in os.listdir(train_labels_dir) 
-                                 if f.endswith('.txt')]) if os.path.exists(train_labels_dir) else 0
+        DatasetManager._generate_data_yaml(YOLO_DATASET_DIR)
         
         print(f"データセット準備完了:")
-        print(f"  - 訓練画像: {actual_train_images}枚")
-        print(f"  - 訓練ラベル: {actual_train_labels}個")
-        print(f"  - 検証データ: {val_count}セット")
+        print(f"  - 訓練データ: {len(train_data)}セット")
+        print(f"  - 検証データ: {len(val_data)}セット")
         
         return {
-            'train_count': train_count,
-            'val_count': val_count,
-            'total_count': train_count + val_count,
-            'actual_train_images': actual_train_images,
-            'actual_train_labels': actual_train_labels
+            'train_count': len(train_data),
+            'val_count': len(val_data),
+            'total_count': len(all_data),
+            'actual_train_images': len(train_data),
+            'actual_train_labels': len(train_data)
         }
 
 

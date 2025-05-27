@@ -56,10 +56,6 @@ Desktop.ini
 *.tmp
 *.temp
 
-# ==================== 旧ディレクトリ（削除済み/削除対象） ====================
-/samples/
-/uploads/
-/static/uploads/
 
 # ==================== YOLOv5関連 ====================
 # YOLOv5のモデル重みファイル（大容量）
@@ -73,24 +69,7 @@ Desktop.ini
 # テスト結果
 /test_results/
 
-# ==================== 特定ファイルの除外 ====================
-# 画像ファイル全般（ユーザー生成・自動生成・サンプル含む）
-/static/images/samples/*
-/static/images/detection_results/*
-/static/images/annotations/*
-
-# ただし、.gitkeepファイルは保持（ディレクトリ構造維持）
-!/static/images/samples/.gitkeep
-!/static/images/samples/papillae/.gitkeep
-!/static/images/detection_results/.gitkeep
-!/static/images/annotations/.gitkeep
-
-# フォントファイル（必要に応じて）
-/static/fonts/*
-
-# ==================== 保持するもの ====================
-# 設定ファイルのみ追跡
-# static/annotation_mapping.json は除外しない（つまり追跡する）
+/static/training_data/
 
 # ==================== 必要なディレクトリ構造 ====================
 # 空のディレクトリを保持するための.gitkeepファイル

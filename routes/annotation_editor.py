@@ -2,12 +2,9 @@ from flask import Blueprint, request, jsonify, render_template, current_app
 import os
 import json
 from datetime import datetime
+from config import TRAINING_IMAGES_DIR, TRAINING_LABELS_DIR, METADATA_FILE
 
 annotation_editor_bp = Blueprint('annotation_editor', __name__, url_prefix='/annotation/editor')
-
-# 共通設定（annotation_images.pyと同じ）
-ANNOTATED_IMAGES_DIR = 'static/images/annotations'
-ANNOTATION_METADATA_FILE = 'data/annotation_metadata.json'
 
 @annotation_editor_bp.route('/')
 def editor_page():
@@ -20,12 +17,12 @@ def load_annotation(image_id):
     """特定の画像とアノテーションを読み込み"""
     try:
         # 画像の存在確認
-        image_path = os.path.join(ANNOTATED_IMAGES_DIR, 'images', image_id)
+        image_path = os.path.join(TRAINING_IMAGES_DIR, image_id)
         if not os.path.exists(image_path):
             return jsonify({'error': '画像が見つかりません'}), 404
         
         # ラベルファイルの読み込み
-        label_path = os.path.join(ANNOTATED_IMAGES_DIR, 'labels', 
+        label_path = os.path.join(TRAINING_LABELS_DIR, 
                                  os.path.splitext(image_id)[0] + '.txt')
         
         annotations = ''
@@ -43,7 +40,7 @@ def load_annotation(image_id):
             'annotations': annotations,
             'annotation_count': len([line for line in annotations.split('\n') if line.strip()]),
             'image_url': f'/annotation/images/image/{image_id}',
-            'redirect_url': f'/annotation/editor/?image_id={image_id}'  # URLリダイレクト用
+            'redirect_url': f'/annotation/editor/?image_id={image_id}'
         })
         
     except Exception as e:
@@ -59,7 +56,7 @@ def save_annotation(image_id):
     
     try:
         # ラベルファイルの保存
-        label_path = os.path.join(ANNOTATED_IMAGES_DIR, 'labels', 
+        label_path = os.path.join(TRAINING_LABELS_DIR, 
                                  os.path.splitext(image_id)[0] + '.txt')
         
         with open(label_path, 'w') as f:
@@ -95,7 +92,6 @@ def save_annotation(image_id):
         
         return jsonify({
             'success': True,
-            # 'message': 'アノテーションを保存しました',
             'annotation_count': annotation_count
         })
         
@@ -118,10 +114,9 @@ def list_for_edit():
     metadata = load_annotation_metadata()
     images = []
     
-    images_dir = os.path.join(ANNOTATED_IMAGES_DIR, 'images')
-    if os.path.exists(images_dir):
+    if os.path.exists(TRAINING_IMAGES_DIR):
         all_image_files = []
-        for image_file in os.listdir(images_dir):
+        for image_file in os.listdir(TRAINING_IMAGES_DIR):
             if image_file.lower().endswith(('.png', '.jpg', '.jpeg')):
                 # 選択されたIDリストがある場合はフィルタリング
                 if selected_image_ids is None or image_file in selected_image_ids:
@@ -135,7 +130,7 @@ def list_for_edit():
             image_info = metadata.get(image_file, {})
             
             # アノテーション数を確認
-            label_path = os.path.join(ANNOTATED_IMAGES_DIR, 'labels', 
+            label_path = os.path.join(TRAINING_LABELS_DIR, 
                                      os.path.splitext(image_file)[0] + '.txt')
             annotation_count = 0
             if os.path.exists(label_path):
@@ -157,11 +152,11 @@ def list_for_edit():
         'selected_mode': selected_image_ids is not None
     })
 
-# ヘルパー関数（annotation_images.pyと共通）
+# ヘルパー関数
 def load_annotation_metadata():
-    if os.path.exists(ANNOTATION_METADATA_FILE):
+    if os.path.exists(METADATA_FILE):
         try:
-            with open(ANNOTATION_METADATA_FILE, 'r') as f:
+            with open(METADATA_FILE, 'r') as f:
                 return json.load(f)
         except:
             return {}
@@ -175,6 +170,6 @@ def update_annotation_metadata(image_id, info):
     save_annotation_metadata(metadata)
 
 def save_annotation_metadata(metadata):
-    os.makedirs(os.path.dirname(ANNOTATION_METADATA_FILE), exist_ok=True)
-    with open(ANNOTATION_METADATA_FILE, 'w') as f:
+    os.makedirs(os.path.dirname(METADATA_FILE), exist_ok=True)
+    with open(METADATA_FILE, 'w') as f:
         json.dump(metadata, f, indent=2)

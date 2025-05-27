@@ -4,18 +4,15 @@ import json
 import shutil
 from werkzeug.utils import secure_filename
 from datetime import datetime
+from config import TRAINING_IMAGES_DIR, TRAINING_LABELS_DIR, METADATA_FILE
 
 annotation_images_bp = Blueprint('annotation_images', __name__, url_prefix='/annotation/images')
 
-# アノテーション済み画像の管理用ディレクトリ
-ANNOTATED_IMAGES_DIR = 'static/images/annotations'
-ANNOTATION_METADATA_FILE = 'data/annotation_metadata.json'
-
 def ensure_annotation_directories():
     """アノテーション用ディレクトリを作成"""
-    os.makedirs(ANNOTATED_IMAGES_DIR, exist_ok=True)
-    os.makedirs(os.path.join(ANNOTATED_IMAGES_DIR, 'images'), exist_ok=True)
-    os.makedirs(os.path.join(ANNOTATED_IMAGES_DIR, 'labels'), exist_ok=True)
+    os.makedirs(TRAINING_IMAGES_DIR, exist_ok=True)
+    os.makedirs(TRAINING_LABELS_DIR, exist_ok=True)
+    os.makedirs(os.path.dirname(METADATA_FILE), exist_ok=True)
 
 # 初期化
 ensure_annotation_directories()
@@ -44,8 +41,8 @@ def upload_images():
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             unique_filename = f"{timestamp}_{filename}"
             
-            # アノテーション画像ディレクトリに直接保存
-            image_path = os.path.join(ANNOTATED_IMAGES_DIR, 'images', unique_filename)
+            # 学習画像ディレクトリに保存
+            image_path = os.path.join(TRAINING_IMAGES_DIR, unique_filename)
             file.save(image_path)
             
             # メタデータを作成
@@ -83,11 +80,10 @@ def list_images():
     metadata = load_annotation_metadata()
     
     # 実際に存在するファイルのみをリストアップ
-    images_dir = os.path.join(ANNOTATED_IMAGES_DIR, 'images')
     all_images = []
     
-    if os.path.exists(images_dir):
-        for image_file in os.listdir(images_dir):
+    if os.path.exists(TRAINING_IMAGES_DIR):
+        for image_file in os.listdir(TRAINING_IMAGES_DIR):
             if image_file.lower().endswith(('.png', '.jpg', '.jpeg')):
                 image_info = metadata.get(image_file, {
                     'id': image_file,
@@ -97,7 +93,7 @@ def list_images():
                 })
                 
                 # ラベルファイルの存在確認
-                label_path = os.path.join(ANNOTATED_IMAGES_DIR, 'labels', 
+                label_path = os.path.join(TRAINING_LABELS_DIR, 
                                          os.path.splitext(image_file)[0] + '.txt')
                 if os.path.exists(label_path):
                     with open(label_path, 'r') as f:
@@ -152,8 +148,8 @@ def delete_images():
     for image_id in image_ids:
         try:
             # ファイルを削除
-            image_path = os.path.join(ANNOTATED_IMAGES_DIR, 'images', image_id)
-            label_path = os.path.join(ANNOTATED_IMAGES_DIR, 'labels', 
+            image_path = os.path.join(TRAINING_IMAGES_DIR, image_id)
+            label_path = os.path.join(TRAINING_LABELS_DIR, 
                                      os.path.splitext(image_id)[0] + '.txt')
             
             if os.path.exists(image_path):
@@ -181,13 +177,12 @@ def delete_images():
 @annotation_images_bp.route('/image/<image_id>')
 def get_image(image_id):
     """画像を取得（アノテーション付き）"""
-    # 既存の/annotation/get-annotated-image/<image_id>と同じ処理
     try:
-        image_path = os.path.join(ANNOTATED_IMAGES_DIR, 'images', image_id)
+        image_path = os.path.join(TRAINING_IMAGES_DIR, image_id)
         if not os.path.exists(image_path):
             return jsonify({'error': '画像が見つかりません'}), 404
         
-        label_path = os.path.join(ANNOTATED_IMAGES_DIR, 'labels', 
+        label_path = os.path.join(TRAINING_LABELS_DIR, 
                                  os.path.splitext(image_id)[0] + '.txt')
         
         # アノテーションがある場合は描画して返す
@@ -253,9 +248,9 @@ def get_image(image_id):
 # ヘルパー関数
 def load_annotation_metadata():
     """アノテーションメタデータを読み込み"""
-    if os.path.exists(ANNOTATION_METADATA_FILE):
+    if os.path.exists(METADATA_FILE):
         try:
-            with open(ANNOTATION_METADATA_FILE, 'r') as f:
+            with open(METADATA_FILE, 'r') as f:
                 return json.load(f)
         except:
             return {}
@@ -263,8 +258,8 @@ def load_annotation_metadata():
 
 def save_annotation_metadata(metadata):
     """アノテーションメタデータを保存"""
-    os.makedirs(os.path.dirname(ANNOTATION_METADATA_FILE), exist_ok=True)
-    with open(ANNOTATION_METADATA_FILE, 'w') as f:
+    os.makedirs(os.path.dirname(METADATA_FILE), exist_ok=True)
+    with open(METADATA_FILE, 'w') as f:
         json.dump(metadata, f, indent=2)
 
 def update_annotation_metadata(image_id, info):

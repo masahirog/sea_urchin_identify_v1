@@ -7,7 +7,7 @@
     .editor-container {
         display: flex;
         gap: 20px;
-        height: calc(100vh - 200px);
+        height: calc(100vh - 140px); /* ヘッダー分を調整 */
     }
     
     .canvas-container {
@@ -26,11 +26,12 @@
         justify-content: center;
         position: relative;
         overflow: auto;
+        min-height: 500px; /* 最小高さを確保 */
     }
     
     #annotationCanvas {
         max-width: 100%;
-        max-height: 100%;
+        max-height: calc(100vh - 300px); /* より大きなキャンバス */
         border: 2px solid #dee2e6;
         cursor: crosshair;
         background: white;
@@ -57,7 +58,7 @@
         box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         flex: 1;
         overflow-y: auto;
-        max-height: calc(100vh - 400px); /* 高さを広げる */
+        max-height: calc(100vh - 350px); /* 高さを広げる */
     }
     
     .image-list-item {
@@ -216,15 +217,17 @@
         .image-list {
             max-height: 300px;
         }
+        
+        #annotationCanvas {
+            max-height: 400px;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-    <h2 class="text-center mb-4">
-        <i class="fas fa-edit me-2"></i>アノテーションエディタ
-    </h2>
+    <!-- タイトルを削除してキャンバスを広げる -->
     
     <div class="editor-container">
         <!-- キャンバスエリア -->
@@ -329,6 +332,7 @@ let annotator = null;
 let currentImageId = null;
 let currentIndex = 0;
 let allImages = [];
+let currentClassSelection = 0; // 現在選択されているクラスを保持
 
 // 初期画像ID（テンプレートから渡される）
 const initialImageId = {{ initial_image_id|tojson|safe if initial_image_id else 'null' }};
@@ -382,13 +386,21 @@ function setMode(mode) {
 
 // クラス設定
 function setClass(classId) {
+    console.log('setClass called with:', classId);
+    
+    // UI更新
     document.querySelectorAll('.class-button').forEach(btn => {
         btn.classList.remove('active');
     });
     document.querySelector(`[data-class="${classId}"]`).classList.add('active');
     
+    // グローバル変数を更新
+    currentClassSelection = classId;
+    
+    // アノテーターに設定
     if (annotator) {
         annotator.setCurrentClass(classId);
+        console.log('Annotator class set to:', classId);
     }
 }
 
@@ -435,16 +447,73 @@ async function loadImageList() {
     }
 }
 
-// ブラウザの戻る/進むボタンへの対応
-window.addEventListener('popstate', function(event) {
-    if (event.state && event.state.imageId) {
-        const index = allImages.findIndex(img => img.id === event.state.imageId);
-        if (index !== -1) {
-            currentIndex = index;
-            loadImage(index);
-        }
+// 画像読み込み
+async function loadImage(index) {
+    if (index < 0 || index >= allImages.length) return;
+    
+    try {
+        showLoading('画像を読み込み中...');
+        
+        const image = allImages[index];
+        currentImageId = image.id;
+        currentIndex = index;
+        
+        // アノテーション情報を取得
+        const response = await fetch(`/annotation/editor/load/${image.id}`);
+        const data = await response.json();
+        
+        // 画像を読み込み
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.getElementById('annotationCanvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            
+            // アノテーターを初期化
+            if (annotator) {
+                annotator.destroy();
+            }
+            
+            annotator = new YoloAnnotator(canvas, img);
+            annotator.setMode('create');
+            
+            // 保持しているクラス選択を適用
+            annotator.setCurrentClass(currentClassSelection);
+            console.log('新しい画像に対してクラス', currentClassSelection, 'を設定');
+            
+            // アノテーション変更時のコールバック
+            annotator.onAnnotationsChanged = updateStats;
+            
+            // 既存のアノテーションを読み込み
+            if (data.annotations) {
+                annotator.loadFromYoloFormat(data.annotations);
+            }
+            
+            // UI更新
+            updateImageList();
+            updateNavigationButtons();
+            updateStats();
+            
+            // 画像情報を表示
+            document.getElementById('currentImageInfo').textContent = 
+                `${currentIndex + 1} / ${allImages.length} - ${data.original_name}`;
+            
+            hideLoading();
+        };
+        
+        img.onerror = function() {
+            hideLoading();
+            showErrorMessage('画像の読み込みに失敗しました');
+        };
+        
+        img.src = data.image_url;
+        
+    } catch (error) {
+        hideLoading();
+        console.error('画像読み込みエラー:', error);
+        showErrorMessage('画像の読み込みに失敗しました');
     }
-});
+}
 
 // 画像リストの表示更新
 function updateImageList() {
@@ -531,71 +600,6 @@ async function selectImage(index) {
     await loadImage(index);
 }
 
-// 画像読み込み
-async function loadImage(index) {
-    if (index < 0 || index >= allImages.length) return;
-    
-    try {
-        showLoading('画像を読み込み中...');
-        
-        const image = allImages[index];
-        currentImageId = image.id;
-        currentIndex = index;
-        
-        // アノテーション情報を取得
-        const response = await fetch(`/annotation/editor/load/${image.id}`);
-        const data = await response.json();
-        
-        // 画像を読み込み
-        const img = new Image();
-        img.onload = function() {
-            const canvas = document.getElementById('annotationCanvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            
-            // アノテーターを初期化
-            if (annotator) {
-                annotator.destroy();
-            }
-            
-            annotator = new YoloAnnotator(canvas, img);
-            annotator.setMode('create');
-            annotator.setCurrentClass(0);
-            
-            // アノテーション変更時のコールバック
-            annotator.onAnnotationsChanged = updateStats;
-            
-            // 既存のアノテーションを読み込み
-            if (data.annotations) {
-                annotator.loadFromYoloFormat(data.annotations);
-            }
-            
-            // UI更新
-            updateImageList();
-            updateNavigationButtons();
-            updateStats();
-            
-            // 画像情報を表示
-            document.getElementById('currentImageInfo').textContent = 
-                `${currentIndex + 1} / ${allImages.length} - ${data.original_name}`;
-            
-            hideLoading();
-        };
-        
-        img.onerror = function() {
-            hideLoading();
-            showErrorMessage('画像の読み込みに失敗しました');
-        };
-        
-        img.src = data.image_url;
-        
-    } catch (error) {
-        hideLoading();
-        console.error('画像読み込みエラー:', error);
-        showErrorMessage('画像の読み込みに失敗しました');
-    }
-}
-
 // 統計情報更新
 function updateStats() {
     if (!annotator) return;
@@ -673,7 +677,7 @@ async function saveAndNext() {
     }
 }
 
-// ナビゲーション関数も修正
+// ナビゲーション関数
 async function loadPreviousImage() {
     if (currentIndex > 0) {
         await selectImage(currentIndex - 1);
@@ -744,6 +748,17 @@ window.scrollImageList = function(direction) {
     updateImageList();
     loadImage(currentIndex);
 };
+
+// ブラウザの戻る/進むボタンへの対応
+window.addEventListener('popstate', function(event) {
+    if (event.state && event.state.imageId) {
+        const index = allImages.findIndex(img => img.id === event.state.imageId);
+        if (index !== -1) {
+            currentIndex = index;
+            loadImage(index);
+        }
+    }
+});
 
 </script>
 {% endblock %}
