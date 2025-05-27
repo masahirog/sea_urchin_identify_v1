@@ -1426,6 +1426,70 @@ def get_dataset_info():
         'total': total_count
     }
 
+@learning_bp.route('/learning-history')
+def get_learning_history():
+    """学習履歴を取得"""
+    try:
+        # YOLOv5の学習履歴を取得
+        train_dir = 'yolov5/runs/train'
+        history = []
+        
+        if os.path.exists(train_dir):
+            for exp_dir in os.listdir(train_dir):
+                if not exp_dir.startswith('exp'):
+                    continue
+                    
+                exp_path = os.path.join(train_dir, exp_dir)
+                results_csv = os.path.join(exp_path, 'results.csv')
+                
+                if os.path.exists(results_csv):
+                    # 実験の情報を収集
+                    created_time = os.path.getctime(exp_path)
+                    modified_time = os.path.getmtime(results_csv)
+                    
+                    # CSVから最終エポックの情報を取得
+                    try:
+                        with open(results_csv, 'r') as f:
+                            lines = f.readlines()
+                            if len(lines) > 1:
+                                # 最終行から精度を取得
+                                last_line = lines[-1].strip()
+                                if last_line:
+                                    parts = last_line.split(',')
+                                    # mAP@0.5の位置を確認（通常は7番目のカラム）
+                                    map50 = float(parts[6]) if len(parts) > 6 else 0
+                                else:
+                                    map50 = 0
+                            else:
+                                map50 = 0
+                    except:
+                        map50 = 0
+                    
+                    history.append({
+                        'id': exp_dir,
+                        'name': f'実験 {exp_dir}',
+                        'created_at': datetime.fromtimestamp(created_time).isoformat(),
+                        'updated_at': datetime.fromtimestamp(modified_time).isoformat(),
+                        'status': 'completed',
+                        'accuracy': map50,
+                        'model_path': os.path.join(exp_path, 'weights/best.pt')
+                    })
+        
+        # 新しい順にソート
+        history.sort(key=lambda x: x['updated_at'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'history': history[:10]  # 最新10件まで
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'学習履歴取得エラー: {str(e)}')
+        return jsonify({
+            'success': False,
+            'history': [],
+            'error': str(e)
+        }), 500
 
 def get_total_annotations():
     """総アノテーション数を取得（修正版）"""

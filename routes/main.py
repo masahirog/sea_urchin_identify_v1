@@ -138,17 +138,7 @@ def get_uploaded_file(filename):
 
 @main_bp.route('/delete-image', methods=['POST'])
 def delete_image():
-    """
-    指定された画像を削除
-    
-    Request:
-    - image_path: 削除する画像のパス
-    
-    Returns:
-    - JSON: 削除結果
-    """
-    from app import app
-    
+    """指定された画像を削除"""
     data = request.json
     
     if not data or 'image_path' not in data:
@@ -156,36 +146,24 @@ def delete_image():
     
     image_path = data['image_path']
     
-    # パスの検証（不正なパスでないことを確認）
-    if '..' in image_path:
-        current_app.logger.warning(f"不正なパスへの削除試行: {image_path}")
+    # セキュリティチェック
+    if '..' in image_path or os.path.isabs(image_path):
         return jsonify({"error": "不正なパスです"}), 400
     
-    # URLパスから実際のファイルパスに変換
-    if image_path.startswith('/'):
-        if image_path.startswith('/main/images/'):
-            image_path = image_path.replace('/main/images/', '')
-            image_path = os.path.join(app.config['EXTRACTED_FOLDER'], image_path)
-        elif image_path.startswith('/uploads/'):
-            image_path = image_path.replace('/uploads/', '')
-            image_path = os.path.join(app.config['UPLOAD_FOLDER'], image_path)
-        else:
-            # 他のパスパターンに対応
-            image_path = os.path.join(app.config['UPLOAD_FOLDER'], os.path.basename(image_path))
-    elif not os.path.exists(image_path):
-        image_path = os.path.join(app.config['UPLOAD_FOLDER'], image_path)
+    # アップロードフォルダ内のファイルのみ削除可能
+    from app import app
+    full_path = os.path.join(app.config['UPLOAD_FOLDER'], os.path.basename(image_path))
     
-    if not os.path.exists(image_path):
+    if not os.path.exists(full_path):
         return jsonify({"error": "指定された画像が見つかりません"}), 404
     
     try:
-        # 画像の削除
-        os.remove(image_path)
-        current_app.logger.info(f"画像を削除しました: {image_path}")
+        os.remove(full_path)
+        current_app.logger.info(f"画像を削除しました: {full_path}")
         return jsonify({"success": True, "message": "画像を削除しました"})
     except Exception as e:
         current_app.logger.error(f"画像削除エラー: {str(e)}")
-        return jsonify({"error": f"画像の削除中にエラーが発生しました: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
 
 @main_bp.route('/save-to-dataset', methods=['POST'])
 def save_to_dataset():

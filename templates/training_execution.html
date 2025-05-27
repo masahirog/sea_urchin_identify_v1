@@ -527,7 +527,7 @@ async function loadDatasetInfo() {
 // 学習履歴読み込み
 async function loadTrainingHistory() {
     try {
-        const response = await fetch('/learning/learning-history');
+        const response = await fetch('/learning-history');
         const data = await response.json();
         
         const historyContainer = document.getElementById('trainingHistory');

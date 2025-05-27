@@ -1,42 +1,69 @@
 # ==================== データディレクトリ（非公開） ====================
 # 一時ファイル、学習データ、モデルなど - 全て除外
 /data/
-# 例外：data.yamlは保持
+# 例外：YOLOデータセット構造は保持
+!/data/yolo_dataset/
 !/data/yolo_dataset/data.yaml
 !/data/yolo_dataset/.gitkeep
+!/data/yolo_dataset/images/
 !/data/yolo_dataset/images/train/.gitkeep
 !/data/yolo_dataset/images/val/.gitkeep
+!/data/yolo_dataset/labels/
 !/data/yolo_dataset/labels/train/.gitkeep
 !/data/yolo_dataset/labels/val/.gitkeep
 
+# ==================== アップロードディレクトリ ====================
+/uploads/
 
-.env/
+# ==================== モデルファイル ====================
+/models/saved/
+*.pkl
+*.pt
+*.pth
+
+# ==================== 静的ファイル ====================
+# 学習データ（画像とラベル）
+/static/training_data/
+# 検出結果
+/static/detection_results/
+# 評価結果
+/static/evaluation/
+# アノテーションマッピング
+/static/annotation_mapping.json
+
 # ==================== Python関連 ====================
 __pycache__/
 **/__pycache__/
 *.py[cod]
+*$py.class
 *.so
 *.egg
 *.egg-info/
 dist/
 build/
 .pytest_cache/
+.coverage
+htmlcov/
 
 # ==================== 仮想環境 ====================
 venv/
 env/
 .venv/
 ENV/
+.env
 
 # ==================== 開発環境 ====================
 .idea/
 .vscode/
 *.swp
+*.swo
+*~
 
 # ==================== ログファイル ====================
 *.log
-app.log
 logs/
+# ただし、ログディレクトリ構造は維持
+!/logs/.gitkeep
 
 # ==================== データベースファイル ====================
 *.db
@@ -50,32 +77,29 @@ logs/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
-*~
 
 # ==================== 一時ファイル ====================
 *.tmp
 *.temp
-
+*.bak
 
 # ==================== YOLOv5関連 ====================
 # YOLOv5のモデル重みファイル（大容量）
 /yolov5/runs/
 # ただし、実験ディレクトリ構造は維持
 !/yolov5/runs/train/.gitkeep
-# モデルファイル
-*.pt
 # 学習キャッシュ
 *.cache
-# テスト結果
+
+# ==================== テスト関連 ====================
 /test_results/
+.hypothesis/
 
-/static/training_data/
-
-# ==================== 必要なディレクトリ構造 ====================
-# 空のディレクトリを保持するための.gitkeepファイル
-!/logs/.gitkeep
-
-
-*.pyc
-__pycache__/
+# ==================== 環境変数 ====================
 .env
+.env.*
+
+# ==================== メタデータ ====================
+/data/metadata.json
+/data/classification_history.json
+/data/annotation_metadata.json

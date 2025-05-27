@@ -35,7 +35,6 @@ app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config.update({
     'UPLOAD_FOLDER': UPLOAD_DIR,
     'MODEL_FOLDER': os.path.join(MODELS_DIR, 'saved'),
-    'SAMPLES_FOLDER': STATIC_SAMPLES_DIR,
     'ALLOWED_EXTENSIONS': {'jpg', 'jpeg', 'png'},
     'TEMP_FILES_MAX_AGE': 24,
     'MAX_CONTENT_LENGTH': MAX_CONTENT_LENGTH,
@@ -75,20 +74,7 @@ def get_uploaded_file(filename):
     """一時アップロードファイル配信"""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-@app.route('/static/images/<path:filename>')
-def serve_static_images(filename):
-    """静的画像ファイル配信（アノテーション・検出結果など）"""
-    return send_from_directory(STATIC_IMAGES_DIR, filename)
 
-@app.route('/evaluation/images/<filename>')
-def serve_evaluation_images(filename):
-    """評価結果画像配信"""
-    return send_from_directory(STATIC_EVALUATION_DIR, filename)
-
-@app.route('/sample/<path:filename>')
-def serve_sample_image(filename):
-    """サンプル画像配信"""
-    return send_from_directory(STATIC_SAMPLES_DIR, filename)
 
 # 静的ファイルの設定（YOLOの結果ディレクトリ）
 @app.route('/static/runs/<path:filename>')
@@ -173,21 +159,6 @@ def internal_error(error):
 def too_large(error):
     return jsonify({'error': 'ファイルサイズが大きすぎます'}), 413
 
-@app.route('/training-images/<path:filename>')
-# @login_required  # 認証を追加（オプション）- 一旦コメントアウト
-def serve_training_image(filename):
-    """学習画像を配信（アクセス制御付き）"""
-    # セキュリティチェック
-    if '..' in filename:
-        from flask import abort
-        abort(403)
-    
-    from config import TRAINING_DATA_DIR
-    return send_from_directory(TRAINING_DATA_DIR, filename)
-
-@app.route('/images/samples/<path:filename>')
-def serve_sample_images(filename):
-    return send_from_directory(STATIC_SAMPLES_DIR, filename)
 
 # アプリケーション起動
 if __name__ == '__main__':
