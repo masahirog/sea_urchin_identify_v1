@@ -38,10 +38,10 @@ def get_safe_filename(filename):
 def find_image_path(filename):
     """画像ファイルのパスを検索する共通関数"""
     from flask import current_app
+    from config import TRAINING_IMAGES_DIR
     
     search_dirs = [
-        os.path.join(current_app.config.get('STATIC_FOLDER', 'static'), 'images/samples/papillae/male'),
-        os.path.join(current_app.config.get('STATIC_FOLDER', 'static'), 'images/samples/papillae/female'),
+        TRAINING_IMAGES_DIR,  # 統一された学習画像ディレクトリ
         os.path.join(current_app.config.get('UPLOAD_FOLDER', 'data/uploads'), 'yolo_detect'),
         os.path.join(current_app.config.get('UPLOAD_FOLDER', 'data/uploads'), 'yolo_batch'),
         'data/uploads'

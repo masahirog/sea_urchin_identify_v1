@@ -227,27 +227,40 @@ def batch_detect():
 @yolo_bp.route('/api/images', methods=['GET'])
 def get_images():
     """アノテーション用の画像リストを取得"""
-    # 画像ディレクトリの設定
-    image_dirs = [
-        os.path.join(current_app.config['STATIC_FOLDER'], 'images/samples/papillae/male'),
-        os.path.join(current_app.config['STATIC_FOLDER'], 'images/samples/papillae/female')
-    ]
+    from config import TRAINING_IMAGES_DIR, TRAINING_LABELS_DIR, METADATA_FILE
     
     images = []
-    for img_dir in image_dirs:
-        if os.path.exists(img_dir):
-            for filename in os.listdir(img_dir):
-                if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
-                    image_path = os.path.join(img_dir, filename)
-                    relative_path = os.path.relpath(image_path, start='.')
-                    url_path = '/' + relative_path.replace('\\', '/')
-                    
-                    images.append({
-                        'id': filename,
-                        'filename': filename,
-                        'path': image_path,
-                        'url': url_path
-                    })
+    
+    # メタデータを読み込み
+    metadata = {}
+    if os.path.exists(METADATA_FILE):
+        try:
+            with open(METADATA_FILE, 'r') as f:
+                metadata = json.load(f)
+        except:
+            pass
+    
+    if os.path.exists(TRAINING_IMAGES_DIR):
+        for filename in os.listdir(TRAINING_IMAGES_DIR):
+            if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                image_path = os.path.join(TRAINING_IMAGES_DIR, filename)
+                
+                # メタデータから情報を取得
+                image_info = metadata.get(filename, {})
+                
+                # ラベルファイルの存在確認
+                label_file = os.path.splitext(filename)[0] + '.txt'
+                label_path = os.path.join(TRAINING_LABELS_DIR, label_file)
+                has_label = os.path.exists(label_path)
+                
+                images.append({
+                    'id': filename,
+                    'filename': filename,
+                    'path': image_path,
+                    'url': f'/annotation/images/image/{filename}',
+                    'has_annotation': has_label,
+                    'metadata': image_info
+                })
     
     return jsonify({
         'status': 'success',

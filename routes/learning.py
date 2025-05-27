@@ -15,6 +15,7 @@ import os
 import json
 import uuid
 import traceback
+import base64
 from datetime import datetime
 from utils.file_handlers import handle_multiple_image_upload
 
@@ -29,7 +30,7 @@ learning_bp = Blueprint('learning', __name__)
 def upload_learning_data():
     """学習データ用の画像をアップロード（シンプル版）"""
     from app import app
-    from config import STATIC_SAMPLES_DIR
+    from config import TRAINING_DATA_DIR, METADATA_FILE
     
     if 'images' not in request.files:
         return jsonify({"error": "画像ファイルがありません"}), 400
@@ -39,13 +40,11 @@ def upload_learning_data():
     if not files or all(f.filename == '' for f in files):
         return jsonify({"error": "ファイルが選択されていません"}), 400
     
-    # 保存先ディレクトリ（性別分けをしない場合、直接papillaeに保存）
+    # 保存先ディレクトリ
     target_dir = TRAINING_DATA_DIR
     
     # gender パラメータをチェック
     gender = request.form.get('gender', 'unknown')
-    if gender in ['male', 'female']:
-        target_dir = os.path.join(target_dir, gender)
     
     # 共通関数を使用
     uploaded_files, errors = handle_multiple_image_upload(
@@ -54,16 +53,31 @@ def upload_learning_data():
         app.config.get('ALLOWED_EXTENSIONS')
     )
     
-    # パスの調整
+    # メタデータに性別情報を保存
+    metadata = {}
+    if os.path.exists(METADATA_FILE):
+        try:
+            with open(METADATA_FILE, 'r') as f:
+                metadata = json.load(f)
+        except:
+            metadata = {}
+    
+    # アップロードされたファイルのメタデータを更新
     for file_info in uploaded_files:
-        # 相対パスを正しく設定
-        if gender in ['male', 'female']:
-            file_info['path'] = f'papillae/{gender}/{file_info["filename"]}'
-        else:
-            file_info['path'] = f'papillae/{file_info["filename"]}'
+        filename = file_info['filename']
+        metadata[filename] = {
+            'gender': gender,
+            'upload_time': datetime.now().isoformat(),
+            'original_name': file_info.get('original_name', filename)
+        }
         
-        # URLも設定
-        file_info['url'] = f'/sample/{file_info["path"]}'
+        # URLを設定
+        file_info['url'] = f'/annotation/images/image/{filename}'
+    
+    # メタデータを保存
+    os.makedirs(os.path.dirname(METADATA_FILE), exist_ok=True)
+    with open(METADATA_FILE, 'w') as f:
+        json.dump(metadata, f, indent=2)
     
     result = {
         "success": len(uploaded_files) > 0,
@@ -85,59 +99,60 @@ def upload_learning_data():
 
 @learning_bp.route('/dataset-stats')
 def get_dataset_stats():
-    """
-    学習データセットの統計情報を取得（修正版）
-    
-    Returns:
-    - JSON: データセット統計情報
-    """
-    from config import TRAINING_DATA_MALE, TRAINING_DATA_FEMALE
+    """学習データセットの統計情報を取得"""
+    from config import TRAINING_IMAGES_DIR, TRAINING_LABELS_DIR, METADATA_FILE
     
     try:
-        # 各カテゴリのディレクトリパス（修正版）
-        male_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'male')
-        female_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'female')
-        unknown_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'unknown')
-        
-        # 画像ファイル数をカウント
-        male_count = len([f for f in os.listdir(TRAINING_DATA_MALE) 
-                         if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(TRAINING_DATA_MALE) else 0
-        female_count = len([f for f in os.listdir(TRAINING_DATA_FEMALE) 
-                           if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(TRAINING_DATA_FEMALE) else 0
-        unknown_count = len([f for f in os.listdir(unknown_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(unknown_dir) else 0
-        
-        # 合計カウント
-        total_count = male_count + female_count + unknown_count
-        
-        # アノテーション情報の取得
-        annotation_count = 0
-        annotation_file = os.path.join('static', 'annotation_mapping.json')
-        if os.path.exists(annotation_file):
+        # メタデータを読み込み
+        metadata = {}
+        if os.path.exists(METADATA_FILE):
             try:
-                with open(annotation_file, 'r') as f:
-                    annotations = json.load(f)
-                    annotation_count = len(annotations)
-            except Exception as e:
-                current_app.logger.error(f"アノテーション情報読み込みエラー: {str(e)}")
+                with open(METADATA_FILE, 'r') as f:
+                    metadata = json.load(f)
+            except:
+                pass
         
-        # 比率計算
-        male_ratio = (male_count / total_count * 100) if total_count > 0 else 0
-        female_ratio = (female_count / total_count * 100) if total_count > 0 else 0
-        annotation_ratio = (annotation_count / total_count * 100) if total_count > 0 else 0
+        # 画像とラベルのカウント
+        total_images = 0
+        total_labels = 0
+        male_count = 0
+        female_count = 0
+        unknown_count = 0
         
-        # デバッグログ追加
-        current_app.logger.info(f"データセット統計: オス={male_count}, メス={female_count}, 合計={total_count}")
+        if os.path.exists(TRAINING_IMAGES_DIR):
+            for filename in os.listdir(TRAINING_IMAGES_DIR):
+                if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                    total_images += 1
+                    
+                    # メタデータから性別情報を取得（ある場合）
+                    image_info = metadata.get(filename, {})
+                    gender = image_info.get('gender', 'unknown')
+                    
+                    if gender == 'male':
+                        male_count += 1
+                    elif gender == 'female':
+                        female_count += 1
+                    else:
+                        unknown_count += 1
+        
+        if os.path.exists(TRAINING_LABELS_DIR):
+            total_labels = len([f for f in os.listdir(TRAINING_LABELS_DIR) if f.endswith('.txt')])
+        
+        # アノテーション率
+        annotation_ratio = (total_labels / total_images * 100) if total_images > 0 else 0
         
         return jsonify({
+            "total_images": total_images,
+            "total_labels": total_labels,
             "male_count": male_count,
             "female_count": female_count,
             "unknown_count": unknown_count,
-            "total_count": total_count,
-            "annotation_count": annotation_count,
+            "annotation_count": total_labels,
+            "total_count": total_images,  # 互換性のため追加
             "ratios": {
-                "male": male_ratio,
-                "female": female_ratio,
-                "annotation": annotation_ratio
+                "annotation": annotation_ratio,
+                "male": (male_count / total_images * 100) if total_images > 0 else 0,
+                "female": (female_count / total_images * 100) if total_images > 0 else 0
             }
         })
         
@@ -148,22 +163,20 @@ def get_dataset_stats():
 
 @learning_bp.route('/learning-data')
 def get_learning_data():
-    """
-    学習データ一覧を取得
-    
-    Parameters:
-    - gender: フィルタリングする性別 (オプション)
-    
-    Returns:
-    - JSON: 学習データ一覧
-    """
-    from config import STATIC_SAMPLES_DIR
+    """学習データ一覧を取得"""
+    from config import TRAINING_IMAGES_DIR, TRAINING_LABELS_DIR, METADATA_FILE
     
     try:
         gender_filter = request.args.get('gender', 'all')
         
-        # サンプルディレクトリ
-        samples_base_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
+        # メタデータを読み込み
+        metadata = {}
+        if os.path.exists(METADATA_FILE):
+            try:
+                with open(METADATA_FILE, 'r') as f:
+                    metadata = json.load(f)
+            except:
+                pass
         
         result = {
             'male': [],
@@ -171,49 +184,36 @@ def get_learning_data():
             'unknown': []
         }
         
-        # 各性別フォルダを検索
-        for category in ['male', 'female', 'unknown']:
-            if gender_filter != 'all' and gender_filter != category:
-                continue
-                
-            category_dir = os.path.join(samples_base_dir, category)
-            if not os.path.exists(category_dir):
-                continue
-                
-            # 画像ファイルをリストアップ
-            for filename in os.listdir(category_dir):
+        # 画像ファイルをリストアップ
+        if os.path.exists(TRAINING_IMAGES_DIR):
+            for filename in os.listdir(TRAINING_IMAGES_DIR):
                 if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
-                    # アノテーション情報を確認
-                    rel_path = f"papillae/{category}/{filename}"
+                    # メタデータから情報を取得
+                    image_info = metadata.get(filename, {'gender': 'unknown'})
+                    gender = image_info.get('gender', 'unknown')
                     
-                    # アノテーション状態を確認
-                    has_annotation = False
-                    annotation_path = None
+                    if gender_filter != 'all' and gender_filter != gender:
+                        continue
                     
-                    mapping_file = os.path.join('static', 'annotation_mapping.json')
-                    if os.path.exists(mapping_file):
-                        try:
-                            with open(mapping_file, 'r') as f:
-                                mapping = json.load(f)
-                                if rel_path in mapping:
-                                    has_annotation = True
-                                    annotation_path = mapping[rel_path]
-                        except Exception:
-                            pass
+                    # ラベルファイルの存在確認
+                    label_file = os.path.splitext(filename)[0] + '.txt'
+                    has_annotation = os.path.exists(os.path.join(TRAINING_LABELS_DIR, label_file))
                     
-                    # 画像情報を追加
+                    # 画像情報を作成
                     sample_info = {
                         'filename': filename,
-                        'path': rel_path,
-                        'url': f"/sample/{rel_path}",
+                        'path': os.path.join(TRAINING_IMAGES_DIR, filename),
+                        'url': f"/annotation/images/image/{filename}",
                         'has_annotation': has_annotation,
-                        'category': category
+                        'category': gender,
+                        'metadata': image_info
                     }
                     
-                    if has_annotation:
-                        sample_info['annotation_path'] = annotation_path
-                    
-                    result[category].append(sample_info)
+                    # カテゴリに応じて振り分け
+                    if gender in result:
+                        result[gender].append(sample_info)
+                    else:
+                        result['unknown'].append(sample_info)
         
         # 総数情報を追加
         result['counts'] = {
@@ -231,47 +231,71 @@ def get_learning_data():
 
 @learning_bp.route('/delete-data', methods=['POST'])
 def delete_learning_data():
-    """
-    学習データを削除（シンプル版）
-    """
-    from config import STATIC_SAMPLES_DIR
+    """学習データを削除"""
+    from config import TRAINING_IMAGES_DIR, TRAINING_LABELS_DIR, METADATA_FILE, YOLO_DATASET_DIR
     
     try:
         data = request.json
-        if not data or 'path' not in data:
-            return jsonify({"error": "削除する画像のパスが指定されていません"}), 400
+        if not data or ('path' not in data and 'filename' not in data):
+            return jsonify({"error": "削除する画像の情報が指定されていません"}), 400
         
-        image_path = data['path']
+        # ファイル名を取得（pathまたはfilenameから）
+        if 'filename' in data:
+            filename = data['filename']
+        else:
+            # pathから抽出
+            path = data['path']
+            filename = os.path.basename(path)
         
         # パスの検証（セキュリティ）
-        if '..' in image_path:
-            return jsonify({"error": "不正なパスです"}), 400
+        if '..' in filename or '/' in filename or '\\' in filename:
+            return jsonify({"error": "不正なファイル名です"}), 400
         
-        # フルパスの構築（シンプルに）
-        if image_path.startswith('papillae/'):
-            full_path = os.path.join(STATIC_SAMPLES_DIR, image_path)
-        else:
-            # すでにフルパスの場合はそのまま使用
-            full_path = os.path.join(STATIC_SAMPLES_DIR, os.path.basename(image_path))
+        # 画像ファイルのフルパス
+        image_path = os.path.join(TRAINING_IMAGES_DIR, filename)
         
-        if not os.path.exists(full_path):
+        if not os.path.exists(image_path):
             return jsonify({"error": "指定された画像が見つかりません"}), 404
         
         # 画像ファイルを削除
-        os.remove(full_path)
+        os.remove(image_path)
         
-        # 関連するYOLOアノテーションも削除
-        base_name = os.path.splitext(os.path.basename(full_path))[0]
+        # 関連するラベルファイルも削除
+        base_name = os.path.splitext(filename)[0]
+        label_path = os.path.join(TRAINING_LABELS_DIR, f'{base_name}.txt')
+        if os.path.exists(label_path):
+            os.remove(label_path)
+        
+        # YOLOデータセットからも削除
         yolo_paths = [
-            os.path.join('data/yolo_dataset/labels/train', f'{base_name}.txt'),
-            os.path.join('data/yolo_dataset/labels/val', f'{base_name}.txt')
+            os.path.join(YOLO_DATASET_DIR, 'images/train', filename),
+            os.path.join(YOLO_DATASET_DIR, 'images/val', filename),
+            os.path.join(YOLO_DATASET_DIR, 'labels/train', f'{base_name}.txt'),
+            os.path.join(YOLO_DATASET_DIR, 'labels/val', f'{base_name}.txt')
         ]
         
         for yolo_path in yolo_paths:
             if os.path.exists(yolo_path):
-                os.remove(yolo_path)
+                try:
+                    os.remove(yolo_path)
+                except Exception as e:
+                    current_app.logger.warning(f"YOLOファイル削除エラー: {yolo_path} - {str(e)}")
         
-        current_app.logger.info(f"学習データ削除: {image_path}")
+        # メタデータから削除
+        metadata = {}
+        if os.path.exists(METADATA_FILE):
+            try:
+                with open(METADATA_FILE, 'r') as f:
+                    metadata = json.load(f)
+            except:
+                pass
+        
+        if filename in metadata:
+            del metadata[filename]
+            with open(METADATA_FILE, 'w') as f:
+                json.dump(metadata, f, indent=2)
+        
+        current_app.logger.info(f"学習データ削除: {filename}")
         
         return jsonify({
             "success": True,
@@ -284,56 +308,64 @@ def delete_learning_data():
 
 @learning_bp.route('/delete-all-data', methods=['POST'])
 def delete_all_learning_data():
-    """
-    全ての学習データを削除
-    """
-    from config import STATIC_SAMPLES_DIR
+    """全ての学習データを削除"""
+    from config import TRAINING_IMAGES_DIR, TRAINING_LABELS_DIR, METADATA_FILE, YOLO_DATASET_DIR
     
     try:
-        # 各カテゴリのディレクトリ
-        categories = ['male', 'female', 'unknown']
         deleted_count = 0
-        deleted_files = []  # デバッグ用
+        deleted_files = []
         
-        for category in categories:
-            category_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', category)
-            if not os.path.exists(category_dir):
-                continue
-                
-            # 画像ファイルを削除
-            for filename in os.listdir(category_dir):
+        # 画像ファイルを削除
+        if os.path.exists(TRAINING_IMAGES_DIR):
+            for filename in os.listdir(TRAINING_IMAGES_DIR):
                 if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
-                    file_path = os.path.join(category_dir, filename)
+                    file_path = os.path.join(TRAINING_IMAGES_DIR, filename)
                     try:
                         os.remove(file_path)
                         deleted_count += 1
-                        deleted_files.append(f"{category}/{filename}")  # デバッグ用
-                        
-                        # YOLOアノテーションも削除
-                        base_name = os.path.splitext(filename)[0]
-                        yolo_paths = [
-                            os.path.join('data/yolo_dataset/labels/train', f'{base_name}.txt'),
-                            os.path.join('data/yolo_dataset/labels/val', f'{base_name}.txt'),
-                            os.path.join('data/yolo_dataset/images/train', filename),
-                            os.path.join('data/yolo_dataset/images/val', filename)
-                        ]
-                        
-                        for yolo_path in yolo_paths:
-                            if os.path.exists(yolo_path):
-                                try:
-                                    os.remove(yolo_path)
-                                except Exception as e:
-                                    current_app.logger.warning(f"YOLOファイル削除エラー: {yolo_path} - {str(e)}")
+                        deleted_files.append(filename)
                     except Exception as e:
                         current_app.logger.error(f"ファイル削除エラー: {file_path} - {str(e)}")
         
-        current_app.logger.info(f"全学習データ削除: {deleted_count}ファイル - {deleted_files}")
+        # ラベルファイルを削除
+        if os.path.exists(TRAINING_LABELS_DIR):
+            for filename in os.listdir(TRAINING_LABELS_DIR):
+                if filename.endswith('.txt'):
+                    file_path = os.path.join(TRAINING_LABELS_DIR, filename)
+                    try:
+                        os.remove(file_path)
+                    except Exception as e:
+                        current_app.logger.error(f"ラベル削除エラー: {file_path} - {str(e)}")
+        
+        # YOLOデータセットもクリア
+        yolo_dirs = [
+            os.path.join(YOLO_DATASET_DIR, 'images/train'),
+            os.path.join(YOLO_DATASET_DIR, 'images/val'),
+            os.path.join(YOLO_DATASET_DIR, 'labels/train'),
+            os.path.join(YOLO_DATASET_DIR, 'labels/val')
+        ]
+        
+        for yolo_dir in yolo_dirs:
+            if os.path.exists(yolo_dir):
+                for filename in os.listdir(yolo_dir):
+                    file_path = os.path.join(yolo_dir, filename)
+                    try:
+                        os.remove(file_path)
+                    except Exception as e:
+                        current_app.logger.warning(f"YOLOファイル削除エラー: {file_path} - {str(e)}")
+        
+        # メタデータをクリア
+        if os.path.exists(METADATA_FILE):
+            with open(METADATA_FILE, 'w') as f:
+                json.dump({}, f)
+        
+        current_app.logger.info(f"全学習データ削除: {deleted_count}ファイル")
         
         return jsonify({
             "success": True,
             "message": f"{deleted_count}個の画像を削除しました",
             "deleted_count": deleted_count,
-            "deleted_files": deleted_files  # デバッグ情報
+            "deleted_files": deleted_files
         })
         
     except Exception as e:
@@ -388,22 +420,22 @@ def save_annotation():
         # 新しいファイル名（元の名前に_annotation付加）
         new_filename = f"{basename}_annotation{ext}"
         
-        # アノテーション保存ディレクトリ
-        from config import STATIC_ANNOTATIONS_DIR
-        os.makedirs(STATIC_ANNOTATIONS_DIR, exist_ok=True)
+        # アノテーション保存ディレクトリ（検出結果ディレクトリを使用）
+        from config import DETECTION_RESULTS_DIR
+        os.makedirs(DETECTION_RESULTS_DIR, exist_ok=True)
         
         # 同名ファイルが既に存在する場合はユニークな名前に変更
-        save_path = os.path.join(STATIC_ANNOTATIONS_DIR, new_filename)
+        save_path = os.path.join(DETECTION_RESULTS_DIR, new_filename)
         if os.path.exists(save_path):
             unique_suffix = uuid.uuid4().hex[:8]
             new_filename = f"{basename}_annotation_{unique_suffix}{ext}"
-            save_path = os.path.join(STATIC_ANNOTATIONS_DIR, new_filename)
+            save_path = os.path.join(DETECTION_RESULTS_DIR, new_filename)
         
         # 画像の保存
         with open(save_path, 'wb') as f:
             f.write(image_bytes)
         
-        # アノテーションマッピングファイルの更新
+        # アノテーションマッピングファイルの更新（後方互換性のため残す）
         annotation_mapping_file = os.path.join('static', 'annotation_mapping.json')
         
         # 既存のマッピングを読み込み
@@ -418,18 +450,18 @@ def save_annotation():
         
         # 新しいマッピングを追加
         # 相対パスでマッピングを保存
-        relative_annotation_path = f"images/annotations/{new_filename}"
+        relative_annotation_path = f"detection_results/{new_filename}"
         mapping[original_path] = relative_annotation_path
         
         # マッピングファイルを更新
+        os.makedirs(os.path.dirname(annotation_mapping_file), exist_ok=True)
         with open(annotation_mapping_file, 'w') as f:
             json.dump(mapping, f, indent=2)
         
         current_app.logger.info(f"アノテーション保存完了: {new_filename}")
         
         return jsonify({
-            "success": True, 
-            # "message": "アノテーションを保存しました",
+            "success": True,
             "annotation_path": save_path,
             "filename": new_filename,
             "mapping_updated": True
@@ -440,74 +472,6 @@ def save_annotation():
         traceback.print_exc()
         return jsonify({"error": f"アノテーションの保存中にエラーが発生しました: {str(e)}"}), 500
 
-
-def validate_dataset_for_training_fixed():
-    """
-    訓練用データセットの検証（修正版）
-    
-    Returns:
-    - dict: 検証結果
-    """
-    try:
-        # データセット統計取得（修正版）
-        stats_response = get_dataset_stats()
-        stats_data = stats_response.get_json()
-        
-        # 修正: より緩い検証ルール
-        validation_rules = [
-            {
-                "condition": stats_data.get('male_count', 0) >= 1,  # 1枚以上に緩和
-                "message": "オス画像が最低1枚必要です",
-                "current": stats_data.get('male_count', 0),
-                "required": 1,
-                "suggestion": "オスのウニ生殖乳頭画像をアップロードしてください"
-            },
-            {
-                "condition": stats_data.get('female_count', 0) >= 1,  # 1枚以上に緩和
-                "message": "メス画像が最低1枚必要です",
-                "current": stats_data.get('female_count', 0),
-                "required": 1,
-                "suggestion": "メスのウニ生殖乳頭画像をアップロードしてください"
-            },
-            {
-                "condition": stats_data.get('total_count', 0) >= 2,  # 2枚以上に緩和
-                "message": "合計画像数が最低2枚必要です",
-                "current": stats_data.get('total_count', 0),
-                "required": 2,
-                "suggestion": "より多くの学習データを追加することで精度が向上します"
-            }
-        ]
-        
-        # 検証実行
-        failed_rules = [rule for rule in validation_rules if not rule['condition']]
-        
-        if failed_rules:
-            return {
-                "valid": False,
-                "message": "データセットが訓練要件を満たしていません",
-                "failed_requirements": failed_rules,
-                "suggestions": [rule['suggestion'] for rule in failed_rules],
-                "stats": stats_data
-            }
-        
-        # 品質チェック
-        quality_warnings = check_dataset_quality(stats_data)
-        
-        return {
-            "valid": True,
-            "message": "データセットは訓練準備完了です",
-            "stats": stats_data,
-            "quality_warnings": quality_warnings,
-            "estimated_accuracy": estimate_model_accuracy(stats_data)
-        }
-        
-    except Exception as e:
-        current_app.logger.error(f"データセット検証エラー: {str(e)}")
-        return {
-            "valid": False,
-            "message": f"検証中にエラーが発生しました: {str(e)}",
-            "stats": {}
-        }
 
 
 # ================================
@@ -823,12 +787,14 @@ def estimate_model_accuracy(stats_data):
     # バランスによる補正
     male_count = stats_data.get('male_count', 0)
     female_count = stats_data.get('female_count', 0)
+    balance = 0
     if total_count > 0:
         balance = min(male_count, female_count) / max(male_count, female_count, 1)
         base_accuracy += balance * 0.1
     
     # アノテーション率による補正
     annotation_count = stats_data.get('annotation_count', 0)
+    annotation_rate = 0
     if total_count > 0:
         annotation_rate = annotation_count / total_count
         base_accuracy += annotation_rate * 0.15
@@ -838,8 +804,8 @@ def estimate_model_accuracy(stats_data):
         "confidence_level": "medium" if total_count >= 20 else "low",
         "factors": {
             "data_quantity": total_count,
-            "data_balance": balance if total_count > 0 else 0,
-            "annotation_rate": annotation_rate if total_count > 0 else 0
+            "data_balance": balance,
+            "annotation_rate": annotation_rate
         }
     }
 
@@ -980,44 +946,6 @@ def calculate_completion_percentage(status):
     current_contribution = (current_progress / 100) * current_phase_weight
     
     return min(100, base_percentage + current_contribution)
-
-def format_timestamp_to_date(timestamp):
-    """
-    タイムスタンプを読みやすい日付形式に変換（修正版）
-    
-    Parameters:
-    - timestamp: タイムスタンプ文字列（複数形式対応）
-    
-    Returns:
-    - str: フォーマットされた日付文字列
-    """
-    if not timestamp:
-        return '日時不明'
-    
-    try:
-        # ISO形式（2025-05-23T09:18:35.558600）の場合
-        if 'T' in timestamp:
-            dt = datetime.fromisoformat(timestamp.split('.')[0])
-            return dt.strftime("%Y年%m月%d日 %H:%M:%S")
-        
-        # YYYYMMdd_HHMMSS形式の場合
-        elif '_' in timestamp and len(timestamp) >= 15:
-            year = timestamp[0:4]
-            month = timestamp[4:6]
-            day = timestamp[6:8]
-            hour = timestamp[9:11]
-            minute = timestamp[11:13]
-            second = timestamp[13:15]
-            
-            date = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
-            return date.strftime("%Y年%m月%d日 %H:%M:%S")
-        
-        # その他の形式
-        else:
-            return timestamp
-    except Exception as e:
-        current_app.logger.error(f"日付変換エラー: {timestamp} - {str(e)}")
-        return timestamp
 
 
 @learning_bp.route('/delete-annotation', methods=['POST'])
@@ -1458,65 +1386,88 @@ def learning_dashboard():
 
 def get_dataset_info():
     """データセット情報を取得"""
-    from config import STATIC_SAMPLES_DIR
+    from config import TRAINING_IMAGES_DIR, METADATA_FILE
     import os
     
-    # papillaeディレクトリのパス
-    papillae_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
+    # メタデータを読み込み
+    metadata = {}
+    if os.path.exists(METADATA_FILE):
+        try:
+            with open(METADATA_FILE, 'r') as f:
+                metadata = json.load(f)
+        except:
+            pass
     
     male_count = 0
     female_count = 0
-    
-    # maleディレクトリ
-    male_dir = os.path.join(papillae_dir, 'male')
-    if os.path.exists(male_dir):
-        male_count = len([f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
-    
-    # femaleディレクトリ
-    female_dir = os.path.join(papillae_dir, 'female')
-    if os.path.exists(female_dir):
-        female_count = len([f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
-    
-    # unknownディレクトリもチェック
     unknown_count = 0
-    unknown_dir = os.path.join(papillae_dir, 'unknown')
-    if os.path.exists(unknown_dir):
-        unknown_count = len([f for f in os.listdir(unknown_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
+    total_count = 0
+    
+    if os.path.exists(TRAINING_IMAGES_DIR):
+        for filename in os.listdir(TRAINING_IMAGES_DIR):
+            if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                total_count += 1
+                
+                # メタデータから性別情報を取得
+                image_info = metadata.get(filename, {})
+                gender = image_info.get('gender', 'unknown')
+                
+                if gender == 'male':
+                    male_count += 1
+                elif gender == 'female':
+                    female_count += 1
+                else:
+                    unknown_count += 1
     
     return {
         'male': male_count,
         'female': female_count,
         'unknown': unknown_count,
-        'total': male_count + female_count + unknown_count
+        'total': total_count
     }
 
 
 def get_total_annotations():
     """総アノテーション数を取得（修正版）"""
+    from config import TRAINING_LABELS_DIR, YOLO_DATASET_DIR
     import os
     
     total_annotations = 0
     
-    # YOLOデータセットのラベルファイルをカウント
-    label_dirs = [
-        'data/yolo_dataset/labels/train',
-        'data/yolo_dataset/labels/val'
+    # 学習ラベルディレクトリ
+    if os.path.exists(TRAINING_LABELS_DIR):
+        for txt_file in os.listdir(TRAINING_LABELS_DIR):
+            if txt_file.endswith('.txt'):
+                file_path = os.path.join(TRAINING_LABELS_DIR, txt_file)
+                try:
+                    with open(file_path, 'r') as f:
+                        content = f.read().strip()
+                        if content:
+                            lines = content.split('\n')
+                            total_annotations += len([line for line in lines if line.strip()])
+                except:
+                    pass
+    
+    # YOLOデータセットのラベルファイルもカウント（重複を避けるため別途カウント）
+    yolo_label_dirs = [
+        os.path.join(YOLO_DATASET_DIR, 'labels/train'),
+        os.path.join(YOLO_DATASET_DIR, 'labels/val')
     ]
     
-    for label_dir in label_dirs:
+    yolo_annotations = 0
+    for label_dir in yolo_label_dirs:
         if os.path.exists(label_dir):
-            # .txtファイルの内容も確認（空ファイルを除外）
             for txt_file in os.listdir(label_dir):
                 if txt_file.endswith('.txt'):
                     file_path = os.path.join(label_dir, txt_file)
                     try:
                         with open(file_path, 'r') as f:
                             content = f.read().strip()
-                            if content:  # 空でないファイルのみカウント
-                                # 行数をカウント（各行が1つのアノテーション）
+                            if content:
                                 lines = content.split('\n')
-                                total_annotations += len([line for line in lines if line.strip()])
+                                yolo_annotations += len([line for line in lines if line.strip()])
                     except:
                         pass
     
-    return total_annotations
+    # より大きい値を返す（重複を避けるため）
+    return max(total_annotations, yolo_annotations)

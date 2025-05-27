@@ -6,6 +6,7 @@
 import os
 import numpy as np
 import joblib
+import json
 import traceback
 from datetime import datetime
 
@@ -109,7 +110,7 @@ def processing_worker(queue, status_dict, app_config):
                                 print("特徴量のスケーリング実行中")
                                 X_scaled = scaler.transform(X)
                                 
-                                # ★修正: モデル評価の実行（新しいディレクトリ構造使用）
+                                # モデル評価の実行
                                 print("モデル評価の実行を開始")
                                 
                                 # configから評価データディレクトリを取得
@@ -122,7 +123,7 @@ def processing_worker(queue, status_dict, app_config):
                                 # モデル評価実行（出力ディレクトリを明示的に指定）
                                 eval_results = evaluate_model(
                                     X_scaled, y, model, 
-                                    output_dir=EVALUATION_DATA_DIR  # ★修正: 明示的に指定
+                                    output_dir=EVALUATION_DATA_DIR
                                 )
                                 
                                 # 処理完了を記録
@@ -168,7 +169,7 @@ def processing_worker(queue, status_dict, app_config):
                     # 分析実行（出力ディレクトリを明示的に指定）
                     result = analyze_annotation_impact(
                         dataset_dir, model_path, 
-                        output_dir=EVALUATION_DATA_DIR  # ★修正: 明示的に指定
+                        output_dir=EVALUATION_DATA_DIR
                     )
                     
                     # 処理完了を記録
@@ -233,27 +234,44 @@ def process_dataset_for_evaluation(dataset_dir):
     評価用のデータセットを処理し、特徴量とラベルを返す
     
     Parameters:
-    - dataset_dir: データセットディレクトリ
+    - dataset_dir: データセットディレクトリ（互換性のため残すが使用しない）
     
     Returns:
     - X: 特徴量行列
     - y: ラベルベクトル
     """
-    print(f"評価用データセット処理開始: {dataset_dir}")
+    print(f"評価用データセット処理開始")
     
     try:
-        # データセットの各クラスのパス
-        male_dir = os.path.join(dataset_dir, "male")
-        female_dir = os.path.join(dataset_dir, "female")
+        from config import TRAINING_IMAGES_DIR, METADATA_FILE
         
-        # パスの存在確認
-        if not os.path.exists(male_dir) or not os.path.exists(female_dir):
-            print(f"データセットディレクトリが見つかりません - male: {os.path.exists(male_dir)}, female: {os.path.exists(female_dir)}")
-            return create_test_data()
+        # メタデータを読み込み
+        metadata = {}
+        if os.path.exists(METADATA_FILE):
+            try:
+                with open(METADATA_FILE, 'r') as f:
+                    metadata = json.load(f)
+            except:
+                print("メタデータの読み込みに失敗しました")
+                metadata = {}
         
         # 画像ファイル一覧の取得
-        male_images = [os.path.join(male_dir, f) for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-        female_images = [os.path.join(female_dir, f) for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+        male_images = []
+        female_images = []
+        
+        if os.path.exists(TRAINING_IMAGES_DIR):
+            for filename in os.listdir(TRAINING_IMAGES_DIR):
+                if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                    # メタデータから性別を取得
+                    image_info = metadata.get(filename, {})
+                    gender = image_info.get('gender', 'unknown')
+                    
+                    full_path = os.path.join(TRAINING_IMAGES_DIR, filename)
+                    
+                    if gender == 'male':
+                        male_images.append(full_path)
+                    elif gender == 'female':
+                        female_images.append(full_path)
         
         print(f"画像ファイル数 - オス: {len(male_images)}, メス: {len(female_images)}")
         
@@ -429,19 +447,37 @@ def execute_feature_extraction_phase(task_id, dataset_dir, status_dict):
     })
     
     try:
-        from config import STATIC_SAMPLES_DIR
+        from config import TRAINING_IMAGES_DIR, METADATA_FILE
         
-        # 実際の学習データは static/images/samples/papillae/ にある
-        male_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'male')
-        female_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae', 'female')
+        # メタデータを読み込み
+        metadata = {}
+        if os.path.exists(METADATA_FILE):
+            try:
+                with open(METADATA_FILE, 'r') as f:
+                    metadata = json.load(f)
+            except:
+                metadata = {}
         
         # 画像ファイルをチェック
-        male_images = [f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))] if os.path.exists(male_dir) else []
-        female_images = [f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))] if os.path.exists(female_dir) else []
+        male_images = 0
+        female_images = 0
+        total_images = 0
         
-        total_images = len(male_images) + len(female_images)
+        if os.path.exists(TRAINING_IMAGES_DIR):
+            for filename in os.listdir(TRAINING_IMAGES_DIR):
+                if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                    total_images += 1
+                    
+                    # メタデータから性別を取得
+                    image_info = metadata.get(filename, {})
+                    gender = image_info.get('gender', 'unknown')
+                    
+                    if gender == 'male':
+                        male_images += 1
+                    elif gender == 'female':
+                        female_images += 1
         
-        print(f"検出された画像数: オス={len(male_images)}, メス={len(female_images)}, 合計={total_images}")
+        print(f"検出された画像数: オス={male_images}, メス={female_images}, 合計={total_images}")
         
         # 進捗更新
         status_dict[task_id].update({
@@ -449,12 +485,12 @@ def execute_feature_extraction_phase(task_id, dataset_dir, status_dict):
             "progress": 20
         })
         
-        # ★修正: 最低要件を緩和（10枚→4枚）かつオス・メス両方必須
+        # 最低要件を緩和（4枚以上、オス・メス両方必須）
         if total_images < 4:
             raise Exception(f"特徴量抽出には最低4枚の画像が必要です (現在: {total_images}枚)")
         
-        if len(male_images) == 0 or len(female_images) == 0:
-            raise Exception(f"オスとメスの両方の画像が必要です (オス: {len(male_images)}枚, メス: {len(female_images)}枚)")
+        if male_images == 0 or female_images == 0:
+            raise Exception(f"オスとメスの両方の画像が必要です (オス: {male_images}枚, メス: {female_images}枚)")
         
         # フェーズ完了
         phases_completed = status_dict[task_id].get('phases_completed', [])
@@ -485,10 +521,6 @@ def execute_model_training_phase(task_id, dataset_dir, status_dict):
     
     try:
         from core.analyzer import UnifiedAnalyzer as UrchinPapillaeAnalyzer
-        from config import STATIC_SAMPLES_DIR
-        
-        actual_dataset_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
-        print(f"実際の学習データディレクトリ: {actual_dataset_dir}")
         
         analyzer = UrchinPapillaeAnalyzer()
         
@@ -497,6 +529,7 @@ def execute_model_training_phase(task_id, dataset_dir, status_dict):
             "progress": 50
         })
         
+        # dataset_dirは互換性のため受け取るが、実際はTRAINING_DATA_DIRを使用
         success = analyzer.train_model(TRAINING_DATA_DIR, task_id) 
         
         if not success:
@@ -576,24 +609,21 @@ def execute_detailed_analysis_phase(task_id, dataset_dir, status_dict, evaluatio
     })
     
     try:
-        from config import MODELS_DIR, STATIC_SAMPLES_DIR
+        from config import MODELS_DIR
         model_path = os.path.join(MODELS_DIR, 'saved', 'sea_urchin_rf_model.pkl')
         
-        # 正しいデータセットディレクトリを使用
-        actual_dataset_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
-        
         if os.path.exists(model_path):
-            # データセットからの特徴量抽出
-            X, y = process_dataset_for_evaluation(actual_dataset_dir)
+            # データセットからの特徴量抽出（新しいprocess_dataset_for_evaluationを使用）
+            X, y = process_dataset_for_evaluation(None)  # dataset_dirは使用しない
             
             if X is not None and y is not None:
-                # ★修正: UnifiedEvaluatorを使用
+                # UnifiedEvaluatorを使用
                 evaluator = UnifiedEvaluator()
                 eval_results = evaluator.evaluate_model(
                     X, y, model_path=model_path, save_results=True
                 )
                 
-                # ★追加: タイムスタンプを保存
+                # タイムスタンプを保存
                 status_dict[task_id]['evaluation_timestamp'] = eval_results.get('timestamp')
                 
                 # 進捗更新
@@ -638,19 +668,19 @@ def execute_annotation_impact_phase(task_id, dataset_dir, status_dict):
     })
     
     try:
-        from config import MODELS_DIR, STATIC_SAMPLES_DIR
+        from config import MODELS_DIR
         model_path = os.path.join(MODELS_DIR, 'saved', 'sea_urchin_rf_model.pkl')
         
-        # 正しいデータセットディレクトリを使用
-        actual_dataset_dir = os.path.join(STATIC_SAMPLES_DIR, 'papillae')
-        
-        # ★修正: 評価フェーズのタイムスタンプを取得して渡す
+        # 評価フェーズのタイムスタンプを取得して渡す
         evaluation_timestamp = status_dict[task_id].get('evaluation_timestamp')
         
-        # ★修正: UnifiedEvaluatorを使用（タイムスタンプを渡す）
+        # UnifiedEvaluatorを使用（タイムスタンプを渡す）
         evaluator = UnifiedEvaluator()
         annotation_result = evaluator.analyze_annotation_impact(
-            actual_dataset_dir, model_path, save_results=True, timestamp=evaluation_timestamp
+            None,  # dataset_dirは使用しない
+            model_path, 
+            save_results=True, 
+            timestamp=evaluation_timestamp
         )
         
         # 進捗更新
@@ -698,11 +728,10 @@ def create_unified_result(training_result, evaluation_result, detailed_result, a
     # アノテーション情報
     annotation_dataset = annotation_result.get('dataset', {})
     
-    # ★修正: detailed_resultからタイムスタンプを取得
+    # detailed_resultからタイムスタンプを取得
     timestamp = detailed_result.get('timestamp', datetime.now().isoformat())
     
-    # ★追加: アノテーション画像用のタイムスタンプを取得
-    # annotation_resultにtimestampがあればそれを使用、なければtimestampから生成
+    # アノテーション画像用のタイムスタンプを取得
     if 'timestamp' in annotation_result:
         annotation_timestamp = annotation_result['timestamp']
     else:
@@ -743,14 +772,13 @@ def create_unified_result(training_result, evaluation_result, detailed_result, a
             "dataset": annotation_dataset,
             "impact_score": calculate_annotation_impact_score(annotation_dataset),
             "recommendations": generate_annotation_recommendations(annotation_dataset),
-            # ★修正: アノテーション画像のタイムスタンプ情報
             "annotation_timestamp": annotation_timestamp
         },
         "improvement_suggestions": generate_improvement_suggestions(
             accuracy, annotation_dataset, detailed_result.get('sample_count', 0)
         ),
         "metadata": {
-            "timestamp": timestamp,  # ★修正: 評価時のタイムスタンプを使用
+            "timestamp": timestamp,
             "model_type": "RandomForest",
             "feature_count": 5,
             "training_method": "unified"
@@ -869,3 +897,6 @@ def generate_improvement_suggestions(accuracy, annotation_dataset, sample_count)
     
     return suggestions
 
+# 必要な関数のインポート
+from utils.model_evaluation import evaluate_model
+from utils.annotation_analysis import analyze_annotation_impact

@@ -27,13 +27,6 @@ YOLO_DATASET_DIR = os.path.join(DATA_DIR, 'yolo_dataset')
 # メタデータ
 METADATA_FILE = os.path.join(DATA_DIR, 'metadata.json')
 
-# 古い設定（後方互換性のため一時的に残す）
-STATIC_SAMPLES_DIR = os.path.join(STATIC_DIR, 'images/samples')
-STATIC_IMAGES_DIR = os.path.join(STATIC_DIR, 'images')
-STATIC_ANNOTATIONS_DIR = os.path.join(STATIC_DIR, 'images/annotations')
-TRAINING_DATA_MALE = os.path.join(STATIC_SAMPLES_DIR, 'papillae/male')
-TRAINING_DATA_FEMALE = os.path.join(STATIC_SAMPLES_DIR, 'papillae/female')
-
 # その他の設定
 MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100MB
 DEBUG = True
@@ -52,9 +45,6 @@ def ensure_directories():
         EVALUATION_DATA_DIR,
         DATA_DIR,
         YOLO_DATASET_DIR,
-        # 古いディレクトリ（移行期間中）
-        STATIC_SAMPLES_DIR,
-        STATIC_ANNOTATIONS_DIR,
     ]
     
     for directory in directories:
