@@ -4,6 +4,7 @@ from logging.handlers import RotatingFileHandler
 from flask import Flask, send_from_directory, jsonify, abort
 import threading
 import queue
+import sys
 from app_utils.file_cleanup import cleanup_temp_files, schedule_cleanup
 from config import * 
 from routes.yolo import yolo_bp
@@ -44,6 +45,45 @@ app.config.update({
 # 必要なディレクトリの作成
 ensure_directories()
 
+# システムの準備状態をチェック
+def check_system_readiness():
+    """システムの準備状態をチェック"""
+    issues = []
+    warnings = []
+    
+    # YOLOv5チェック
+    if not os.path.exists('yolov5'):
+        issues.append("YOLOv5がインストールされていません。`python setup_yolo.py`を実行してください。")
+    
+    # RandomForestモデルチェック
+    model_path = os.path.join(MODELS_DIR, 'saved', 'sea_urchin_rf_model.pkl')
+    if not os.path.exists(model_path):
+        warnings.append("RandomForestモデルが未学習です。雌雄判定機能は学習後に利用可能になります。")
+    
+    # 結果をログ出力
+    if issues:
+        logger.error("🚨 システム起動エラー:")
+        for issue in issues:
+            logger.error(f"  - {issue}")
+        return False, issues, warnings
+    
+    if warnings:
+        logger.warning("⚠️  システム警告:")
+        for warning in warnings:
+            logger.warning(f"  - {warning}")
+    else:
+        logger.info("✅ システムチェック完了: すべての要件を満たしています")
+    
+    return True, issues, warnings
+
+# システムチェックの実行
+system_ready, system_issues, system_warnings = check_system_readiness()
+
+if not system_ready:
+    logger.error("システム要件を満たしていません。上記のエラーを解決してください。")
+    logger.error("詳細はREADME.mdを参照してください。")
+    sys.exit(1)
+
 # 起動時クリーンアップ
 with app.app_context():
     cleanup_count = cleanup_temp_files(
@@ -66,7 +106,22 @@ app.register_blueprint(training_bp)
 app.register_blueprint(annotation_images_bp)
 app.register_blueprint(annotation_editor_bp)
 
+# グローバル処理状態（タスク管理用）
+processing_status = {}
+processing_queue = queue.Queue()
 
+# ワーカースレッドの起動
+def start_worker_thread():
+    from app_utils.worker import processing_worker
+    worker_thread = threading.Thread(
+        target=processing_worker,
+        args=(processing_queue, processing_status, app.config),
+        daemon=True
+    )
+    worker_thread.start()
+    logger.info("ワーカースレッドを起動しました")
+
+start_worker_thread()
 
 # ファイル配信ルートの一元化
 @app.route('/uploads/<filename>')
@@ -90,19 +145,41 @@ def system_status():
     """システム全体の状態を取得"""
     try:
         # データセット統計
-        male_dir = os.path.join(app.config['DATASET_FOLDER'], 'male')
-        female_dir = os.path.join(app.config['DATASET_FOLDER'], 'female')
+        from config import TRAINING_IMAGES_DIR, METADATA_FILE
+        import json
         
-        male_count = len([f for f in os.listdir(male_dir) 
-                         if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(male_dir) else 0
-        female_count = len([f for f in os.listdir(female_dir) 
-                           if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(female_dir) else 0
+        # メタデータ読み込み
+        metadata = {}
+        if os.path.exists(METADATA_FILE):
+            try:
+                with open(METADATA_FILE, 'r') as f:
+                    metadata = json.load(f)
+            except:
+                pass
+        
+        # 画像カウント
+        male_count = 0
+        female_count = 0
+        unknown_count = 0
+        
+        if os.path.exists(TRAINING_IMAGES_DIR):
+            for filename in os.listdir(TRAINING_IMAGES_DIR):
+                if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                    image_info = metadata.get(filename, {})
+                    gender = image_info.get('gender', 'unknown')
+                    if gender == 'male':
+                        male_count += 1
+                    elif gender == 'female':
+                        female_count += 1
+                    else:
+                        unknown_count += 1
         
         # アクティブタスク数
         active_tasks = len([t for t in processing_status.values() 
                           if t.get('status') in ['processing', 'queued', 'running']])
         
         # モデル存在確認
+        model_path = os.path.join(MODELS_DIR, 'saved', 'sea_urchin_rf_model.pkl')
         model_exists = os.path.exists(model_path)
         
         # YOLOモデルの確認
@@ -122,28 +199,54 @@ def system_status():
             'dataset': {
                 'male_count': male_count,
                 'female_count': female_count,
-                'total_count': male_count + female_count
+                'unknown_count': unknown_count,
+                'total_count': male_count + female_count + unknown_count
             },
             'tasks': {
                 'active': active_tasks,
                 'total': len(processing_status)
             },
             'model': {
-                'exists': model_exists,
-                'path': model_path
-            },
-            'yolo_model': {
-                'exists': yolo_model_exists,
-                'path': yolo_model_path
+                'random_forest': {
+                    'exists': model_exists,
+                    'path': model_path if model_exists else None,
+                    'status': 'ready' if model_exists else 'not_trained'
+                },
+                'yolo': {
+                    'exists': yolo_model_exists,
+                    'path': yolo_model_path,
+                    'status': 'ready' if yolo_model_exists else 'not_trained'
+                }
             },
             'system': {
                 'version': '1.0.0',
-                'status': 'healthy'
+                'status': 'healthy',
+                'warnings': system_warnings
             }
         })
     except Exception as e:
         logger.error(f"システム状態取得エラー: {str(e)}")
         return jsonify({'error': 'システム状態の取得に失敗しました'}), 500
+
+# 起動時のシステム状態表示
+@app.route('/api/startup-info')
+def startup_info():
+    """起動時の情報を提供"""
+    return jsonify({
+        'ready': system_ready,
+        'issues': system_issues,
+        'warnings': system_warnings,
+        'guidance': {
+            'model_not_trained': {
+                'message': 'モデルの学習が必要です',
+                'steps': [
+                    '1. 「学習データ」タブでオス・メスの画像をアップロード',
+                    '2. 「機械学習」タブで学習を実行',
+                    '3. 学習完了後、雌雄判定が利用可能になります'
+                ]
+            }
+        }
+    })
 
 # エラーハンドラー
 @app.errorhandler(404)
@@ -162,14 +265,22 @@ def too_large(error):
 
 # アプリケーション起動
 if __name__ == '__main__':
+    logger.info("=" * 60)
+    logger.info("🦀 ウニ生殖乳頭分析システム 起動")
+    logger.info("=" * 60)
+    
     logger.info("登録されているルート:")
     for rule in app.url_map.iter_rules():
         logger.info(f"  {rule} -> {rule.endpoint} [{', '.join(rule.methods)}]")
     
-    # YOLOv5ディレクトリの確認
-    if not os.path.exists('yolov5'):
-        logger.warning("YOLOv5ディレクトリが見つかりません。YOLOv5のクローンが必要です。")
-        logger.info("実行: git clone https://github.com/ultralytics/yolov5.git")
+    # システム状態サマリー
+    if system_warnings:
+        logger.info("\n⚠️  起動時の注意事項:")
+        for warning in system_warnings:
+            logger.info(f"  - {warning}")
+        logger.info("\n詳細は http://localhost:8080 でご確認ください")
     
-    logger.info("アプリケーションを起動します")
+    logger.info("\nアプリケーションを起動します")
+    logger.info("URL: http://localhost:8080")
+    
     app.run(host='0.0.0.0', port=8080, debug=DEBUG)

@@ -181,7 +181,20 @@ async function executeClassification() {
         
         hideLoading();
         
-        if (data.error) {
+        // デバッグ: レスポンスをコンソールに表示
+        console.log('Classification response:', data);
+        console.log('Status field:', data.status);
+        console.log('Error field:', data.error);
+        
+        // モデル未学習の場合の処理
+        if (data.status === 'model_not_trained') {
+            console.log('Model not trained - showing guide');
+            showModelTrainingGuide(data);
+            return;
+        }
+        
+        // エラーチェックの順序を変更
+        if (data.error && data.status !== 'model_not_trained') {
             // YOLOv5エラーの場合は詳細な対処法を表示
             if (data.solution) {
                 showErrorMessage(
@@ -206,8 +219,92 @@ async function executeClassification() {
         
     } catch (error) {
         hideLoading();
+        console.error('Classification error:', error);
         showErrorMessage('判定中にエラーが発生しました: ' + error.message);
     }
+}
+
+/**
+ * モデル学習ガイドを表示
+ * @param {Object} data - サーバーからのレスポンス
+ */
+function showModelTrainingGuide(data) {
+    // プレースホルダーを非表示
+    hideElement('classificationPlaceholder');
+    
+    // 結果エリアを表示
+    showElement('classificationResult');
+    
+    const resultArea = document.getElementById('classificationResult');
+    
+    // YOLO検出情報があれば表示用HTMLを作成
+    let detectionInfo = '';
+    if (data.papillae_count !== undefined) {
+        detectionInfo = `
+            <div class="alert alert-info mt-3">
+                <h6><i class="fas fa-eye me-2"></i>YOLO検出結果</h6>
+                <p>生殖乳頭を${data.papillae_count}個検出しました。</p>
+                <small>※雌雄判定にはRandomForestモデルの学習が必要です。</small>
+            </div>
+        `;
+    }
+    
+    resultArea.innerHTML = `
+        <div class="alert alert-warning">
+            <h4 class="alert-heading">
+                <i class="fas fa-exclamation-triangle me-2"></i>モデルの学習が必要です
+            </h4>
+            <p>${data.message}</p>
+            <hr>
+            <p class="mb-0">
+                <a href="/annotation/images" class="btn btn-primary me-2">
+                    <i class="fas fa-upload me-1"></i>学習データをアップロード
+                </a>
+                <a href="/training" class="btn btn-success">
+                    <i class="fas fa-brain me-1"></i>機械学習を実行
+                </a>
+            </p>
+        </div>
+        
+        ${detectionInfo}
+        
+        <div class="mt-4">
+            <h5>クイックスタートガイド</h5>
+            <ol>
+                <li><strong>学習データをアップロード</strong>
+                    <ul>
+                        <li>「学習データ」ページでオス・メスの画像を各5枚以上アップロード</li>
+                        <li>性別（オス/メス）を正しく選択してください</li>
+                    </ul>
+                </li>
+                <li><strong>アノテーション（オプション）</strong>
+                    <ul>
+                        <li>「アノテーション」ページで生殖乳頭の位置をマーキング</li>
+                        <li>より高い精度が期待できます</li>
+                    </ul>
+                </li>
+                <li><strong>機械学習を実行</strong>
+                    <ul>
+                        <li>「機械学習」ページで学習を実行</li>
+                        <li>通常1-2分で完了します</li>
+                    </ul>
+                </li>
+                <li><strong>雌雄判定を開始</strong>
+                    <ul>
+                        <li>学習完了後、このページで雌雄判定が可能になります</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+        
+        <div class="mt-4 p-3 bg-light rounded">
+            <h6><i class="fas fa-info-circle me-2"></i>なぜ学習が必要？</h6>
+            <p class="mb-0 small">
+                このシステムは機械学習を使用しており、ウニの個体差や撮影条件の違いに対応するため、
+                お客様の実際のデータで学習することで最適な判定精度を実現します。
+            </p>
+        </div>
+    `;
 }
 
 /**
@@ -250,8 +347,22 @@ function displayClassificationResult(data) {
         genderResult.innerHTML = `<i class="${icon} me-2"></i>${genderResult.textContent}`;
     }
     
+    // 検出情報の表示
+    if (data.papillae_count !== undefined) {
+        const detectionInfo = document.createElement('div');
+        detectionInfo.className = 'alert alert-info mt-3';
+        detectionInfo.innerHTML = `
+            <i class="fas fa-eye me-2"></i>
+            生殖乳頭を${data.papillae_count}個検出しました
+        `;
+        genderResult.parentElement.appendChild(detectionInfo);
+    }
+    
     // 特徴重要度表示
     displayFeatureImportance(data.feature_importance);
+    
+    // フィードバックボタンを有効化
+    enableFeedbackButtons();
 }
 
 /**
@@ -285,6 +396,20 @@ function displayFeatureImportance(featureImportance) {
         `;
         
         container.appendChild(bar);
+    });
+}
+
+/**
+ * フィードバックボタンの有効化
+ */
+function enableFeedbackButtons() {
+    const buttons = ['feedbackCorrect', 'feedbackWrongMale', 'feedbackWrongFemale'];
+    buttons.forEach(buttonId => {
+        const button = document.getElementById(buttonId);
+        if (button) {
+            button.disabled = false;
+            button.classList.remove('disabled');
+        }
     });
 }
 
