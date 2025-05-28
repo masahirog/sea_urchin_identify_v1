@@ -172,21 +172,21 @@ class YoloDetector:
             # クラスに応じた色とラベル
             info = self.class_info.get(class_id, {'name': '不明', 'color': (128, 128, 128)})
             color = info['color']
-            class_name = info['name']
-            
+            class_name = info.get('name_en', f'Class {class_id}')
+
             # 境界ボックスの描画（太い線）
             cv2.rectangle(annotated_image, 
                         (bbox[0], bbox[1]), 
                         (bbox[2], bbox[3]), 
-                        color, 4)
+                        color, 5)
             
             # クラス名と信頼度の表示
             label = f"{class_name}: {conf:.2f}"
             
             # ラベルの背景
-            (label_width, label_height), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+            (label_width, label_height), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 2, 2)
             cv2.rectangle(annotated_image, 
-                        (bbox[0], bbox[1] - 30), 
+                        (bbox[0], bbox[1] - 60), 
                         (bbox[0] + label_width + 10, bbox[1]), 
                         color, -1)
             
@@ -194,7 +194,7 @@ class YoloDetector:
             cv2.putText(annotated_image, label, 
                       (bbox[0] + 5, bbox[1] - 10), 
                       cv2.FONT_HERSHEY_SIMPLEX, 
-                      0.6, (255, 255, 255), 2)
+                      2, (255, 255, 255), 2)
         
         return annotated_image
     
