@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block title %}機械学習 - ウニ生殖乳頭分析{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2 class="text-center mb-4">
+        <i class="fas fa-brain me-2"></i>機械学習
+    </h2>
+    
+    <!-- ステータス表示 -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-info-circle"></i> システム状態</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <div class="metric">
+                                <h3 id="totalImages">0</h3>
+                                <p>総画像数</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric">
+                                <h3 id="maleImages">0</h3>
+                                <p>オス画像</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric">
+                                <h3 id="femaleImages">0</h3>
+                                <p>メス画像</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="metric">
+                                <h3 id="modelStatus">未学習</h3>
+                                <p>モデル状態</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 学習オプション -->
+    <div class="row">
+        <!-- クイック学習（RandomForestのみ） -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5><i class="fas fa-rocket"></i> クイック学習（推奨）</h5>
+                </div>
+                <div class="card-body">
+                    <p>雌雄判定モデル（RandomForest）のみを学習します。</p>
+                    <ul>
+                        <li>学習時間：約1-2分</li>
+                        <li>必要画像数：各性別5枚以上</li>
+                        <li>すぐに雌雄判定を開始できます</li>
+                    </ul>
+                    <button class="btn btn-primary btn-lg w-100" id="quickTrainBtn">
+                        <i class="fas fa-play"></i> クイック学習開始
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- YOLO学習 -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-warning">
+                    <h5><i class="fas fa-microscope"></i> YOLO検出学習（オプション）</h5>
+                </div>
+                <div class="card-body">
+                    <p>生殖乳頭の検出精度を向上させます。</p>
+                    <ul>
+                        <li>学習時間：30分～数時間</li>
+                        <li>アノテーションが必要</li>
+                        <li>より高精度な検出が可能</li>
+                    </ul>
+                    <a href="/training" class="btn btn-warning btn-lg w-100">
+                        <i class="fas fa-cog"></i> YOLO学習設定へ
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 進行状況 -->
+    <div id="trainingProgress" class="d-none">
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5><i class="fas fa-spinner fa-spin"></i> 学習進行状況</h5>
+            </div>
+            <div class="card-body">
+                <div class="progress mb-3" style="height: 30px;">
+                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%">0%</div>
+                </div>
+                <p id="statusMessage" class="text-center">準備中...</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 完了メッセージ -->
+    <div id="trainingComplete" class="d-none">
+        <div class="alert alert-success mt-4">
+            <h4 class="alert-heading">
+                <i class="fas fa-check-circle"></i> 学習完了！
+            </h4>
+            <p>モデルの学習が完了しました。雌雄判定機能が利用可能になりました。</p>
+            <hr>
+            <a href="/" class="btn btn-success">
+                <i class="fas fa-search"></i> 雌雄判定を開始
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+.metric {
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+}
+
+.metric h3 {
+    color: #007bff;
+    margin-bottom: 10px;
+}
+
+.metric p {
+    margin: 0;
+    color: #6c757d;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script type="module">
+import { showLoading, hideLoading, showSuccessMessage, showErrorMessage } from '/static/js/utilities.js';
+
+// 初期化
+document.addEventListener('DOMContentLoaded', function() {
+    loadSystemStatus();
+    
+    document.getElementById('quickTrainBtn')?.addEventListener('click', startQuickTraining);
+});
+
+// システム状態読み込み
+async function loadSystemStatus() {
+    try {
+        const response = await fetch('/api/system-status');
+        const data = await response.json();
+        
+        // 画像数更新
+        document.getElementById('totalImages').textContent = 
+            data.dataset.male_count + data.dataset.female_count;
+        document.getElementById('maleImages').textContent = data.dataset.male_count;
+        document.getElementById('femaleImages').textContent = data.dataset.female_count;
+        
+        // モデル状態
+        if (data.model.random_forest.exists) {
+            document.getElementById('modelStatus').textContent = '学習済み';
+            document.getElementById('modelStatus').style.color = '#28a745';
+        } else {
+            document.getElementById('modelStatus').textContent = '未学習';
+            document.getElementById('modelStatus').style.color = '#dc3545';
+        }
+        
+        // ボタンの有効/無効
+        const canTrain = data.dataset.male_count >= 2 && data.dataset.female_count >= 2;
+        document.getElementById('quickTrainBtn').disabled = !canTrain;
+        
+        if (!canTrain) {
+            document.getElementById('quickTrainBtn').innerHTML = 
+                '<i class="fas fa-exclamation-triangle"></i> 学習データ不足';
+        }
+        
+    } catch (error) {
+        console.error('状態取得エラー:', error);
+    }
+}
+
+// クイック学習開始
+async function startQuickTraining() {
+    try {
+        showLoading('モデルを学習中...');
+        
+        // 進行状況表示
+        document.getElementById('trainingProgress').classList.remove('d-none');
+        document.getElementById('trainingComplete').classList.add('d-none');
+        
+        const response = await fetch('/learning/quick-train', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        hideLoading();
+        
+        if (data.success) {
+            // 学習完了
+            document.getElementById('trainingProgress').classList.add('d-none');
+            document.getElementById('trainingComplete').classList.remove('d-none');
+            
+            showSuccessMessage('学習が完了しました！');
+            
+            // 状態を再読み込み
+            loadSystemStatus();
+        } else {
+            showErrorMessage(data.error || '学習に失敗しました');
+            document.getElementById('trainingProgress').classList.add('d-none');
+        }
+        
+    } catch (error) {
+        hideLoading();
+        showErrorMessage('エラー: ' + error.message);
+        document.getElementById('trainingProgress').classList.add('d-none');
+    }
+}
+
+// 進行状況の擬似アニメーション（実際の進捗APIがない場合）
+function animateProgress() {
+    let progress = 0;
+    const progressBar = document.getElementById('progressBar');
+    const statusMessage = document.getElementById('statusMessage');
+    
+    const messages = [
+        '画像を読み込んでいます...',
+        '特徴量を抽出しています...',
+        'モデルを学習しています...',
+        '精度を評価しています...',
+        '最終調整中...'
+    ];
+    
+    const interval = setInterval(() => {
+        progress += Math.random() * 15;
+        if (progress > 95) progress = 95;
+        
+        progressBar.style.width = progress + '%';
+        progressBar.textContent = Math.round(progress) + '%';
+        
+        const messageIndex = Math.floor(progress / 20);
+        statusMessage.textContent = messages[Math.min(messageIndex, messages.length - 1)];
+        
+        if (progress >= 95) {
+            clearInterval(interval);
+        }
+    }, 500);
+}
+</script>
+{% endblock %}

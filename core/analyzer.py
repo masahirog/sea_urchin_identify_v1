@@ -51,126 +51,99 @@ class UnifiedAnalyzer:
     # メイン機能: 雌雄判定
     # ================================
     
-    def classify_image():
+    def classify_image(self, image_path, extract_only=False):
         """
-        画像をアップロードして雌雄判定を実行
+        画像から雌雄を判定
+        
+        Args:
+            image_path: 画像ファイルのパス
+            extract_only: 特徴抽出のみ行うかどうか
+            
+        Returns:
+            dict: 判定結果
         """
-        from app import app
-        from app_utils.file_handlers import allowed_file, is_image_file
-        from core.analyzer import UnifiedAnalyzer
-        from core.YoloDetector import YoloDetector
-        
-        if 'image' not in request.files:
-            return jsonify({"error": "画像ファイルがありません"}), 400
+        try:
+            # 画像読み込み
+            image = cv2.imread(image_path)
+            if image is None:
+                return {"error": "画像の読み込みに失敗しました"}
             
-        file = request.files['image']
-        
-        if file.filename == '':
-            return jsonify({"error": "ファイルが選択されていません"}), 400
-        
-        if file and allowed_file(file.filename, app.config['ALLOWED_EXTENSIONS']) and is_image_file(file.filename):
-            # 安全なファイル名に変換
-            filename = secure_filename(file.filename)
+            # Step 1: YOLO検出（可能な場合）
+            detection_info = {}
+            if self.yolo_detector is not None:
+                try:
+                    detection_result = self.yolo_detector.detect(image_path)
+                    detection_info = {
+                        "papillae_count": detection_result.get("count", 0),
+                        "detections": detection_result.get("detections", []),
+                        "annotated_image": detection_result.get("annotated_image")
+                    }
+                except Exception as e:
+                    print(f"YOLO検出エラー（継続）: {str(e)}")
             
-            # 同名ファイルが既に存在する場合はユニークな名前に変更
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            if os.path.exists(file_path):
-                name, ext = os.path.splitext(filename)
-                unique_suffix = uuid.uuid4().hex[:8]
-                filename = f"{name}_{unique_suffix}{ext}"
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            # Step 2: 特徴量抽出
+            features = self._extract_features_from_image(image)
             
-            # ファイルを保存
-            file.save(file_path)
-            current_app.logger.info(f"画像をアップロード: {filename}")
+            # 特徴抽出のみの場合
+            if extract_only:
+                return {
+                    "features": features,
+                    "detection_info": detection_info
+                }
+            
+            # Step 3: RandomForestモデルによる雌雄判定
+            if not self.model_loaded or self.rf_model is None:
+                # モデル未学習の場合
+                return {
+                    "status": "model_not_trained",
+                    "message": "雌雄判定モデルが未学習です。「機械学習」メニューから学習を実行してください。",
+                    "features": features,
+                    "guide": {
+                        "steps": [
+                            "1. 「学習データ」メニューでオス・メスの画像をアップロード（各5枚以上推奨）",
+                            "2. 「機械学習」メニューでクイック学習を実行（1-2分）",
+                            "3. 学習完了後、このページで雌雄判定が可能になります"
+                        ],
+                        "quick_start": True
+                    },
+                    **detection_info  # YOLO検出情報を含める
+                }
             
             try:
-                # 画像の判別
-                analyzer = UnifiedAnalyzer()
-                result = analyzer.classify_image(file_path)
+                # 特徴量のスケーリング
+                features_scaled = self.scaler.transform([features])
                 
-                # デバッグログ
-                current_app.logger.info(f"分析結果: {result}")
+                # 予測
+                prediction = self.rf_model.predict(features_scaled)[0]
+                probabilities = self.rf_model.predict_proba(features_scaled)[0]
                 
-                # モデル未学習の場合の処理を修正
-                if result.get("status") == "model_not_trained":
-                    current_app.logger.info("モデル未学習を検出")
-                    
-                    # 画像へのURLを追加
-                    result["image_url"] = url_for('main.get_uploaded_file', filename=filename, _external=True)
-                    result["filename"] = filename
-                    
-                    # YOLOで検出画像を生成（可能な場合）
-                    try:
-                        detector = YoloDetector()
-                        detection_result = detector.detect(file_path)
-                        
-                        if detection_result and "annotated_image" in detection_result:
-                            # 検出結果画像を保存
-                            marked_filename = f"marked_{filename}"
-                            marked_path = os.path.join(app.config['UPLOAD_FOLDER'], marked_filename)
-                            cv2.imwrite(marked_path, detection_result["annotated_image"])
-                            
-                            result["marked_image_url"] = url_for('main.get_uploaded_file', filename=marked_filename, _external=True)
-                    except Exception as e:
-                        current_app.logger.warning(f"YOLO検出エラー（継続）: {str(e)}")
-                    
-                    # 重要: errorフィールドを削除してstatusを保持
-                    if "error" in result:
-                        del result["error"]  # errorフィールドを削除
-                    
-                    # 200 OKで返す
-                    return jsonify(result), 200
+                # 結果の整形
+                gender = "male" if prediction == 0 else "female"
+                confidence = float(max(probabilities))
                 
-                # 通常のエラーの場合
-                if "error" in result and "status" not in result:
-                    current_app.logger.error(f"画像分析エラー: {result['error']}")
-                    
-                    # YOLOv5関連のエラーの場合、詳細なメッセージを返す
-                    if "YOLO" in result["error"] or "検出器" in result["error"]:
-                        return jsonify({
-                            "error": "YOLOv5が利用できません。セットアップが必要です。",
-                            "details": result["error"],
-                            "solution": "python setup_yolo.py を実行してください"
-                        }), 500
-                    
-                    return jsonify({"error": result["error"]}), 400
+                # 特徴重要度
+                feature_importance = self._get_feature_importance()
                 
-                # 正常な判定結果の場合
-                # 画像へのURLを追加
-                result["image_url"] = url_for('main.get_uploaded_file', filename=filename, _external=True)
-                result["filename"] = filename
+                return {
+                    "gender": gender,
+                    "confidence": confidence,
+                    "features": features.tolist() if hasattr(features, 'tolist') else features,
+                    "feature_importance": feature_importance,
+                    **detection_info  # YOLO検出情報を含める
+                }
                 
-                # YOLOで検出画像を生成
-                try:
-                    detector = YoloDetector()
-                    detection_result = detector.detect(file_path)
-
-                    if detection_result and "annotated_image" in detection_result:
-                        # 検出結果画像を保存
-                        marked_filename = f"marked_{filename}"
-                        marked_path = os.path.join(app.config['UPLOAD_FOLDER'], marked_filename)
-                        cv2.imwrite(marked_path, detection_result["annotated_image"])
-                        
-                        result["marked_image_url"] = url_for('main.get_uploaded_file', filename=marked_filename, _external=True)
-                        result["papillae_count"] = detection_result["count"]
-                        result["papillae_details"] = detection_result.get("detections", [])
-                except Exception as e:
-                    current_app.logger.warning(f"YOLO検出エラー: {str(e)}")
-                
-                # 判定履歴に記録
-                record_classification_history(filename, result)
-                
-                current_app.logger.info(f"雌雄判定完了: {filename} -> {result.get('gender', 'unknown')}")
-                
-                return jsonify(result)
-            
             except Exception as e:
-                current_app.logger.error(f"画像処理エラー: {str(e)}")
+                print(f"予測エラー: {str(e)}")
                 traceback.print_exc()
-                return jsonify({"error": f"画像処理中にエラーが発生しました: {str(e)}"}), 500
-        
-        return jsonify({"error": "無効なファイル形式です"}), 400
+                return {
+                    "error": f"予測中にエラーが発生しました: {str(e)}",
+                    **detection_info
+                }
+                
+        except Exception as e:
+            print(f"画像分析エラー: {str(e)}")
+            traceback.print_exc()
+            return {"error": f"画像分析中にエラーが発生しました: {str(e)}"}
 
     # ================================
     # メイン機能: モデル学習

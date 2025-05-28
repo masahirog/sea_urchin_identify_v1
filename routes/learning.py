@@ -1535,3 +1535,110 @@ def get_total_annotations():
     
     # より大きい値を返す（重複を避けるため）
     return max(total_annotations, yolo_annotations)
+
+@learning_bp.route('/train-all', methods=['POST'])
+def train_all_models():
+    """YOLOとRandomForestの統合学習を実行"""
+    from app import app, processing_queue
+    import uuid
+    
+    try:
+        # データセットの確認
+        from config import TRAINING_IMAGES_DIR, METADATA_FILE
+        import os
+        import json
+        
+        # メタデータ読み込み
+        metadata = {}
+        if os.path.exists(METADATA_FILE):
+            with open(METADATA_FILE, 'r') as f:
+                metadata = json.load(f)
+        
+        # 画像数の確認
+        male_count = 0
+        female_count = 0
+        total_count = 0
+        
+        if os.path.exists(TRAINING_IMAGES_DIR):
+            for filename in os.listdir(TRAINING_IMAGES_DIR):
+                if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                    total_count += 1
+                    image_info = metadata.get(filename, {})
+                    gender = image_info.get('gender', 'unknown')
+                    
+                    if gender == 'male':
+                        male_count += 1
+                    elif gender == 'female':
+                        female_count += 1
+        
+        # 最低要件チェック
+        if total_count < 4:
+            return jsonify({
+                "error": f"学習には最低4枚の画像が必要です（現在: {total_count}枚）"
+            }), 400
+        
+        if male_count == 0 or female_count == 0:
+            return jsonify({
+                "error": f"オスとメスの両方の画像が必要です（オス: {male_count}枚, メス: {female_count}枚）"
+            }), 400
+        
+        # タスクIDの生成
+        task_id = str(uuid.uuid4())
+        
+        # タスクをキューに追加
+        task = {
+            'id': task_id,
+            'type': 'unified_training',
+            'dataset_dir': TRAINING_IMAGES_DIR,
+            'phases': ['feature_extraction', 'model_training', 'basic_evaluation']
+        }
+        
+        processing_queue.put(task)
+        
+        current_app.logger.info(f"統合学習タスク開始: {task_id}")
+        
+        return jsonify({
+            "success": True,
+            "task_id": task_id,
+            "message": "統合学習を開始しました",
+            "dataset_info": {
+                "male_count": male_count,
+                "female_count": female_count,
+                "total_count": total_count
+            }
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"統合学習開始エラー: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@learning_bp.route('/quick-train', methods=['POST'])
+def quick_train_rf():
+    """RandomForestモデルのみ素早く学習（YOLOは既存のものを使用）"""
+    from app import app, processing_queue
+    from core.analyzer import UnifiedAnalyzer
+    import uuid
+    
+    try:
+        # 簡易学習の実行
+        analyzer = UnifiedAnalyzer()
+        task_id = str(uuid.uuid4())
+        
+        # 直接学習を実行（非同期処理をスキップ）
+        success = analyzer.train_model(None, task_id)
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "RandomForestモデルの学習が完了しました",
+                "task_id": task_id
+            })
+        else:
+            return jsonify({
+                "error": "モデル学習に失敗しました。学習データを確認してください。"
+            }), 500
+            
+    except Exception as e:
+        current_app.logger.error(f"クイック学習エラー: {str(e)}")
+        return jsonify({"error": str(e)}), 500
