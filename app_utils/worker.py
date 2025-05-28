@@ -44,146 +44,20 @@ def processing_worker(queue, status_dict, app_config):
                 # タスクの種類に応じた処理
                 if task_type == 'train_model':
                     # モデル訓練タスク
-                    from core.analyzer import UnifiedAnalyzer as UrchinPapillaeAnalyzer
-                    
-                    # パラメータ取得
-                    dataset_dir = task.get('dataset_dir')
-                    
-                    # 状態更新
-                    status_dict[task_id]["message"] = "モデル訓練の準備中..."
-                    status_dict[task_id]["progress"] = 20
-                    
-                    # 分析インスタンス作成
-                    analyzer = UrchinPapillaeAnalyzer()
-                    
-                    # 訓練実行
-                    success = analyzer.train_model(dataset_dir, task_id)
-                    
-                    # 処理状態の更新はtrain_model内で行われる
+                    handle_train_model_task(task, task_id, status_dict)
                     
                 elif task_type == 'evaluate_model':
                     # モデル評価
-                    model_path = task.get('model_path')
-                    dataset_dir = task.get('dataset_dir')
+                    handle_evaluate_model_task(task, task_id, status_dict, app_config)
                     
-                    # 進捗状況を更新
-                    status_dict[task_id]["message"] = "モデル評価準備中..."
-                    status_dict[task_id]["progress"] = 20
-                    
-                    try:
-                        # データセットからの特徴量抽出
-                        X, y = process_dataset_for_evaluation(dataset_dir)
-                        
-                        if X is None or y is None or len(X) == 0:
-                            print("特徴量抽出失敗: データが見つからないか、抽出できませんでした")
-                            status_dict[task_id] = {
-                                "status": "failed", 
-                                "message": "評価用の特徴量を抽出できませんでした。データセットを確認してください。",
-                                "progress": 100
-                            }
-                        else:
-                            # 処理状態の更新
-                            print(f"特徴量抽出成功: {len(X)}サンプル")
-                            status_dict[task_id] = {
-                                "status": "running", 
-                                "progress": 50,
-                                "message": f"モデル評価を実行中... ({len(X)}サンプル)"
-                            }
-                            
-                            # モデルのロード
-                            try:
-                                print(f"モデルをロード中: {model_path}")
-                                
-                                if not os.path.exists(model_path):
-                                    print(f"モデルファイルが見つかりません: {model_path}")
-                                    status_dict[task_id] = {
-                                        "status": "failed", 
-                                        "message": f"モデルファイルが見つかりません: {model_path}",
-                                        "progress": 100
-                                    }
-                                    continue
-                                    
-                                print("モデルを読み込みました")
-                                model, scaler = joblib.load(model_path)
-                                
-                                # 特徴量のスケーリング
-                                print("特徴量のスケーリング実行中")
-                                X_scaled = scaler.transform(X)
-                                
-                                # モデル評価の実行
-                                print("モデル評価の実行を開始")
-                                
-                                # configから評価データディレクトリを取得
-                                from config import EVALUATION_DATA_DIR
-                                print(f"評価結果保存先（データ）: {EVALUATION_DATA_DIR}")
-                                
-                                # ディレクトリの作成
-                                os.makedirs(EVALUATION_DATA_DIR, exist_ok=True)
-                                
-                                # モデル評価実行（出力ディレクトリを明示的に指定）
-                                eval_results = evaluate_model(
-                                    X_scaled, y, model, 
-                                    output_dir=EVALUATION_DATA_DIR
-                                )
-                                
-                                # 処理完了を記録
-                                status_dict[task_id] = {
-                                    "status": "completed",
-                                    "message": "モデル評価完了",
-                                    "result": eval_results,
-                                    "progress": 100
-                                }
-                            except Exception as e:
-                                error_msg = f"モデル評価中にエラーが発生: {str(e)}"
-                                print(error_msg)
-                                traceback.print_exc()
-                                status_dict[task_id] = {
-                                    "status": "failed", 
-                                    "message": error_msg,
-                                    "progress": 100
-                                }
-                    except Exception as e:
-                        error_msg = f"特徴量抽出中にエラーが発生: {str(e)}"
-                        print(error_msg)
-                        traceback.print_exc()
-                        status_dict[task_id] = {
-                            "status": "failed", 
-                            "message": error_msg,
-                            "progress": 100
-                        }
-                
                 elif task_type == 'analyze_annotation':
                     # アノテーション影響分析
-                    model_path = task.get('model_path')
-                    dataset_dir = task.get('dataset_dir')
+                    handle_annotation_analysis_task(task, task_id, status_dict)
                     
-                    # 進捗状況を更新
-                    status_dict[task_id]["message"] = "アノテーション影響分析準備中..."
-                    status_dict[task_id]["progress"] = 20
-
-                    
-                    # configから評価データディレクトリを取得
-                    from config import EVALUATION_DATA_DIR
-                    print(f"アノテーション分析結果保存先（データ）: {EVALUATION_DATA_DIR}")
-                    
-                    # 分析実行（出力ディレクトリを明示的に指定）
-                    result = analyze_annotation_impact(
-                        dataset_dir, model_path, 
-                        output_dir=EVALUATION_DATA_DIR
-                    )
-                    
-                    # 処理完了を記録
-                    status_dict[task_id] = {
-                        "status": "completed",
-                        "message": "アノテーション影響分析完了",
-                        "result": result,
-                        "progress": 100
-                    }
-                
-                # 統合学習タスクの処理を追加
                 elif task_type == 'unified_training':
+                    # 統合学習タスク
                     handle_unified_training_task(task, status_dict, app_config)
-                
+                    
                 else:
                     # 未知のタスクタイプ
                     status_dict[task_id] = {
@@ -226,15 +100,181 @@ def processing_worker(queue, status_dict, app_config):
                 try:
                     queue.task_done()
                 except Exception:
-                    pass  # キューに関する処理は既に完了している可能性があるため無視
+                    pass
 
 
-def process_dataset_for_evaluation(dataset_dir):
+def handle_train_model_task(task, task_id, status_dict):
+    """モデル訓練タスクの処理"""
+    from core.analyzer import UnifiedAnalyzer
+    
+    # パラメータ取得
+    dataset_dir = task.get('dataset_dir')
+    
+    # 状態更新
+    status_dict[task_id]["message"] = "モデル訓練の準備中..."
+    status_dict[task_id]["progress"] = 20
+    
+    # 分析インスタンス作成
+    analyzer = UnifiedAnalyzer()
+    
+    # 訓練実行
+    success = analyzer.train_model(dataset_dir, task_id)
+    
+    # 処理状態の更新はtrain_model内で行われる
+
+
+def handle_evaluate_model_task(task, task_id, status_dict, app_config):
+    """モデル評価タスクの処理"""
+    model_path = task.get('model_path')
+    dataset_dir = task.get('dataset_dir')
+    
+    # 進捗状況を更新
+    status_dict[task_id]["message"] = "モデル評価準備中..."
+    status_dict[task_id]["progress"] = 20
+    
+    try:
+        # データセットからの特徴量抽出（統一関数を使用）
+        X, y = extract_features_for_evaluation()
+        
+        if X is None or y is None or len(X) == 0:
+            print("特徴量抽出失敗: データが見つからないか、抽出できませんでした")
+            status_dict[task_id] = {
+                "status": "failed", 
+                "message": "評価用の特徴量を抽出できませんでした。データセットを確認してください。",
+                "progress": 100
+            }
+        else:
+            # 処理状態の更新
+            print(f"特徴量抽出成功: {len(X)}サンプル")
+            status_dict[task_id] = {
+                "status": "running", 
+                "progress": 50,
+                "message": f"モデル評価を実行中... ({len(X)}サンプル)"
+            }
+            
+            # モデル評価の実行
+            eval_results = evaluate_model_with_features(X, y, model_path)
+            
+            # 処理完了を記録
+            status_dict[task_id] = {
+                "status": "completed",
+                "message": "モデル評価完了",
+                "result": eval_results,
+                "progress": 100
+            }
+    except Exception as e:
+        error_msg = f"特徴量抽出中にエラーが発生: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        status_dict[task_id] = {
+            "status": "failed", 
+            "message": error_msg,
+            "progress": 100
+        }
+
+
+def handle_annotation_analysis_task(task, task_id, status_dict):
+    """アノテーション影響分析タスクの処理"""
+    model_path = task.get('model_path')
+    dataset_dir = task.get('dataset_dir')
+    
+    # 進捗状況を更新
+    status_dict[task_id]["message"] = "アノテーション影響分析準備中..."
+    status_dict[task_id]["progress"] = 20
+    
+    # configから評価データディレクトリを取得
+    from config import EVALUATION_DATA_DIR
+    print(f"アノテーション分析結果保存先（データ）: {EVALUATION_DATA_DIR}")
+    
+    # 分析実行（出力ディレクトリを明示的に指定）
+    result = analyze_annotation_impact(
+        dataset_dir, model_path, 
+        output_dir=EVALUATION_DATA_DIR
+    )
+    
+    # 処理完了を記録
+    status_dict[task_id] = {
+        "status": "completed",
+        "message": "アノテーション影響分析完了",
+        "result": result,
+        "progress": 100
+    }
+
+
+def handle_unified_training_task(task, status_dict, app_config):
     """
-    評価用のデータセットを処理し、特徴量とラベルを返す
+    統合学習タスクの処理
     
     Parameters:
-    - dataset_dir: データセットディレクトリ（互換性のため残すが使用しない）
+    - task: 統合学習タスク
+    - status_dict: 処理状態辞書
+    - app_config: アプリケーション設定
+    """
+    task_id = task.get('id')
+    dataset_dir = task.get('dataset_dir')
+    phases = task.get('phases', [])
+    
+    print(f"統合学習プロセス開始: {task_id}")
+    
+    try:
+        # フェーズ1: 特徴量抽出
+        execute_feature_extraction_phase(task_id, dataset_dir, status_dict)
+        
+        # フェーズ2: モデル訓練
+        training_result = execute_model_training_phase(task_id, dataset_dir, status_dict)
+        
+        # フェーズ3: 基本評価
+        evaluation_result = execute_basic_evaluation_phase(task_id, dataset_dir, status_dict, training_result)
+        
+        # フェーズ4: 詳細分析（オプション）
+        detailed_result = evaluation_result
+        if 'detailed_analysis' in phases:
+            detailed_result = execute_detailed_analysis_phase(task_id, dataset_dir, status_dict, evaluation_result)
+        
+        # フェーズ5: アノテーション効果分析（オプション）
+        annotation_result = {}
+        if 'annotation_impact' in phases:
+            annotation_result = execute_annotation_impact_phase(task_id, dataset_dir, status_dict)
+        
+        # 統合結果の作成
+        unified_result = create_unified_result(
+            training_result, evaluation_result, detailed_result, annotation_result
+        )
+        
+        # 完了状態の更新
+        status_dict[task_id] = {
+            "status": "completed",
+            "message": "統合学習プロセスが正常に完了しました",
+            "progress": 100,
+            "current_phase": "completed",
+            "phases_completed": phases,
+            "result": unified_result,
+            "completion_time": datetime.now().isoformat()
+        }
+        
+        print(f"統合学習プロセス完了: {task_id}")
+        
+    except Exception as e:
+        error_msg = f"統合学習エラー: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        
+        status_dict[task_id] = {
+            "status": "failed",
+            "message": error_msg,
+            "progress": 100,
+            "current_phase": "error",
+            "error_details": traceback.format_exc()
+        }
+
+
+# ================================
+# 共通特徴量抽出関数（重複を統合）
+# ================================
+
+def extract_features_for_evaluation():
+    """
+    評価用のデータセットから特徴量を抽出する統一関数
     
     Returns:
     - X: 特徴量行列
@@ -244,6 +284,7 @@ def process_dataset_for_evaluation(dataset_dir):
     
     try:
         from config import TRAINING_IMAGES_DIR, METADATA_FILE
+        from core.analyzer import UnifiedAnalyzer
         
         # メタデータを読み込み
         metadata = {}
@@ -280,8 +321,7 @@ def process_dataset_for_evaluation(dataset_dir):
             return create_test_data()
         
         # 特徴量抽出の初期化
-        from core.analyzer import UnifiedAnalyzer as UrchinPapillaeAnalyzer
-        analyzer = UrchinPapillaeAnalyzer()
+        analyzer = UnifiedAnalyzer()
         
         # 各画像から特徴量を抽出
         features = []
@@ -369,73 +409,56 @@ def create_test_data():
     return X, y
 
 
-def handle_unified_training_task(task, status_dict, app_config):
-    """
-    統合学習タスクの処理
-    
-    Parameters:
-    - task: 統合学習タスク
-    - status_dict: 処理状態辞書
-    - app_config: アプリケーション設定
-    """
-    task_id = task.get('id')
-    dataset_dir = task.get('dataset_dir')
-    phases = task.get('phases', [])
-    
-    print(f"統合学習プロセス開始: {task_id}")
-    
+def evaluate_model_with_features(X, y, model_path):
+    """特徴量とモデルパスから評価を実行"""
     try:
-        # フェーズ1: 特徴量抽出
-        execute_feature_extraction_phase(task_id, dataset_dir, status_dict)
+        print(f"モデルをロード中: {model_path}")
         
-        # フェーズ2: モデル訓練
-        training_result = execute_model_training_phase(task_id, dataset_dir, status_dict)
+        if not os.path.exists(model_path):
+            print(f"モデルファイルが見つかりません: {model_path}")
+            return {
+                "error": f"モデルファイルが見つかりません: {model_path}"
+            }
         
-        # フェーズ3: 基本評価
-        evaluation_result = execute_basic_evaluation_phase(task_id, dataset_dir, status_dict, training_result)
+        print("モデルを読み込みました")
+        model, scaler = joblib.load(model_path)
         
-        # フェーズ4: 詳細分析
-        detailed_result = execute_detailed_analysis_phase(task_id, dataset_dir, status_dict, evaluation_result)
+        # 特徴量のスケーリング
+        print("特徴量のスケーリング実行中")
+        X_scaled = scaler.transform(X)
         
-        # フェーズ5: アノテーション効果分析
-        annotation_result = execute_annotation_impact_phase(task_id, dataset_dir, status_dict)
+        # モデル評価の実行
+        print("モデル評価の実行を開始")
         
-        # 統合結果の作成
-        unified_result = create_unified_result(
-            training_result, evaluation_result, detailed_result, annotation_result
+        # configから評価データディレクトリを取得
+        from config import EVALUATION_DATA_DIR
+        print(f"評価結果保存先（データ）: {EVALUATION_DATA_DIR}")
+        
+        # ディレクトリの作成
+        os.makedirs(EVALUATION_DATA_DIR, exist_ok=True)
+        
+        # 評価実行
+        from core.evaluator import UnifiedEvaluator
+        evaluator = UnifiedEvaluator()
+        eval_results = evaluator.evaluate_model(
+            X_scaled, y, model, model_path=model_path
         )
         
-        # 完了状態の更新
-        status_dict[task_id] = {
-            "status": "completed",
-            "message": "統合学習プロセスが正常に完了しました",
-            "progress": 100,
-            "current_phase": "completed",
-            "phases_completed": phases,
-            "result": unified_result,
-            "completion_time": datetime.now().isoformat()
-        }
-        
-        print(f"統合学習プロセス完了: {task_id}")
+        return eval_results
         
     except Exception as e:
-        error_msg = f"統合学習エラー: {str(e)}"
+        error_msg = f"モデル評価中にエラーが発生: {str(e)}"
         print(error_msg)
         traceback.print_exc()
-        
-        status_dict[task_id] = {
-            "status": "failed",
-            "message": error_msg,
-            "progress": 100,
-            "current_phase": "error",
-            "error_details": traceback.format_exc()
-        }
+        return {"error": error_msg}
 
+
+# ================================
+# 統合学習のフェーズ関数
+# ================================
 
 def execute_feature_extraction_phase(task_id, dataset_dir, status_dict):
-    """
-    フェーズ1: 特徴量抽出
-    """
+    """フェーズ1: 特徴量抽出"""
     print(f"フェーズ1開始: 特徴量抽出 - {task_id}")
     
     # 状態更新
@@ -506,11 +529,10 @@ def execute_feature_extraction_phase(task_id, dataset_dir, status_dict):
     except Exception as e:
         raise Exception(f"特徴量抽出フェーズでエラー: {str(e)}")
 
+
 def execute_model_training_phase(task_id, dataset_dir, status_dict):
-    """
-    フェーズ2: モデル訓練
-    """
-    from config import TRAINING_DATA_DIR  # 統一された設定を使用
+    """フェーズ2: モデル訓練"""
+    from config import TRAINING_DATA_DIR
     
     # 状態更新
     status_dict[task_id].update({
@@ -520,9 +542,9 @@ def execute_model_training_phase(task_id, dataset_dir, status_dict):
     })
     
     try:
-        from core.analyzer import UnifiedAnalyzer as UrchinPapillaeAnalyzer
+        from core.analyzer import UnifiedAnalyzer
         
-        analyzer = UrchinPapillaeAnalyzer()
+        analyzer = UnifiedAnalyzer()
         
         status_dict[task_id].update({
             "message": "モデル訓練実行中...",
@@ -552,10 +574,9 @@ def execute_model_training_phase(task_id, dataset_dir, status_dict):
     except Exception as e:
         raise Exception(f"モデル訓練フェーズでエラー: {str(e)}")
 
+
 def execute_basic_evaluation_phase(task_id, dataset_dir, status_dict, training_result):
-    """
-    フェーズ3: 基本評価
-    """
+    """フェーズ3: 基本評価"""
     print(f"フェーズ3開始: 基本評価 - {task_id}")
     
     # 状態更新
@@ -593,12 +614,8 @@ def execute_basic_evaluation_phase(task_id, dataset_dir, status_dict, training_r
         raise Exception(f"基本評価フェーズでエラー: {str(e)}")
 
 
-from core.evaluator import UnifiedEvaluator
-
 def execute_detailed_analysis_phase(task_id, dataset_dir, status_dict, evaluation_result):
-    """
-    フェーズ4: 詳細分析
-    """
+    """フェーズ4: 詳細分析"""
     print(f"フェーズ4開始: 詳細分析 - {task_id}")
     
     # 状態更新
@@ -610,11 +627,13 @@ def execute_detailed_analysis_phase(task_id, dataset_dir, status_dict, evaluatio
     
     try:
         from config import MODELS_DIR
+        from core.evaluator import UnifiedEvaluator
+        
         model_path = os.path.join(MODELS_DIR, 'saved', 'sea_urchin_rf_model.pkl')
         
         if os.path.exists(model_path):
-            # データセットからの特徴量抽出（新しいprocess_dataset_for_evaluationを使用）
-            X, y = process_dataset_for_evaluation(None)  # dataset_dirは使用しない
+            # データセットからの特徴量抽出（統一関数を使用）
+            X, y = extract_features_for_evaluation()
             
             if X is not None and y is not None:
                 # UnifiedEvaluatorを使用
@@ -655,9 +674,7 @@ def execute_detailed_analysis_phase(task_id, dataset_dir, status_dict, evaluatio
 
 
 def execute_annotation_impact_phase(task_id, dataset_dir, status_dict):
-    """
-    フェーズ5: アノテーション効果分析
-    """
+    """フェーズ5: アノテーション効果分析"""
     print(f"フェーズ5開始: アノテーション効果分析 - {task_id}")
     
     # 状態更新
@@ -669,6 +686,8 @@ def execute_annotation_impact_phase(task_id, dataset_dir, status_dict):
     
     try:
         from config import MODELS_DIR
+        from core.evaluator import UnifiedEvaluator
+        
         model_path = os.path.join(MODELS_DIR, 'saved', 'sea_urchin_rf_model.pkl')
         
         # 評価フェーズのタイムスタンプを取得して渡す
@@ -789,15 +808,7 @@ def create_unified_result(training_result, evaluation_result, detailed_result, a
 
 
 def calculate_annotation_impact_score(annotation_dataset):
-    """
-    アノテーション影響スコアの計算
-    
-    Parameters:
-    - annotation_dataset: アノテーションデータセット情報
-    
-    Returns:
-    - float: 影響スコア (0-1)
-    """
+    """アノテーション影響スコアの計算"""
     annotation_rate = annotation_dataset.get('annotation_rate', 0)
     
     # アノテーション率に基づくスコア計算
@@ -812,15 +823,7 @@ def calculate_annotation_impact_score(annotation_dataset):
 
 
 def generate_annotation_recommendations(annotation_dataset):
-    """
-    アノテーション推奨事項の生成
-    
-    Parameters:
-    - annotation_dataset: アノテーションデータセット情報
-    
-    Returns:
-    - list: 推奨事項リスト
-    """
+    """アノテーション推奨事項の生成"""
     recommendations = []
     
     annotation_rate = annotation_dataset.get('annotation_rate', 0)
@@ -854,17 +857,7 @@ def generate_annotation_recommendations(annotation_dataset):
 
 
 def generate_improvement_suggestions(accuracy, annotation_dataset, sample_count):
-    """
-    改善提案の生成
-    
-    Parameters:
-    - accuracy: モデル精度
-    - annotation_dataset: アノテーションデータセット情報
-    - sample_count: サンプル数
-    
-    Returns:
-    - list: 改善提案リスト
-    """
+    """改善提案の生成"""
     suggestions = []
     
     # 精度に基づく提案
@@ -897,5 +890,13 @@ def generate_improvement_suggestions(accuracy, annotation_dataset, sample_count)
     
     return suggestions
 
-# 必要な関数のインポート
-from core.evaluator import UnifiedEvaluator
+
+# ================================
+# アノテーション影響分析（互換性のため残す）
+# ================================
+
+def analyze_annotation_impact(dataset_dir, model_path, output_dir):
+    """アノテーション影響分析（後方互換性）"""
+    from core.evaluator import UnifiedEvaluator
+    evaluator = UnifiedEvaluator()
+    return evaluator.analyze_annotation_impact(dataset_dir, model_path, save_results=True)

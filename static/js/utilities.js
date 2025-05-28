@@ -224,7 +224,7 @@ export async function apiRequest(url, options = {}) {
         
         // 404エラーの場合、特定のエンドポイントは無視
         if (response.status === 404) {
-            const ignoredEndpoints = ['/yolo/dataset-status', '/yolo/model-status']; // '/yolo/model-status'を追加
+            const ignoredEndpoints = ['/yolo/dataset-status', '/yolo/model-status'];
             if (ignoredEndpoints.some(endpoint => url.includes(endpoint))) {
                 console.warn(`エンドポイント ${url} は存在しません（無視されました）`);
                 return { error: 'Not found', status: 404, exists: false };
@@ -269,38 +269,6 @@ export async function apiRequestFormData(url, formData) {
 // ===========================================================
 // データ操作ユーティリティ
 // ===========================================================
-
-/**
- * ネストされたオブジェクトから安全に値を取得
- * @param {Object} obj - 対象オブジェクト
- * @param {string} path - ドット区切りのパス
- * @param {any} defaultValue - デフォルト値
- * @returns {any} 取得した値
- */
-export function getNestedValue(obj, path, defaultValue = null) {
-    if (!obj || !path) return defaultValue;
-    
-    const keys = path.split('.');
-    let current = obj;
-    
-    for (const key of keys) {
-        if (current === null || current === undefined || typeof current !== 'object') {
-            return defaultValue;
-        }
-        current = current[key];
-    }
-    
-    return current !== undefined ? current : defaultValue;
-}
-
-/**
- * オブジェクトの深いコピーを作成
- * @param {any} obj - コピー対象
- * @returns {any} コピーされたオブジェクト
- */
-export function deepCopy(obj) {
-    return JSON.parse(JSON.stringify(obj));
-}
 
 /**
  * デバウンス関数
@@ -357,30 +325,6 @@ export function getGenderIcon(gender) {
 }
 
 /**
- * ステータスに応じたアラートクラスを取得
- * @param {string} status - ステータス
- * @returns {string} アラートクラス
- */
-export function getStatusAlertClass(status) {
-    switch (status) {
-        case 'success':
-        case 'completed':
-            return 'alert-success';
-        case 'warning':
-        case 'pending':
-            return 'alert-warning';
-        case 'error':
-        case 'failed':
-            return 'alert-danger';
-        case 'running':
-        case 'processing':
-            return 'alert-info';
-        default:
-            return 'alert-secondary';
-    }
-}
-
-/**
  * 準備完了度に応じたアラートクラスを取得
  * @param {string} status - 準備完了度ステータス
  * @returns {string} アラートクラス
@@ -388,10 +332,14 @@ export function getStatusAlertClass(status) {
 export function getReadinessAlertClass(status) {
     switch (status) {
         case 'ready':
+        case 'excellent':
             return 'alert-success';
         case 'partial':
+        case 'good':
+        case 'fair':
             return 'alert-warning';
         case 'not_ready':
+        case 'poor':
             return 'alert-danger';
         default:
             return 'alert-secondary';
@@ -405,7 +353,7 @@ export function getReadinessAlertClass(status) {
 // DOMロード時の初期化
 if (typeof document !== 'undefined') {
     document.addEventListener('DOMContentLoaded', function() {
-        // グローバル関数として公開
+        // グローバル関数として公開（後方互換性のため）
         window.showLoading = showLoading;
         window.hideLoading = hideLoading;
         window.showLoadingWithProgress = showLoadingWithProgress;

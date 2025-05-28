@@ -1,6 +1,5 @@
 /**
  * ウニ生殖乳頭分析システム - メインアプリケーション
- * classification-service.js + app.js の統合版
  * 雌雄判定機能とアプリケーション初期化を統合
  */
 
@@ -15,16 +14,12 @@ import {
     setElementText,
     showElement,
     hideElement,
-    getGenderClass,
     getGenderIcon
 } from './utilities.js';
 
 // ===========================================
-// グローバル変数とアプリケーション状態管理
+// アプリケーション状態管理
 // ===========================================
-
-// アプリケーション全体の状態
-let currentTaskId = null;
 
 // 雌雄判定サービスの状態管理
 const classificationService = {
@@ -38,16 +33,13 @@ const classificationService = {
 };
 
 // ===========================================
-// アプリケーション初期化（DOMContentLoaded）
+// アプリケーション初期化
 // ===========================================
 
 /**
  * DOMが読み込まれたら実行
  */
 document.addEventListener('DOMContentLoaded', function() {
-    // アプリケーション全体の初期化
-    initMainApplication();
-    
     // 雌雄判定機能の初期化（雌雄判定ページの場合のみ）
     if (isClassificationPage()) {
         initClassificationService();
@@ -55,55 +47,10 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /**
- * メインアプリケーションの初期化
- */
-function initMainApplication() {
-    // 既存のタスクIDを復元
-    restoreTaskState();
-    
-    // 各機能の初期化
-    initTaskManager();
-    
-    // 初期表示データの読み込み
-    loadDatasetInfo();
-}
-
-/**
  * 雌雄判定ページかどうかを判定
  */
 function isClassificationPage() {
     return document.getElementById('classificationForm') !== null;
-}
-
-/**
- * 保存されていたタスク状態を復元する
- */
-function restoreTaskState() {
-    const savedTaskId = getTaskId();
-    if (savedTaskId) {
-        currentTaskId = savedTaskId;
-    }
-}
-
-/**
- * タスク管理の初期化
- */
-function initTaskManager() {
-    // 必要に応じて実装
-}
-
-/**
- * タスクIDをローカルストレージに保存
- */
-function saveTaskId(taskId) {
-    localStorage.setItem('currentTaskId', taskId);
-}
-
-/**
- * タスクIDをローカルストレージから取得
- */
-function getTaskId() {
-    return localStorage.getItem('currentTaskId');
 }
 
 // ===========================================
@@ -125,6 +72,9 @@ function initClassificationService() {
     
     // 判定履歴の読み込み
     loadJudgmentHistory();
+    
+    // 画像クリックイベント
+    initImageZoom();
 }
 
 /**
@@ -159,6 +109,19 @@ function initFeedbackButtons() {
 }
 
 /**
+ * 画像クリックで拡大表示の初期化
+ */
+function initImageZoom() {
+    document.addEventListener('click', function(e) {
+        if (e.target.id === 'resultImage' && e.target.src) {
+            const modal = new bootstrap.Modal(document.getElementById('imageZoomModal'));
+            document.getElementById('zoomedImage').src = e.target.src;
+            modal.show();
+        }
+    });
+}
+
+/**
  * 雌雄判定の実行
  */
 async function executeClassification() {
@@ -169,11 +132,9 @@ async function executeClassification() {
         return;
     }
     
-    // フォームデータの作成
     const formData = new FormData();
     formData.append('image', imageFile);
     
-    // ローディング表示
     showLoading();
     
     try {
@@ -181,26 +142,19 @@ async function executeClassification() {
         
         hideLoading();
         
-        // デバッグ: レスポンスをコンソールに表示
-        console.log('Classification response:', data);
-        console.log('Status field:', data.status);
-        console.log('Error field:', data.error);
-        
         // モデル未学習の場合の処理
         if (data.status === 'model_not_trained') {
-            console.log('Model not trained - showing guide');
             showModelTrainingGuide(data);
             return;
         }
         
-        // エラーチェックの順序を変更
+        // エラーチェック
         if (data.error && data.status !== 'model_not_trained') {
-            // YOLOv5エラーの場合は詳細な対処法を表示
             if (data.solution) {
                 showErrorMessage(
                     `判定エラー: ${data.error}<br>` +
                     `<small>解決方法: ${data.solution}</small>`,
-                    10000  // 10秒間表示
+                    10000
                 );
             } else {
                 showErrorMessage('判定中にエラーが発生しました: ' + data.error);
@@ -219,25 +173,19 @@ async function executeClassification() {
         
     } catch (error) {
         hideLoading();
-        console.error('Classification error:', error);
         showErrorMessage('判定中にエラーが発生しました: ' + error.message);
     }
 }
 
 /**
  * モデル学習ガイドを表示
- * @param {Object} data - サーバーからのレスポンス
  */
 function showModelTrainingGuide(data) {
-    // プレースホルダーを非表示
     hideElement('classificationPlaceholder');
-    
-    // 結果エリアを表示
     showElement('classificationResult');
     
     const resultArea = document.getElementById('classificationResult');
     
-    // YOLO検出情報があれば表示用HTMLを作成
     let detectionInfo = '';
     if (data.papillae_count !== undefined) {
         detectionInfo = `
@@ -271,58 +219,25 @@ function showModelTrainingGuide(data) {
         <div class="mt-4">
             <h5>クイックスタートガイド</h5>
             <ol>
-                <li><strong>学習データをアップロード</strong>
-                    <ul>
-                        <li>「学習データ」ページでオス・メスの画像を各5枚以上アップロード</li>
-                        <li>性別（オス/メス）を正しく選択してください</li>
-                    </ul>
-                </li>
-                <li><strong>アノテーション（オプション）</strong>
-                    <ul>
-                        <li>「アノテーション」ページで生殖乳頭の位置をマーキング</li>
-                        <li>より高い精度が期待できます</li>
-                    </ul>
-                </li>
-                <li><strong>機械学習を実行</strong>
-                    <ul>
-                        <li>「機械学習」ページで学習を実行</li>
-                        <li>通常1-2分で完了します</li>
-                    </ul>
-                </li>
-                <li><strong>雌雄判定を開始</strong>
-                    <ul>
-                        <li>学習完了後、このページで雌雄判定が可能になります</li>
-                    </ul>
-                </li>
+                <li><strong>学習データをアップロード</strong> - 「学習データ」ページでオス・メスの画像を各5枚以上アップロード</li>
+                <li><strong>機械学習を実行</strong> - 「機械学習」ページで学習を実行（通常1-2分）</li>
+                <li><strong>雌雄判定を開始</strong> - 学習完了後、このページで雌雄判定が可能になります</li>
             </ol>
-        </div>
-        
-        <div class="mt-4 p-3 bg-light rounded">
-            <h6><i class="fas fa-info-circle me-2"></i>なぜ学習が必要？</h6>
-            <p class="mb-0 small">
-                このシステムは機械学習を使用しており、ウニの個体差や撮影条件の違いに対応するため、
-                お客様の実際のデータで学習することで最適な判定精度を実現します。
-            </p>
         </div>
     `;
 }
 
 /**
  * 判定結果の表示
- * @param {Object} data - 判定結果データ
  */
 function displayClassificationResult(data) {
-    // 現在の結果を保存
     classificationService.currentResult = {
         ...data,
         timestamp: new Date().toISOString(),
         feedbackGiven: false
     };
     
-    // プレースホルダーを非表示
     hideElement('classificationPlaceholder');
-    
-    // 結果エリアを表示
     showElement('classificationResult');
     
     // 画像表示
@@ -337,24 +252,17 @@ function displayClassificationResult(data) {
     if (genderResult) {
         const gender = data.gender === 'male' ? 'オス' : 'メス';
         const confidence = (data.confidence * 100).toFixed(1);
-        
-        genderResult.textContent = `判定結果: ${gender} (信頼度: ${confidence}%)`;
-        genderResult.className = 'alert';
-        genderResult.classList.add(data.gender === 'male' ? 'alert-primary' : 'alert-danger');
-        
-        // アイコン追加
         const icon = data.gender === 'male' ? 'fas fa-mars' : 'fas fa-venus';
-        genderResult.innerHTML = `<i class="${icon} me-2"></i>${genderResult.textContent}`;
+        
+        genderResult.className = 'alert ' + (data.gender === 'male' ? 'alert-primary' : 'alert-danger');
+        genderResult.innerHTML = `<i class="${icon} me-2"></i>判定結果: ${gender} (信頼度: ${confidence}%)`;
     }
     
     // 検出情報の表示
     if (data.papillae_count !== undefined) {
         const detectionInfo = document.createElement('div');
         detectionInfo.className = 'alert alert-info mt-3';
-        detectionInfo.innerHTML = `
-            <i class="fas fa-eye me-2"></i>
-            生殖乳頭を${data.papillae_count}個検出しました
-        `;
+        detectionInfo.innerHTML = `<i class="fas fa-eye me-2"></i>生殖乳頭を${data.papillae_count}個検出しました`;
         genderResult.parentElement.appendChild(detectionInfo);
     }
     
@@ -367,7 +275,6 @@ function displayClassificationResult(data) {
 
 /**
  * 特徴重要度の表示
- * @param {Object} featureImportance - 特徴重要度データ
  */
 function displayFeatureImportance(featureImportance) {
     const container = document.getElementById('featureImportance');
@@ -375,11 +282,9 @@ function displayFeatureImportance(featureImportance) {
     
     container.innerHTML = '';
     
-    // 特徴量を重要度順にソート
     const sortedFeatures = Object.entries(featureImportance)
         .sort((a, b) => b[1] - a[1]);
     
-    // 特徴バーの作成
     sortedFeatures.forEach(([feature, importance]) => {
         const percent = (importance * 100).toFixed(1);
         const bar = document.createElement('div');
@@ -403,9 +308,8 @@ function displayFeatureImportance(featureImportance) {
  * フィードバックボタンの有効化
  */
 function enableFeedbackButtons() {
-    const buttons = ['feedbackCorrect', 'feedbackWrongMale', 'feedbackWrongFemale'];
-    buttons.forEach(buttonId => {
-        const button = document.getElementById(buttonId);
+    ['feedbackCorrect', 'feedbackWrongMale', 'feedbackWrongFemale'].forEach(id => {
+        const button = document.getElementById(id);
         if (button) {
             button.disabled = false;
             button.classList.remove('disabled');
@@ -414,75 +318,17 @@ function enableFeedbackButtons() {
 }
 
 /**
- * フィードバックの送信
- * @param {string} type - フィードバックタイプ ('correct' or 'wrong')
- * @param {string} correctGender - 正しい性別 (wrongの場合のみ)
- */
-async function submitFeedback(type, correctGender = null) {
-    if (!classificationService.currentResult) {
-        return;
-    }
-    
-    if (classificationService.currentResult.feedbackGiven) {
-        showWarningMessage('このデータには既にフィードバックが送信されています');
-        return;
-    }
-    
-    const feedbackData = {
-        result_id: classificationService.currentResult.timestamp,
-        feedback_type: type,
-        predicted_gender: classificationService.currentResult.gender,
-        correct_gender: type === 'correct' ? classificationService.currentResult.gender : correctGender,
-        confidence: classificationService.currentResult.confidence,
-        timestamp: new Date().toISOString()
-    };
-    
-    try {
-        // TODO: 実際のフィードバック送信API実装
-        // const response = await apiRequest('/api/feedback', {
-        //     method: 'POST',
-        //     body: JSON.stringify(feedbackData)
-        // });
-        
-        // 暫定処理: ローカル統計更新
-        classificationService.currentResult.feedbackGiven = true;
-        
-        if (type === 'correct') {
-            classificationService.statistics.correctFeedbacks++;
-            showSuccessMessage('フィードバックありがとうございます！正解として記録しました。');
-        } else {
-            classificationService.statistics.incorrectFeedbacks++;
-            showSuccessMessage(`フィードバックありがとうございます！正解は「${correctGender === 'male' ? 'オス' : 'メス'}」として記録しました。`);
-        }
-        
-        // フィードバックボタンを無効化
-        disableFeedbackButtons();
-        
-        // 統計更新
-        updateStatisticsDisplay();
-        
-        // 履歴更新
-        updateHistoryWithFeedback(feedbackData);
-        
-    } catch (error) {
-        showErrorMessage('フィードバック送信中にエラーが発生しました: ' + error.message);
-    }
-}
-
-/**
  * フィードバックボタンの無効化
  */
 function disableFeedbackButtons() {
-    const buttons = ['feedbackCorrect', 'feedbackWrongMale', 'feedbackWrongFemale'];
-    buttons.forEach(buttonId => {
-        const button = document.getElementById(buttonId);
+    ['feedbackCorrect', 'feedbackWrongMale', 'feedbackWrongFemale'].forEach(id => {
+        const button = document.getElementById(id);
         if (button) {
             button.disabled = true;
             button.classList.add('disabled');
         }
     });
     
-    // フィードバック済みメッセージを表示
     const feedbackArea = document.querySelector('.card.bg-light .card-body');
     if (feedbackArea) {
         feedbackArea.innerHTML = `
@@ -496,8 +342,49 @@ function disableFeedbackButtons() {
 }
 
 /**
+ * フィードバックの送信
+ */
+async function submitFeedback(type, correctGender = null) {
+    if (!classificationService.currentResult) {
+        return;
+    }
+    
+    if (classificationService.currentResult.feedbackGiven) {
+        showWarningMessage('このデータには既にフィードバックが送信されています');
+        return;
+    }
+    
+    try {
+        classificationService.currentResult.feedbackGiven = true;
+        
+        if (type === 'correct') {
+            classificationService.statistics.correctFeedbacks++;
+            showSuccessMessage('フィードバックありがとうございます！正解として記録しました。');
+        } else {
+            classificationService.statistics.incorrectFeedbacks++;
+            showSuccessMessage(`フィードバックありがとうございます！正解は「${correctGender === 'male' ? 'オス' : 'メス'}」として記録しました。`);
+        }
+        
+        disableFeedbackButtons();
+        updateStatisticsDisplay();
+        
+        const feedbackData = {
+            result_id: classificationService.currentResult.timestamp,
+            feedback_type: type,
+            predicted_gender: classificationService.currentResult.gender,
+            correct_gender: type === 'correct' ? classificationService.currentResult.gender : correctGender,
+            timestamp: new Date().toISOString()
+        };
+        
+        updateHistoryWithFeedback(feedbackData);
+        
+    } catch (error) {
+        showErrorMessage('フィードバック送信中にエラーが発生しました: ' + error.message);
+    }
+}
+
+/**
  * 判定履歴への追加
- * @param {Object} result - 判定結果
  */
 function addToHistory(result) {
     const historyItem = {
@@ -505,13 +392,12 @@ function addToHistory(result) {
         timestamp: new Date().toISOString(),
         predicted_gender: result.gender,
         confidence: result.confidence,
-        image_url: result.marked_image_url,
+        papillae_count: result.papillae_count,
         feedback: null
     };
     
     classificationService.judgmentHistory.unshift(historyItem);
     
-    // 履歴は最新20件まで保持
     if (classificationService.judgmentHistory.length > 20) {
         classificationService.judgmentHistory = classificationService.judgmentHistory.slice(0, 20);
     }
@@ -523,17 +409,14 @@ function addToHistory(result) {
  * 統計情報の読み込み
  */
 function loadStatistics() {
-    // TODO: サーバーから統計データを読み込み
-    // 暫定処理: ローカルストレージから読み込み
     const savedStats = localStorage.getItem('classificationStatistics');
     if (savedStats) {
         try {
             classificationService.statistics = JSON.parse(savedStats);
         } catch (e) {
-            // 統計データ読み込みエラー
+            console.error('統計データ読み込みエラー:', e);
         }
     }
-    
     updateStatisticsDisplay();
 }
 
@@ -557,10 +440,7 @@ function updateStatisticsDisplay() {
  */
 function updateStatistics() {
     classificationService.statistics.totalJudgments++;
-    
-    // ローカルストレージに保存
     localStorage.setItem('classificationStatistics', JSON.stringify(classificationService.statistics));
-    
     updateStatisticsDisplay();
 }
 
@@ -568,17 +448,14 @@ function updateStatistics() {
  * 判定履歴の読み込み
  */
 function loadJudgmentHistory() {
-    // TODO: サーバーから履歴データを読み込み
-    // 暫定処理: ローカルストレージから読み込み
     const savedHistory = localStorage.getItem('judgmentHistory');
     if (savedHistory) {
         try {
             classificationService.judgmentHistory = JSON.parse(savedHistory);
         } catch (e) {
-            // 履歴データ読み込みエラー
+            console.error('履歴データ読み込みエラー:', e);
         }
     }
-    
     updateHistoryDisplay();
 }
 
@@ -591,12 +468,10 @@ function updateHistoryDisplay() {
     
     if (!historyContainer) return;
     
-    // 件数更新
     if (historyCount) {
         historyCount.textContent = `${classificationService.judgmentHistory.length}件`;
     }
     
-    // 履歴表示
     if (classificationService.judgmentHistory.length === 0) {
         historyContainer.innerHTML = `
             <div class="text-center text-muted py-3">
@@ -607,7 +482,6 @@ function updateHistoryDisplay() {
         return;
     }
     
-    // 履歴項目の生成
     const historyHTML = classificationService.judgmentHistory.map((item, index) => {
         const date = new Date(item.timestamp).toLocaleString();
         const gender = item.predicted_gender === 'male' ? 'オス' : 'メス';
@@ -616,15 +490,13 @@ function updateHistoryDisplay() {
         
         let feedbackBadge = '';
         if (item.feedback) {
-            if (item.feedback.feedback_type === 'correct') {
-                feedbackBadge = '<span class="badge bg-success ms-2">正解</span>';
-            } else {
-                feedbackBadge = '<span class="badge bg-warning ms-2">修正済み</span>';
-            }
+            feedbackBadge = item.feedback.feedback_type === 'correct' 
+                ? '<span class="badge bg-success ms-2">正解</span>'
+                : '<span class="badge bg-warning ms-2">修正済み</span>';
         }
         
         return `
-            <div class="history-item border-bottom py-2" onclick="showHistoryDetail(${index})">
+            <div class="history-item border-bottom py-2" onclick="window.showHistoryDetail(${index})">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <i class="${icon} me-2"></i>
@@ -633,8 +505,7 @@ function updateHistoryDisplay() {
                     </div>
                     <small class="text-muted">${date}</small>
                 </div>
-                <div id="historyDetail${index}" class="history-detail d-none">
-                    <p class="mb-1"><strong>画像:</strong> ${item.id || 'N/A'}</p>
+                <div id="historyDetail${index}" class="d-none">
                     <p class="mb-1"><strong>検出数:</strong> ${item.papillae_count || 0}個</p>
                     ${item.feedback ? `
                         <p class="mb-1"><strong>フィードバック:</strong> 
@@ -648,36 +519,11 @@ function updateHistoryDisplay() {
     }).join('');
     
     historyContainer.innerHTML = historyHTML;
-    
-    // ローカルストレージに保存
     localStorage.setItem('judgmentHistory', JSON.stringify(classificationService.judgmentHistory));
 }
 
-// 履歴詳細の表示/非表示
-window.showHistoryDetail = function(index) {
-    const detailElement = document.getElementById(`historyDetail${index}`);
-    if (detailElement) {
-        detailElement.classList.toggle('d-none');
-    }
-};
-
-// 画像クリックで拡大表示
-document.addEventListener('DOMContentLoaded', function() {
-    // 既存の初期化コードの後に追加
-    
-    // 画像クリックイベント
-    document.addEventListener('click', function(e) {
-        if (e.target.id === 'resultImage' && e.target.src) {
-            const modal = new bootstrap.Modal(document.getElementById('imageZoomModal'));
-            document.getElementById('zoomedImage').src = e.target.src;
-            modal.show();
-        }
-    });
-});
-
 /**
  * フィードバックによる履歴更新
- * @param {Object} feedbackData - フィードバックデータ
  */
 function updateHistoryWithFeedback(feedbackData) {
     const targetItem = classificationService.judgmentHistory.find(item => 
@@ -690,9 +536,10 @@ function updateHistoryWithFeedback(feedbackData) {
     }
 }
 
-/**
- * データセット情報の読み込み
- */
-async function loadDatasetInfo() {
-    // 必要に応じて実装
-}
+// グローバル関数として公開
+window.showHistoryDetail = function(index) {
+    const detailElement = document.getElementById(`historyDetail${index}`);
+    if (detailElement) {
+        detailElement.classList.toggle('d-none');
+    }
+};

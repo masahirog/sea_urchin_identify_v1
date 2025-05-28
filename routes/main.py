@@ -1,6 +1,6 @@
 """
 routes/main.py - 統合メインルート
-
+雌雄判定、画像管理、システム情報の統合
 """
 
 from flask import Blueprint, render_template, jsonify, request, url_for, send_from_directory, current_app
@@ -10,25 +10,29 @@ import uuid
 import traceback
 import cv2
 from datetime import datetime
+import json
+import shutil
 
 main_bp = Blueprint('main', __name__)
+
+# ================================
+# ページ表示
+# ================================
 
 @main_bp.route('/')
 def index():
     """メインページ（雌雄判定）を表示"""
     return render_template('index.html')
 
+# ================================
+# 雌雄判定機能
+# ================================
 
 @main_bp.route('/classify', methods=['POST'])
 def classify_image():
     """
     画像をアップロードして雌雄判定を実行
-    
-    Request:
-    - image: アップロードする画像ファイル
-    
-    Returns:
-    - JSON: 判定結果
+    /upload エンドポイントも内部的にこの関数を使用
     """
     from app import app
     from app_utils.file_handlers import allowed_file, is_image_file
@@ -122,45 +126,39 @@ def classify_image():
     
     return jsonify({"error": "無効なファイル形式です"}), 400
 
+# 後方互換性のためのエイリアス
 @main_bp.route('/upload', methods=['POST'])
 def upload_image():
-    """
-    画像をアップロードして分析（画像処理API）
-    
-    Request:
-    - image: アップロードする画像ファイル
-    
-    Returns:
-    - JSON: 分析結果
-    """
-    # classify_imageと同じ処理を実行（後方互換性）
+    """画像をアップロードして分析（後方互換性）"""
     return classify_image()
 
 # ================================
-# ファイル配信
+# ファイル管理
 # ================================
 
 @main_bp.route('/uploads/<filename>')
 def get_uploaded_file(filename):
-    """
-    アップロードファイルを配信
-    
-    Parameters:
-    - filename: ファイル名
-    
-    Returns:
-    - Response: ファイル
-    """
+    """アップロードファイルを配信"""
     from app import app
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-    
-# ================================
-# 画像管理機能 (旧image_routes.pyから統合)
-# ================================
 
-@main_bp.route('/delete-image', methods=['POST'])
+@main_bp.route('/image', methods=['POST', 'DELETE'])
+def manage_image():
+    """画像管理の統合エンドポイント"""
+    if request.method == 'POST':
+        # マーキング画像の保存またはデータセットへの保存
+        action = request.json.get('action', 'save_marked')
+        if action == 'save_marked':
+            return save_marked_image()
+        elif action == 'save_to_dataset':
+            return save_to_dataset()
+        else:
+            return jsonify({"error": "無効なアクションです"}), 400
+    elif request.method == 'DELETE':
+        return delete_image()
+
 def delete_image():
-    """指定された画像を削除"""
+    """指定された画像を削除（内部処理）"""
     data = request.json
     
     if not data or 'image_path' not in data:
@@ -187,20 +185,9 @@ def delete_image():
         current_app.logger.error(f"画像削除エラー: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@main_bp.route('/save-to-dataset', methods=['POST'])
 def save_to_dataset():
-    """
-    画像をデータセットに保存
-    
-    Request:
-    - image_path: データセットに保存する画像のパス
-    - gender: 性別カテゴリ ('male' または 'female')
-    
-    Returns:
-    - JSON: 保存結果
-    """
+    """画像をデータセットに保存（内部処理）"""
     from app import app
-    import shutil
     
     data = request.json
     
@@ -218,7 +205,7 @@ def save_to_dataset():
         current_app.logger.warning(f"不正なパスへのアクセス試行: {image_path}")
         return jsonify({"error": "不正なパスです"}), 400
     
-    # URLパスをファイルパスに変換（必要に応じて）
+    # URLパスをファイルパスに変換
     if not os.path.exists(image_path) and image_path.startswith('/'):
         if image_path.startswith('/main/images/'):
             image_path = image_path.replace('/main/images/', '')
@@ -264,19 +251,10 @@ def save_to_dataset():
         traceback.print_exc()
         return jsonify({"error": f"画像の保存中にエラーが発生しました: {str(e)}"}), 500
 
-@main_bp.route('/save-marked-image', methods=['POST'])
 def save_marked_image():
-    """
-    マーキングされた画像を保存
-    
-    Request:
-    - image_data: Base64エンコードされた画像データ
-    - original_image_path: 元の画像パス
-    
-    Returns:
-    - JSON: 保存結果
-    """
+    """マーキングされた画像を保存（内部処理）"""
     from app import app
+    import base64
     
     data = request.json
     
@@ -284,30 +262,20 @@ def save_marked_image():
         return jsonify({"error": "必要なパラメータが不足しています"}), 400
     
     try:
-        # Base64データの分割（コンテンツタイプと実際のデータ）
+        # Base64データの処理
         image_data_parts = data['image_data'].split(',')
-        if len(image_data_parts) > 1:
-            # コンテンツタイプが含まれている場合
-            image_data = image_data_parts[1]
-        else:
-            # コンテンツタイプが含まれていない場合
-            image_data = image_data_parts[0]
+        image_data = image_data_parts[1] if len(image_data_parts) > 1 else image_data_parts[0]
         
-        # Base64デコード
         try:
             image_bytes = base64.b64decode(image_data)
         except Exception as e:
             current_app.logger.error(f"Base64デコードエラー: {str(e)}")
             return jsonify({"error": f"画像データの解析に失敗しました: {str(e)}"}), 400
         
-        # 元の画像パス
+        # ファイル名処理
         original_path = data['original_image_path']
-        
-        # 元の画像からファイル名を取得
         filename = os.path.basename(original_path)
         basename, ext = os.path.splitext(filename)
-        
-        # 新しいファイル名（元の名前に_marked付加）
         new_filename = f"{basename}_marked{ext}"
         
         # 保存先ディレクトリ
@@ -315,7 +283,7 @@ def save_marked_image():
         if not os.path.exists(save_dir):
             save_dir = app.config['UPLOAD_FOLDER']
         
-        # 同名ファイルが既に存在する場合はユニークな名前に変更
+        # 同名ファイル対策
         save_path = os.path.join(save_dir, new_filename)
         if os.path.exists(save_path):
             unique_suffix = uuid.uuid4().hex[:8]
@@ -345,20 +313,12 @@ def save_marked_image():
         return jsonify({"error": f"画像の保存中にエラーが発生しました: {str(e)}"}), 500
 
 # ================================
-# タスク・状態管理 (旧main_routes.pyから統合)
+# タスク管理
 # ================================
 
-@main_bp.route('/task-status/<task_id>', methods=['GET'])
+@main_bp.route('/task/<task_id>', methods=['GET'])
 def task_status(task_id):
-    """
-    指定されたタスクIDの処理状況を取得
-    
-    Parameters:
-    - task_id: 処理タスクのID
-    
-    Returns:
-    - JSON: タスクの処理状況情報
-    """
+    """指定されたタスクIDの処理状況を取得"""
     from app import processing_status
     
     if not task_id:
@@ -369,64 +329,31 @@ def task_status(task_id):
     
     return jsonify({"status": "unknown", "message": "タスクが見つかりません"}), 404
 
-
 # ================================
-# データセット・システム情報 (旧main_routes.pyから統合)
+# システム情報
 # ================================
 
-@main_bp.route('/dataset-info', methods=['GET'])
-def get_dataset_info():
-    """
-    データセット情報を取得
+@main_bp.route('/system', methods=['GET'])
+def system_info():
+    """システム情報の統合エンドポイント"""
+    info_type = request.args.get('type', 'stats')
     
-    Returns:
-    - JSON: データセットの情報
-    """
-    from app import app
-    
-    # 各カテゴリのディレクトリパス
-    male_dir = os.path.join(app.config['DATASET_FOLDER'], 'male')
-    female_dir = os.path.join(app.config['DATASET_FOLDER'], 'female')
-    
-    # 画像ファイル数をカウント
-    male_count = len([f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(male_dir) else 0
-    female_count = len([f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(female_dir) else 0
-    
-    # 合計カウント
-    total_count = male_count + female_count
-    
-    # アノテーション情報の取得（オプション）
-    annotation_count = 0
-    annotation_file = os.path.join('static', 'annotation_mapping.json')
-    if os.path.exists(annotation_file):
-        try:
-            import json
-            with open(annotation_file, 'r') as f:
-                annotations = json.load(f)
-                annotation_count = len(annotations)
-        except Exception as e:
-            print(f"アノテーション情報読み込みエラー: {str(e)}")
-    
-    return jsonify({
-        "male_count": male_count,
-        "female_count": female_count,
-        "total_count": total_count,
-        "annotation_count": annotation_count
-    })
+    if info_type == 'stats':
+        return get_system_stats()
+    elif info_type == 'dataset':
+        return get_dataset_info()
+    elif info_type == 'classification':
+        return get_classification_stats()
+    else:
+        return jsonify({"error": "無効な情報タイプです"}), 400
 
-@main_bp.route('/system-stats', methods=['GET'])
 def get_system_stats():
-    """
-    システム統計情報を取得
-    
-    Returns:
-    - JSON: システム統計情報
-    """
+    """システム統計情報を取得（内部処理）"""
     from app import processing_status, app
     
     try:
         # データセット統計
-        dataset_info = get_dataset_info().get_json()
+        dataset_info = get_dataset_info_internal()
         
         # タスク統計
         tasks = processing_status
@@ -435,7 +362,7 @@ def get_system_stats():
         failed_tasks = len([t for t in tasks.values() if t.get('status') in ['failed', 'error']])
         
         # 判定履歴統計
-        classification_stats = get_classification_stats()
+        classification_stats = get_classification_stats_internal()
         
         # モデル存在確認
         from config import MODELS_DIR
@@ -472,150 +399,49 @@ def get_system_stats():
         current_app.logger.error(f"システム統計取得エラー: {str(e)}")
         return jsonify({"error": "システム統計の取得に失敗しました"}), 500
 
-# ================================
-# 判定履歴管理
-# ================================
+def get_dataset_info():
+    """データセット情報を取得（エンドポイント用）"""
+    return jsonify(get_dataset_info_internal())
 
-@main_bp.route('/classification-history', methods=['GET'])
-def get_classification_history():
-    """
-    雌雄判定履歴を取得
+def get_dataset_info_internal():
+    """データセット情報を取得（内部処理）"""
+    from app import app
     
-    Returns:
-    - JSON: 判定履歴のリスト
-    """
-    try:
-        history = load_classification_history()
-        
-        # 日付でソート（新しい順）
-        history.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-        
-        # 最新20件に制限
-        recent_history = history[:20]
-        
-        return jsonify({
-            "history": recent_history,
-            "total_count": len(history),
-            "recent_count": len(recent_history)
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f"判定履歴取得エラー: {str(e)}")
-        return jsonify({"error": "判定履歴の取得に失敗しました"}), 500
-
-@main_bp.route('/feedback', methods=['POST'])
-def submit_feedback():
-    """
-    判定結果へのフィードバックを記録
+    # 各カテゴリのディレクトリパス
+    male_dir = os.path.join(app.config['DATASET_FOLDER'], 'male')
+    female_dir = os.path.join(app.config['DATASET_FOLDER'], 'female')
     
-    Request:
-    - filename: 対象画像ファイル名
-    - correct: 判定が正しいかどうか (boolean)
-    - actual_gender: 実際の性別 ('male' または 'female')
+    # 画像ファイル数をカウント
+    male_count = len([f for f in os.listdir(male_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(male_dir) else 0
+    female_count = len([f for f in os.listdir(female_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]) if os.path.exists(female_dir) else 0
     
-    Returns:
-    - JSON: フィードバック記録結果
-    """
-    try:
-        data = request.json
-        
-        if not data or 'filename' not in data:
-            return jsonify({"error": "必要なパラメータがありません"}), 400
-        
-        filename = data['filename']
-        correct = data.get('correct', False)
-        actual_gender = data.get('actual_gender')
-        
-        # フィードバックを履歴に記録
-        update_classification_feedback(filename, correct, actual_gender)
-        
-        current_app.logger.info(f"フィードバック記録: {filename} - 正解: {correct}, 実際: {actual_gender}")
-        
-        return jsonify({
-            "success": True,
-            "message": "フィードバックを記録しました"
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f"フィードバック記録エラー: {str(e)}")
-        return jsonify({"error": "フィードバックの記録に失敗しました"}), 500
-
-# ================================
-# ヘルパー関数
-# ================================
-
-def load_classification_history():
-    """判定履歴を読み込み"""
-    history_file = os.path.join('data', 'classification_history.json')
+    # 合計カウント
+    total_count = male_count + female_count
     
-    if os.path.exists(history_file):
+    # アノテーション情報の取得
+    annotation_count = 0
+    annotation_file = os.path.join('static', 'annotation_mapping.json')
+    if os.path.exists(annotation_file):
         try:
-            import json
-            with open(history_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
+            with open(annotation_file, 'r') as f:
+                annotations = json.load(f)
+                annotation_count = len(annotations)
         except Exception as e:
-            current_app.logger.error(f"履歴読み込みエラー: {str(e)}")
+            print(f"アノテーション情報読み込みエラー: {str(e)}")
     
-    return []
-
-def save_classification_history(history):
-    """判定履歴を保存"""
-    from config import DATA_DIR
-    
-    os.makedirs(DATA_DIR, exist_ok=True)
-    history_file = os.path.join(DATA_DIR, 'classification_history.json')
-    
-    try:
-        import json
-        with open(history_file, 'w', encoding='utf-8') as f:
-            json.dump(history, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        current_app.logger.error(f"履歴保存エラー: {str(e)}")
-
-def record_classification_history(filename, result):
-    """新しい判定結果を履歴に記録"""
-    history = load_classification_history()
-    
-    # 新しい記録を作成
-    record = {
-        "filename": filename,
-        "timestamp": datetime.now().isoformat(),
-        "gender": result.get("gender", "unknown"),
-        "confidence": result.get("confidence", 0),
-        "features": result.get("features", []),
-        "papillae_count": result.get("papillae_count", 0),
-        "feedback": None  # 後でフィードバックが追加される
+    return {
+        "male_count": male_count,
+        "female_count": female_count,
+        "total_count": total_count,
+        "annotation_count": annotation_count
     }
-    
-    # 履歴に追加（最新を先頭に）
-    history.insert(0, record)
-    
-    # 履歴サイズ制限（最新1000件まで）
-    if len(history) > 1000:
-        history = history[:1000]
-    
-    # 保存
-    save_classification_history(history)
-
-def update_classification_feedback(filename, correct, actual_gender):
-    """判定結果にフィードバックを追加"""
-    history = load_classification_history()
-    
-    # 該当する記録を検索して更新
-    for record in history:
-        if record.get("filename") == filename:
-            record["feedback"] = {
-                "correct": correct,
-                "actual_gender": actual_gender,
-                "feedback_timestamp": datetime.now().isoformat()
-            }
-            break
-    
-    # 保存
-    save_classification_history(history)
 
 def get_classification_stats():
-    """判定統計を計算"""
+    """判定統計を取得（エンドポイント用）"""
+    return jsonify(get_classification_stats_internal())
+
+def get_classification_stats_internal():
+    """判定統計を計算（内部処理）"""
     history = load_classification_history()
     
     if not history:
@@ -644,7 +470,92 @@ def get_classification_stats():
     }
 
 # ================================
-# デバッグ・管理機能
+# 判定履歴管理
+# ================================
+
+@main_bp.route('/classification', methods=['GET', 'POST'])
+def manage_classification():
+    """判定履歴管理の統合エンドポイント"""
+    if request.method == 'GET':
+        return get_classification_history()
+    elif request.method == 'POST':
+        return submit_feedback()
+
+def get_classification_history():
+    """雌雄判定履歴を取得"""
+    try:
+        history = load_classification_history()
+        
+        # 日付でソート（新しい順）
+        history.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        
+        # 最新20件に制限
+        recent_history = history[:20]
+        
+        return jsonify({
+            "history": recent_history,
+            "total_count": len(history),
+            "recent_count": len(recent_history)
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"判定履歴取得エラー: {str(e)}")
+        return jsonify({"error": "判定履歴の取得に失敗しました"}), 500
+
+def submit_feedback():
+    """判定結果へのフィードバックを記録"""
+    try:
+        data = request.json
+        
+        if not data or 'filename' not in data:
+            return jsonify({"error": "必要なパラメータがありません"}), 400
+        
+        filename = data['filename']
+        correct = data.get('correct', False)
+        actual_gender = data.get('actual_gender')
+        
+        # フィードバックを履歴に記録
+        update_classification_feedback(filename, correct, actual_gender)
+        
+        current_app.logger.info(f"フィードバック記録: {filename} - 正解: {correct}, 実際: {actual_gender}")
+        
+        return jsonify({
+            "success": True,
+            "message": "フィードバックを記録しました"
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"フィードバック記録エラー: {str(e)}")
+        return jsonify({"error": "フィードバックの記録に失敗しました"}), 500
+
+# ================================
+# クリーンアップ機能
+# ================================
+
+@main_bp.route('/cleanup', methods=['POST'])
+def cleanup_temp_files():
+    """一時ファイルをクリーンアップ"""
+    from app import app
+    from app_utils.file_cleanup import cleanup_temp_files as cleanup_function
+    
+    try:
+        upload_dir = app.config.get('UPLOAD_FOLDER')
+        max_age = request.json.get('max_age_hours', 24) if request.json else 24
+        
+        deleted_count = cleanup_function(upload_dir, max_age)
+        
+        return jsonify({
+            "success": True,
+            "message": f"{deleted_count}個のファイルを削除しました",
+            "deleted_count": deleted_count
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"一時ファイルクリーンアップエラー: {str(e)}")
+        return jsonify({"error": f"クリーンアップに失敗しました: {str(e)}"}), 500
+
+# ================================
+# デバッグ機能
 # ================================
 
 @main_bp.route('/debug/info')
@@ -687,24 +598,128 @@ def debug_info():
     
     return jsonify(info)
 
-@main_bp.route('/cleanup/temp-files', methods=['POST'])
-def cleanup_temp_files():
-    """一時ファイルをクリーンアップ"""
-    from app import app
-    from app_utils.file_cleanup import cleanup_temp_files
+# ================================
+# ヘルパー関数
+# ================================
+
+def load_classification_history():
+    """判定履歴を読み込み"""
+    history_file = os.path.join('data', 'classification_history.json')
+    
+    if os.path.exists(history_file):
+        try:
+            with open(history_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            current_app.logger.error(f"履歴読み込みエラー: {str(e)}")
+    
+    return []
+
+def save_classification_history(history):
+    """判定履歴を保存"""
+    from config import DATA_DIR
+    
+    os.makedirs(DATA_DIR, exist_ok=True)
+    history_file = os.path.join(DATA_DIR, 'classification_history.json')
     
     try:
-        upload_dir = app.config.get('UPLOAD_FOLDER')
-        max_age = request.json.get('max_age_hours', 24) if request.json else 24
-        
-        deleted_count = cleanup_temp_files(upload_dir, max_age)
-        
-        return jsonify({
-            "success": True,
-            "message": f"{deleted_count}個のファイルを削除しました",
-            "deleted_count": deleted_count
-        })
-        
+        with open(history_file, 'w', encoding='utf-8') as f:
+            json.dump(history, f, indent=2, ensure_ascii=False)
     except Exception as e:
-        current_app.logger.error(f"一時ファイルクリーンアップエラー: {str(e)}")
-        return jsonify({"error": f"クリーンアップに失敗しました: {str(e)}"}), 500
+        current_app.logger.error(f"履歴保存エラー: {str(e)}")
+
+def record_classification_history(filename, result):
+    """新しい判定結果を履歴に記録"""
+    history = load_classification_history()
+    
+    # 新しい記録を作成
+    record = {
+        "filename": filename,
+        "timestamp": datetime.now().isoformat(),
+        "gender": result.get("gender", "unknown"),
+        "confidence": result.get("confidence", 0),
+        "features": result.get("features", []),
+        "papillae_count": result.get("papillae_count", 0),
+        "feedback": None
+    }
+    
+    # 履歴に追加（最新を先頭に）
+    history.insert(0, record)
+    
+    # 履歴サイズ制限（最新1000件まで）
+    if len(history) > 1000:
+        history = history[:1000]
+    
+    # 保存
+    save_classification_history(history)
+
+def update_classification_feedback(filename, correct, actual_gender):
+    """判定結果にフィードバックを追加"""
+    history = load_classification_history()
+    
+    # 該当する記録を検索して更新
+    for record in history:
+        if record.get("filename") == filename:
+            record["feedback"] = {
+                "correct": correct,
+                "actual_gender": actual_gender,
+                "feedback_timestamp": datetime.now().isoformat()
+            }
+            break
+    
+    # 保存
+    save_classification_history(history)
+
+# ================================
+# 後方互換性のための個別ルート定義（非推奨）
+# ================================
+
+# 画像管理の個別ルート
+@main_bp.route('/delete-image', methods=['POST'])
+def delete_image_legacy():
+    """後方互換性のための削除ルート"""
+    return delete_image()
+
+@main_bp.route('/save-to-dataset', methods=['POST'])
+def save_to_dataset_legacy():
+    """後方互換性のためのデータセット保存ルート"""
+    return save_to_dataset()
+
+@main_bp.route('/save-marked-image', methods=['POST'])
+def save_marked_image_legacy():
+    """後方互換性のためのマーキング画像保存ルート"""
+    return save_marked_image()
+
+# タスク管理の個別ルート
+@main_bp.route('/task-status/<task_id>', methods=['GET'])
+def task_status_legacy(task_id):
+    """後方互換性のためのタスク状態取得ルート"""
+    return task_status(task_id)
+
+# システム情報の個別ルート
+@main_bp.route('/dataset-info', methods=['GET'])
+def get_dataset_info_legacy():
+    """後方互換性のためのデータセット情報取得ルート"""
+    return get_dataset_info()
+
+@main_bp.route('/system-stats', methods=['GET'])
+def get_system_stats_legacy():
+    """後方互換性のためのシステム統計取得ルート"""
+    return get_system_stats()
+
+# 判定履歴の個別ルート
+@main_bp.route('/classification-history', methods=['GET'])
+def get_classification_history_legacy():
+    """後方互換性のための判定履歴取得ルート"""
+    return get_classification_history()
+
+@main_bp.route('/feedback', methods=['POST'])
+def submit_feedback_legacy():
+    """後方互換性のためのフィードバック送信ルート"""
+    return submit_feedback()
+
+# クリーンアップの個別ルート
+@main_bp.route('/cleanup/temp-files', methods=['POST'])
+def cleanup_temp_files_legacy():
+    """後方互換性のためのクリーンアップルート"""
+    return cleanup_temp_files()

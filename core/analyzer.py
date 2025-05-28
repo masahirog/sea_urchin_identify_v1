@@ -13,8 +13,7 @@ import traceback
 from datetime import datetime
 from skimage.metrics import structural_similarity as ssim
 
-# PapillaeDetector（YOLOv5ベース）のインポート
-from .PapillaeDetector import PapillaeDetector
+# YoloDetectorのみをインポート
 from .YoloDetector import YoloDetector
 
 class UnifiedAnalyzer:
