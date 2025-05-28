@@ -13,8 +13,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, 'static')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 UPLOAD_DIR = os.path.join(BASE_DIR, 'uploads')
-MODELS_DIR = os.path.join(BASE_DIR, 'models')
-MODEL_SAVE_DIR = os.path.join(MODELS_DIR, 'saved')
 
 # 学習データ用ディレクトリ（統一）
 TRAINING_DATA_DIR = os.path.join(STATIC_DIR, 'training_data')
@@ -23,10 +21,6 @@ TRAINING_LABELS_DIR = os.path.join(TRAINING_DATA_DIR, 'labels')
 
 # 検出結果ディレクトリ
 DETECTION_RESULTS_DIR = os.path.join(STATIC_DIR, 'detection_results')
-
-# 評価結果ディレクトリ
-STATIC_EVALUATION_DIR = os.path.join(STATIC_DIR, 'evaluation')
-EVALUATION_DATA_DIR = os.path.join(DATA_DIR, 'evaluation')
 
 # YOLOデータセット（自動生成）
 YOLO_DATASET_DIR = os.path.join(DATA_DIR, 'yolo_dataset')
@@ -63,14 +57,10 @@ def ensure_directories():
     """必要なディレクトリを作成"""
     directories = [
         UPLOAD_DIR,
-        MODELS_DIR,
-        MODEL_SAVE_DIR,
         TRAINING_DATA_DIR,
         TRAINING_IMAGES_DIR,
         TRAINING_LABELS_DIR,
         DETECTION_RESULTS_DIR,
-        STATIC_EVALUATION_DIR,
-        EVALUATION_DATA_DIR,
         DATA_DIR,
         YOLO_DATASET_DIR,
         'logs'
@@ -97,15 +87,6 @@ def save_metadata(metadata):
         return True
     except:
         return False
-
-def get_model_path(model_name='sea_urchin_rf_model.pkl'):
-    """モデルのパスを取得"""
-    return os.path.join(MODEL_SAVE_DIR, model_name)
-
-def get_yolo_weights_path(model_size='small'):
-    """YOLOの重みファイルパスを取得"""
-    weights_file = YOLO_MODEL_WEIGHTS.get(model_size, YOLO_MODEL_WEIGHTS['small'])
-    return weights_file
 
 def get_latest_yolo_model():
     """最新のYOLOモデルパスを取得"""

@@ -33,7 +33,6 @@ app = Flask(__name__, static_folder='static', static_url_path='/static')
 # 設定の適用（config.pyから）
 app.config.update({
     'UPLOAD_FOLDER': UPLOAD_DIR,
-    'MODEL_FOLDER': MODEL_SAVE_DIR,
     'ALLOWED_EXTENSIONS': ALLOWED_EXTENSIONS,
     'TEMP_FILES_MAX_AGE': TEMP_FILES_MAX_AGE,
     'MAX_CONTENT_LENGTH': MAX_CONTENT_LENGTH,
@@ -52,12 +51,7 @@ def check_system_readiness():
     # YOLOv5チェック
     if not os.path.exists('yolov5'):
         issues.append("YOLOv5がインストールされていません。`python setup_yolo.py`を実行してください。")
-    
-    # RandomForestモデルチェック
-    model_path = os.path.join(MODEL_SAVE_DIR, 'sea_urchin_rf_model.pkl')
-    if not os.path.exists(model_path):
-        warnings.append("RandomForestモデルが未学習です。雌雄判定機能は学習後に利用可能になります。")
-    
+        
     # 結果をログ出力
     if issues:
         logger.error("🚨 システム起動エラー:")

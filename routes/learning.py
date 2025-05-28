@@ -1,12 +1,10 @@
 """
-routes/learning.py - 統合学習ルート
+routes/learning.py - 学習データ管理ルート
 
 機能:
 - 学習データ管理
-- モデル訓練・評価
 - アノテーション機能  
 - タスク状態管理
-- 評価履歴
 """
 
 from flask import Blueprint, request, jsonify, render_template, send_from_directory, current_app
@@ -20,7 +18,6 @@ from datetime import datetime
 from app_utils.file_handlers import handle_multiple_image_upload
 
 learning_bp = Blueprint('learning', __name__, url_prefix='/learning')
-
 
 # ================================
 # データ管理API（統合版）
@@ -39,7 +36,7 @@ def manage_learning_data():
 def upload_learning_data():
     """学習データ用の画像をアップロード（POST処理）"""
     from app import app
-    from config import TRAINING_IMAGES_DIR, METADATA_FILE  # TRAINING_DATA_DIR → TRAINING_IMAGES_DIR
+    from config import TRAINING_IMAGES_DIR, METADATA_FILE
     
     if 'images' not in request.files:
         return jsonify({"error": "画像ファイルがありません"}), 400
@@ -49,13 +46,9 @@ def upload_learning_data():
     if not files or all(f.filename == '' for f in files):
         return jsonify({"error": "ファイルが選択されていません"}), 400
     
-    # 保存先ディレクトリ（修正）
-    target_dir = TRAINING_IMAGES_DIR  # 正しいディレクトリを使用
-    
-    # gender パラメータをチェック
+    target_dir = TRAINING_IMAGES_DIR
     gender = request.form.get('gender', 'unknown')
     
-    # 共通関数を使用
     uploaded_files, errors = handle_multiple_image_upload(
         files, 
         target_dir, 
@@ -71,7 +64,6 @@ def upload_learning_data():
         except:
             metadata = {}
     
-    # アップロードされたファイルのメタデータを更新
     for file_info in uploaded_files:
         filename = file_info['filename']
         metadata[filename] = {
@@ -79,11 +71,8 @@ def upload_learning_data():
             'upload_time': datetime.now().isoformat(),
             'original_name': file_info.get('original_name', filename)
         }
-        
-        # URLを設定（修正）
         file_info['url'] = f'/static/training_data/images/{filename}'
     
-    # メタデータを保存
     os.makedirs(os.path.dirname(METADATA_FILE), exist_ok=True)
     with open(METADATA_FILE, 'w') as f:
         json.dump(metadata, f, indent=2)
@@ -113,7 +102,6 @@ def get_learning_data():
     try:
         gender_filter = request.args.get('gender', 'all')
         
-        # メタデータを読み込み
         metadata = {}
         if os.path.exists(METADATA_FILE):
             try:
@@ -128,47 +116,32 @@ def get_learning_data():
             'unknown': []
         }
         
-        # デバッグ出力を追加
-        current_app.logger.info(f"学習画像ディレクトリ: {TRAINING_IMAGES_DIR}")
-        current_app.logger.info(f"ディレクトリ存在確認: {os.path.exists(TRAINING_IMAGES_DIR)}")
-        
-        # 画像ファイルをリストアップ
         if os.path.exists(TRAINING_IMAGES_DIR):
-            files_in_dir = os.listdir(TRAINING_IMAGES_DIR)
-            current_app.logger.info(f"ディレクトリ内のファイル数: {len(files_in_dir)}")
-            
-            for filename in files_in_dir:
+            for filename in os.listdir(TRAINING_IMAGES_DIR):
                 if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
-                    # メタデータから情報を取得
                     image_info = metadata.get(filename, {'gender': 'unknown'})
                     gender = image_info.get('gender', 'unknown')
                     
                     if gender_filter != 'all' and gender_filter != gender:
                         continue
                     
-                    # ラベルファイルの存在確認
                     label_file = os.path.splitext(filename)[0] + '.txt'
                     has_annotation = os.path.exists(os.path.join(TRAINING_LABELS_DIR, label_file))
                     
-                    # 画像情報を作成
                     sample_info = {
                         'filename': filename,
                         'path': os.path.join(TRAINING_IMAGES_DIR, filename),
-                        'url': f"/static/training_data/images/{filename}",  # 修正：正しいURLパス
+                        'url': f"/static/training_data/images/{filename}",
                         'has_annotation': has_annotation,
                         'category': gender,
                         'metadata': image_info
                     }
                     
-                    # カテゴリに応じて振り分け
                     if gender in result:
                         result[gender].append(sample_info)
                     else:
                         result['unknown'].append(sample_info)
-        else:
-            current_app.logger.warning(f"学習画像ディレクトリが存在しません: {TRAINING_IMAGES_DIR}")
         
-        # 総数情報を追加
         result['counts'] = {
             'male': len(result['male']),
             'female': len(result['female']),
@@ -176,13 +149,10 @@ def get_learning_data():
             'total': len(result['male']) + len(result['female']) + len(result['unknown'])
         }
         
-        current_app.logger.info(f"学習データ取得結果: {result['counts']}")
-        
         return jsonify(result)
         
     except Exception as e:
         current_app.logger.error(f"学習データ取得エラー: {str(e)}")
-        import traceback
         traceback.print_exc()
         return jsonify({"error": "学習データの取得に失敗しました"}), 500
 
@@ -193,42 +163,33 @@ def delete_learning_data():
     try:
         data = request.json
         
-        # 全削除フラグの確認
         if data and data.get('delete_all', False):
             return delete_all_learning_data_internal()
         
-        # 個別削除の処理
         if not data or ('path' not in data and 'filename' not in data):
             return jsonify({"error": "削除する画像の情報が指定されていません"}), 400
         
-        # ファイル名を取得（pathまたはfilenameから）
         if 'filename' in data:
             filename = data['filename']
         else:
-            # pathから抽出
             path = data['path']
             filename = os.path.basename(path)
         
-        # パスの検証（セキュリティ）
         if '..' in filename or '/' in filename or '\\' in filename:
             return jsonify({"error": "不正なファイル名です"}), 400
         
-        # 画像ファイルのフルパス
         image_path = os.path.join(TRAINING_IMAGES_DIR, filename)
         
         if not os.path.exists(image_path):
             return jsonify({"error": "指定された画像が見つかりません"}), 404
         
-        # 画像ファイルを削除
         os.remove(image_path)
         
-        # 関連するラベルファイルも削除
         base_name = os.path.splitext(filename)[0]
         label_path = os.path.join(TRAINING_LABELS_DIR, f'{base_name}.txt')
         if os.path.exists(label_path):
             os.remove(label_path)
         
-        # YOLOデータセットからも削除
         yolo_paths = [
             os.path.join(YOLO_DATASET_DIR, 'images/train', filename),
             os.path.join(YOLO_DATASET_DIR, 'images/val', filename),
@@ -243,7 +204,6 @@ def delete_learning_data():
                 except Exception as e:
                     current_app.logger.warning(f"YOLOファイル削除エラー: {yolo_path} - {str(e)}")
         
-        # メタデータから削除
         metadata = {}
         if os.path.exists(METADATA_FILE):
             try:
@@ -256,8 +216,6 @@ def delete_learning_data():
             del metadata[filename]
             with open(METADATA_FILE, 'w') as f:
                 json.dump(metadata, f, indent=2)
-        
-        current_app.logger.info(f"学習データ削除: {filename}")
         
         return jsonify({
             "success": True,
@@ -275,7 +233,6 @@ def delete_all_learning_data_internal():
     deleted_count = 0
     deleted_files = []
     
-    # 画像ファイルを削除
     if os.path.exists(TRAINING_IMAGES_DIR):
         for filename in os.listdir(TRAINING_IMAGES_DIR):
             if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
@@ -287,7 +244,6 @@ def delete_all_learning_data_internal():
                 except Exception as e:
                     current_app.logger.error(f"ファイル削除エラー: {file_path} - {str(e)}")
     
-    # ラベルファイルを削除
     if os.path.exists(TRAINING_LABELS_DIR):
         for filename in os.listdir(TRAINING_LABELS_DIR):
             if filename.endswith('.txt'):
@@ -297,7 +253,6 @@ def delete_all_learning_data_internal():
                 except Exception as e:
                     current_app.logger.error(f"ラベル削除エラー: {file_path} - {str(e)}")
     
-    # YOLOデータセットもクリア
     yolo_dirs = [
         os.path.join(YOLO_DATASET_DIR, 'images/train'),
         os.path.join(YOLO_DATASET_DIR, 'images/val'),
@@ -314,12 +269,9 @@ def delete_all_learning_data_internal():
                 except Exception as e:
                     current_app.logger.warning(f"YOLOファイル削除エラー: {file_path} - {str(e)}")
     
-    # メタデータをクリア
     if os.path.exists(METADATA_FILE):
         with open(METADATA_FILE, 'w') as f:
             json.dump({}, f)
-    
-    current_app.logger.info(f"全学習データ削除: {deleted_count}ファイル")
     
     return jsonify({
         "success": True,
@@ -334,7 +286,6 @@ def get_dataset_stats():
     from config import TRAINING_IMAGES_DIR, TRAINING_LABELS_DIR, METADATA_FILE
     
     try:
-        # メタデータを読み込み
         metadata = {}
         if os.path.exists(METADATA_FILE):
             try:
@@ -343,7 +294,6 @@ def get_dataset_stats():
             except:
                 pass
         
-        # 画像とラベルのカウント
         total_images = 0
         total_labels = 0
         male_count = 0
@@ -355,7 +305,6 @@ def get_dataset_stats():
                 if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
                     total_images += 1
                     
-                    # メタデータから性別情報を取得（ある場合）
                     image_info = metadata.get(filename, {})
                     gender = image_info.get('gender', 'unknown')
                     
@@ -369,16 +318,7 @@ def get_dataset_stats():
         if os.path.exists(TRAINING_LABELS_DIR):
             total_labels = len([f for f in os.listdir(TRAINING_LABELS_DIR) if f.endswith('.txt')])
         
-        # アノテーション率
         annotation_ratio = (total_labels / total_images * 100) if total_images > 0 else 0
-        
-        # 準備完了度スコアの計算
-        readiness_info = calculate_readiness_score({
-            'male_count': male_count,
-            'female_count': female_count,
-            'total_count': total_images,
-            'annotation_count': total_labels
-        })
         
         return jsonify({
             "total_images": total_images,
@@ -392,8 +332,7 @@ def get_dataset_stats():
                 "annotation": annotation_ratio,
                 "male": (male_count / total_images * 100) if total_images > 0 else 0,
                 "female": (female_count / total_images * 100) if total_images > 0 else 0
-            },
-            "readiness": readiness_info
+            }
         })
         
     except Exception as e:
@@ -420,38 +359,31 @@ def save_annotation():
         if not data or 'image_data' not in data or 'original_path' not in data:
             return jsonify({"error": "必要なパラメータが不足しています"}), 400
         
-        # Base64データの処理
         image_data_parts = data['image_data'].split(',')
         image_data = image_data_parts[1] if len(image_data_parts) > 1 else image_data_parts[0]
         
         try:
             image_bytes = base64.b64decode(image_data)
         except Exception as e:
-            current_app.logger.error(f"Base64デコードエラー: {str(e)}")
             return jsonify({"error": f"画像データの解析に失敗しました: {str(e)}"}), 400
         
-        # ファイル名処理
         original_path = data['original_path']
         filename = os.path.basename(original_path)
         basename, ext = os.path.splitext(filename)
         new_filename = f"{basename}_annotation{ext}"
         
-        # 保存ディレクトリ
         from config import DETECTION_RESULTS_DIR
         os.makedirs(DETECTION_RESULTS_DIR, exist_ok=True)
         
-        # 同名ファイル対策
         save_path = os.path.join(DETECTION_RESULTS_DIR, new_filename)
         if os.path.exists(save_path):
             unique_suffix = uuid.uuid4().hex[:8]
             new_filename = f"{basename}_annotation_{unique_suffix}{ext}"
             save_path = os.path.join(DETECTION_RESULTS_DIR, new_filename)
         
-        # 画像の保存
         with open(save_path, 'wb') as f:
             f.write(image_bytes)
         
-        # アノテーションマッピングの更新
         annotation_mapping_file = os.path.join('static', 'annotation_mapping.json')
         
         mapping = {}
@@ -468,8 +400,6 @@ def save_annotation():
         os.makedirs(os.path.dirname(annotation_mapping_file), exist_ok=True)
         with open(annotation_mapping_file, 'w') as f:
             json.dump(mapping, f, indent=2)
-        
-        current_app.logger.info(f"アノテーション保存完了: {new_filename}")
         
         return jsonify({
             "success": True,
@@ -615,8 +545,6 @@ def get_task_status_by_id(task_id):
     
     status = processing_status.get(task_id, {"status": "unknown", "message": "タスクが見つかりません"})
     
-    current_app.logger.debug(f"タスク状態取得: {task_id} = {status}")
-    
     return jsonify(status)
 
 def cancel_task(task_id):
@@ -643,8 +571,6 @@ def cancel_task(task_id):
         "previous_status": status
     }
     
-    current_app.logger.info(f"タスクをキャンセルしました: {task_id}")
-    
     return jsonify({
         "success": True,
         "message": "タスクがキャンセルされました",
@@ -652,123 +578,17 @@ def cancel_task(task_id):
     })
 
 # ================================
-# 学習実行
+# 学習実行（YOLOのみ）
 # ================================
 
 @learning_bp.route('/train', methods=['POST'])
 def train_models():
-    """モデル学習の統合エンドポイント"""
-    data = request.json or {}
-    model_type = data.get('model_type', 'all')
-    
-    if model_type == 'rf':
-        return quick_train_rf()
-    else:
-        return train_all_models()
-
-def train_all_models():
-    """YOLOとRandomForestの統合学習を実行"""
-    from app import app, processing_queue
-    import uuid
-    
-    try:
-        # データセットの確認
-        from config import TRAINING_IMAGES_DIR, METADATA_FILE
-        import os
-        import json
-        
-        # メタデータ読み込み
-        metadata = {}
-        if os.path.exists(METADATA_FILE):
-            with open(METADATA_FILE, 'r') as f:
-                metadata = json.load(f)
-        
-        # 画像数の確認
-        male_count = 0
-        female_count = 0
-        total_count = 0
-        
-        if os.path.exists(TRAINING_IMAGES_DIR):
-            for filename in os.listdir(TRAINING_IMAGES_DIR):
-                if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
-                    total_count += 1
-                    image_info = metadata.get(filename, {})
-                    gender = image_info.get('gender', 'unknown')
-                    
-                    if gender == 'male':
-                        male_count += 1
-                    elif gender == 'female':
-                        female_count += 1
-        
-        # 最低要件チェック
-        if total_count < 4:
-            return jsonify({
-                "error": f"学習には最低4枚の画像が必要です（現在: {total_count}枚）"
-            }), 400
-        
-        if male_count == 0 or female_count == 0:
-            return jsonify({
-                "error": f"オスとメスの両方の画像が必要です（オス: {male_count}枚, メス: {female_count}枚）"
-            }), 400
-        
-        # タスクIDの生成
-        task_id = str(uuid.uuid4())
-        
-        # タスクをキューに追加
-        task = {
-            'id': task_id,
-            'type': 'unified_training',
-            'dataset_dir': TRAINING_IMAGES_DIR,
-            'phases': ['feature_extraction', 'model_training', 'basic_evaluation']
-        }
-        
-        processing_queue.put(task)
-        
-        current_app.logger.info(f"統合学習タスク開始: {task_id}")
-        
-        return jsonify({
-            "success": True,
-            "task_id": task_id,
-            "message": "統合学習を開始しました",
-            "dataset_info": {
-                "male_count": male_count,
-                "female_count": female_count,
-                "total_count": total_count
-            }
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f"統合学習開始エラー: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
-def quick_train_rf():
-    """RandomForestモデルのみ素早く学習"""
-    from app import app, processing_queue
-    from core.analyzer import UnifiedAnalyzer
-    import uuid
-    
-    try:
-        # 簡易学習の実行
-        analyzer = UnifiedAnalyzer()
-        task_id = str(uuid.uuid4())
-        
-        # 直接学習を実行（非同期処理をスキップ）
-        success = analyzer.train_model(None, task_id)
-        
-        if success:
-            return jsonify({
-                "success": True,
-                "message": "RandomForestモデルの学習が完了しました",
-                "task_id": task_id
-            })
-        else:
-            return jsonify({
-                "error": "モデル学習に失敗しました。学習データを確認してください。"
-            }), 500
-            
-    except Exception as e:
-        current_app.logger.error(f"クイック学習エラー: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+    """YOLO学習へリダイレクト"""
+    return jsonify({
+        "success": False,
+        "message": "YOLOの学習は「機械学習」ページから実行してください",
+        "redirect": "/training"
+    })
 
 # ================================
 # 結果表示
@@ -910,11 +730,9 @@ def view_results(exp=None):
                         'last_update': datetime.fromtimestamp(os.path.getmtime(results_csv_path)).strftime('%Y-%m-%d %H:%M:%S'),
                         'dataset_path': 'data/yolo_dataset'
                     },
-                    'training_params': training_params
+                    'training_params': training_params,
+                    'available_images': available_images
                 }
-            # results_dataに画像情報を追加
-            if results_data:
-                results_data['available_images'] = available_images
         
         return render_template('learning_results.html', results=results_data)
         
@@ -923,6 +741,7 @@ def view_results(exp=None):
         import traceback
         traceback.print_exc()
         return render_template('learning_results.html', error=f"結果の読み込みに失敗しました: {str(e)}")
+
 
 @learning_bp.route('/download-results-csv')
 def download_results_csv():
@@ -1074,11 +893,15 @@ def learning_dashboard():
                              recent_trainings=[],
                              recommendations=[{'type': 'info', 'icon': 'info-circle', 'message': 'データの読み込みに失敗しました。'}])
 
+
+# ================================
+# 学習履歴
+# ================================
+
 @learning_bp.route('/learning-history')
 def get_learning_history():
-    """学習履歴を取得"""
+    """YOLO学習履歴を取得"""
     try:
-        # YOLOv5の学習履歴を取得
         train_dir = 'yolov5/runs/train'
         history = []
         
@@ -1091,20 +914,16 @@ def get_learning_history():
                 results_csv = os.path.join(exp_path, 'results.csv')
                 
                 if os.path.exists(results_csv):
-                    # 実験の情報を収集
                     created_time = os.path.getctime(exp_path)
                     modified_time = os.path.getmtime(results_csv)
                     
-                    # CSVから最終エポックの情報を取得
                     try:
                         with open(results_csv, 'r') as f:
                             lines = f.readlines()
                             if len(lines) > 1:
-                                # 最終行から精度を取得
                                 last_line = lines[-1].strip()
                                 if last_line:
                                     parts = last_line.split(',')
-                                    # mAP@0.5の位置を確認（通常は7番目のカラム）
                                     map50 = float(parts[6]) if len(parts) > 6 else 0
                                 else:
                                     map50 = 0
@@ -1123,12 +942,11 @@ def get_learning_history():
                         'model_path': os.path.join(exp_path, 'weights/best.pt')
                     })
         
-        # 新しい順にソート
         history.sort(key=lambda x: x['updated_at'], reverse=True)
         
         return jsonify({
             'success': True,
-            'history': history[:10]  # 最新10件まで
+            'history': history[:10]
         })
         
     except Exception as e:
@@ -1143,98 +961,11 @@ def get_learning_history():
 # ヘルパー関数
 # ================================
 
-def calculate_readiness_score(stats_data):
-    """準備完了度スコアの計算"""
-    score = 0
-    max_score = 100
-    requirements = []
-    suggestions = []
-    
-    # データ量チェック (40点)
-    male_count = stats_data.get('male_count', 0)
-    female_count = stats_data.get('female_count', 0)
-    total_count = stats_data.get('total_count', 0)
-    
-    if male_count >= 5 and female_count >= 5:
-        score += 30
-        requirements.append({"item": "最小データ量", "status": "完了", "score": 30})
-    else:
-        requirements.append({"item": "最小データ量", "status": "不足", "score": 0})
-        suggestions.append(f"オス{max(0, 5-male_count)}枚、メス{max(0, 5-female_count)}枚を追加してください")
-    
-    if total_count >= 20:
-        score += 10
-        requirements.append({"item": "推奨データ量", "status": "完了", "score": 10})
-    else:
-        requirements.append({"item": "推奨データ量", "status": "部分", "score": 5})
-        suggestions.append(f"より高い精度のため、合計{20-total_count}枚の追加を推奨します")
-    
-    # バランスチェック (20点)
-    if total_count > 0:
-        balance = min(male_count, female_count) / max(male_count, female_count, 1)
-        if balance >= 0.8:
-            score += 20
-            requirements.append({"item": "データバランス", "status": "良好", "score": 20})
-        elif balance >= 0.6:
-            score += 15
-            requirements.append({"item": "データバランス", "status": "普通", "score": 15})
-        else:
-            score += 10
-            requirements.append({"item": "データバランス", "status": "改善余地", "score": 10})
-            suggestions.append("オスとメスのデータ数をより均等にすることを推奨します")
-    
-    # アノテーション率チェック (30点)
-    annotation_count = stats_data.get('annotation_count', 0)
-    if total_count > 0:
-        annotation_rate = annotation_count / total_count
-        if annotation_rate >= 0.5:
-            score += 30
-            requirements.append({"item": "アノテーション率", "status": "優秀", "score": 30})
-        elif annotation_rate >= 0.3:
-            score += 20
-            requirements.append({"item": "アノテーション率", "status": "良好", "score": 20})
-        elif annotation_rate >= 0.1:
-            score += 10
-            requirements.append({"item": "アノテーション率", "status": "低い", "score": 10})
-            suggestions.append("より多くの画像にアノテーションを追加すると精度が向上します")
-        else:
-            requirements.append({"item": "アノテーション率", "status": "不足", "score": 0})
-            suggestions.append("手動アノテーションを開始してください")
-    
-    # 品質評価 (10点)
-    if total_count >= 10 and male_count >= 5 and female_count >= 5:
-        score += 10
-        requirements.append({"item": "基本品質", "status": "合格", "score": 10})
-    
-    # ステータス判定
-    if score >= 80:
-        status = "excellent"
-        message = "学習開始の準備が完了しています！優秀なモデルが期待できます。"
-    elif score >= 60:
-        status = "good"
-        message = "学習を開始できます。さらなる改善でより良い結果が得られます。"
-    elif score >= 40:
-        status = "fair"
-        message = "基本的な学習は可能ですが、データ追加を推奨します。"
-    else:
-        status = "poor"
-        message = "学習開始にはより多くのデータが必要です。"
-    
-    return {
-        "score": score,
-        "percentage": score,
-        "status": status,
-        "message": message,
-        "requirements": requirements,
-        "suggestions": suggestions
-    }
-
 def get_dataset_info():
     """データセット情報を取得"""
     from config import TRAINING_IMAGES_DIR, METADATA_FILE
     import os
     
-    # メタデータを読み込み
     metadata = {}
     if os.path.exists(METADATA_FILE):
         try:
@@ -1253,7 +984,6 @@ def get_dataset_info():
             if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
                 total_count += 1
                 
-                # メタデータから性別情報を取得
                 image_info = metadata.get(filename, {})
                 gender = image_info.get('gender', 'unknown')
                 
@@ -1278,7 +1008,6 @@ def get_total_annotations():
     
     total_annotations = 0
     
-    # 学習ラベルディレクトリ
     if os.path.exists(TRAINING_LABELS_DIR):
         for txt_file in os.listdir(TRAINING_LABELS_DIR):
             if txt_file.endswith('.txt'):
@@ -1292,7 +1021,6 @@ def get_total_annotations():
                 except:
                     pass
     
-    # YOLOデータセットのラベルファイルもカウント（重複を避けるため別途カウント）
     yolo_label_dirs = [
         os.path.join(YOLO_DATASET_DIR, 'labels/train'),
         os.path.join(YOLO_DATASET_DIR, 'labels/val')
@@ -1313,7 +1041,6 @@ def get_total_annotations():
                     except:
                         pass
     
-    # より大きい値を返す（重複を避けるため）
     return max(total_annotations, yolo_annotations)
 
 # 後方互換性のための個別ルート定義（非推奨）
@@ -1349,11 +1076,3 @@ def get_task_status_by_id_legacy(task_id):
 @learning_bp.route('/cancel-task/<task_id>', methods=['POST'])
 def cancel_task_legacy(task_id):
     return cancel_task(task_id)
-
-@learning_bp.route('/train-all', methods=['POST'])
-def train_all_models_legacy():
-    return train_all_models()
-
-@learning_bp.route('/quick-train', methods=['POST'])
-def quick_train_rf_legacy():
-    return quick_train_rf()
