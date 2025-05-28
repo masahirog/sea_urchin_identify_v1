@@ -88,19 +88,14 @@
         {% block content %}{% endblock %}
     </div>
 
-    <!-- ローディングオーバーレイ（改良版） -->
+    
+    <!-- ローディングオーバーレイ -->
     <div id="loadingOverlay" class="d-none">
         <div class="loading-content">
             <div class="spinner-border text-light mb-3" role="status">
                 <span class="visually-hidden">処理中...</span>
             </div>
             <div class="loading-message">処理中...</div>
-            <div class="loading-progress mt-2">
-                <div class="progress" style="width: 200px;">
-                    <div id="loading-progress-bar" class="progress-bar" style="width: 0%"></div>
-                </div>
-                <small id="loading-progress-text" class="text-light mt-1">準備中...</small>
-            </div>
         </div>
     </div>
 

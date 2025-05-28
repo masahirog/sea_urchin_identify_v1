@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 from logging.handlers import RotatingFileHandler
 from flask import Flask, send_from_directory, jsonify, abort
@@ -6,13 +7,11 @@ import threading
 import queue
 import sys
 from app_utils.file_cleanup import cleanup_temp_files, schedule_cleanup
-from config import * 
+from config import *  # 設定は全てconfig.pyから取得
 from routes.yolo import yolo_bp
 from routes.training import training_bp
 from routes.annotation_images import annotation_images_bp
 from routes.annotation_editor import annotation_editor_bp
-
-
 
 # ログディレクトリ作成
 os.makedirs('logs', exist_ok=True)
@@ -28,21 +27,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
 # アプリケーション初期化
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
-# 設定の一元化
+# 設定の適用（config.pyから）
 app.config.update({
     'UPLOAD_FOLDER': UPLOAD_DIR,
-    'MODEL_FOLDER': os.path.join(MODELS_DIR, 'saved'),
-    'ALLOWED_EXTENSIONS': {'jpg', 'jpeg', 'png'},
-    'TEMP_FILES_MAX_AGE': 24,
+    'MODEL_FOLDER': MODEL_SAVE_DIR,
+    'ALLOWED_EXTENSIONS': ALLOWED_EXTENSIONS,
+    'TEMP_FILES_MAX_AGE': TEMP_FILES_MAX_AGE,
     'MAX_CONTENT_LENGTH': MAX_CONTENT_LENGTH,
-    'STATIC_FOLDER': STATIC_DIR  # 追加: STATICフォルダのパスを設定
+    'STATIC_FOLDER': STATIC_DIR
 })
 
-# 必要なディレクトリの作成
+# 必要なディレクトリの作成（config.pyの関数を使用）
 ensure_directories()
 
 # システムの準備状態をチェック
@@ -56,7 +54,7 @@ def check_system_readiness():
         issues.append("YOLOv5がインストールされていません。`python setup_yolo.py`を実行してください。")
     
     # RandomForestモデルチェック
-    model_path = os.path.join(MODELS_DIR, 'saved', 'sea_urchin_rf_model.pkl')
+    model_path = os.path.join(MODEL_SAVE_DIR, 'sea_urchin_rf_model.pkl')
     if not os.path.exists(model_path):
         warnings.append("RandomForestモデルが未学習です。雌雄判定機能は学習後に利用可能になります。")
     
@@ -93,7 +91,7 @@ with app.app_context():
     logger.info(f"起動時クリーンアップ: {cleanup_count}ファイルを削除しました")
 
 # 定期クリーンアップ
-schedule_cleanup(app, interval_hours=6)
+schedule_cleanup(app, interval_hours=CLEANUP_INTERVAL_HOURS)
 
 # ルートのインポートと登録
 from routes.main import main_bp
@@ -129,8 +127,6 @@ def get_uploaded_file(filename):
     """一時アップロードファイル配信"""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-
-
 # 静的ファイルの設定（YOLOの結果ディレクトリ）
 @app.route('/static/runs/<path:filename>')
 def serve_runs(filename):
@@ -138,16 +134,29 @@ def serve_runs(filename):
     runs_dir = os.path.join('yolov5', 'runs')
     return send_from_directory(runs_dir, filename)
 
+# 学習データ画像の配信ルート
+@app.route('/static/training_data/images/<filename>')
+def serve_training_images(filename):
+    """学習データ画像を提供するルート"""
+    return send_from_directory(TRAINING_IMAGES_DIR, filename)
+
+# 検出結果画像の配信ルート
+@app.route('/static/detection_results/<path:filename>')
+def serve_detection_results(filename):
+    """検出結果画像を提供するルート"""
+    return send_from_directory(DETECTION_RESULTS_DIR, filename)
+
+# 評価結果画像の配信ルート
+@app.route('/static/evaluation/<path:filename>')
+def serve_evaluation_results(filename):
+    """評価結果画像を提供するルート"""
+    return send_from_directory(STATIC_EVALUATION_DIR, filename)
 
 # システム状態API
 @app.route('/api/system-status')
 def system_status():
     """システム全体の状態を取得"""
     try:
-        # データセット統計
-        from config import TRAINING_IMAGES_DIR, METADATA_FILE
-        import json
-        
         # メタデータ読み込み
         metadata = {}
         if os.path.exists(METADATA_FILE):
@@ -179,7 +188,7 @@ def system_status():
                           if t.get('status') in ['processing', 'queued', 'running']])
         
         # モデル存在確認
-        model_path = os.path.join(MODELS_DIR, 'saved', 'sea_urchin_rf_model.pkl')
+        model_path = os.path.join(MODEL_SAVE_DIR, 'sea_urchin_rf_model.pkl')
         model_exists = os.path.exists(model_path)
         
         # YOLOモデルの確認
@@ -219,7 +228,7 @@ def system_status():
                 }
             },
             'system': {
-                'version': '1.0.0',
+                'version': APP_VERSION,
                 'status': 'healthy',
                 'warnings': system_warnings
             }
@@ -262,25 +271,19 @@ def internal_error(error):
 def too_large(error):
     return jsonify({'error': 'ファイルサイズが大きすぎます'}), 413
 
-
 # アプリケーション起動
 if __name__ == '__main__':
     logger.info("=" * 60)
     logger.info("🦀 ウニ生殖乳頭分析システム 起動")
     logger.info("=" * 60)
     
-    logger.info("登録されているルート:")
-    for rule in app.url_map.iter_rules():
-        logger.info(f"  {rule} -> {rule.endpoint} [{', '.join(rule.methods)}]")
-    
-    # システム状態サマリー
     if system_warnings:
         logger.info("\n⚠️  起動時の注意事項:")
         for warning in system_warnings:
             logger.info(f"  - {warning}")
         logger.info("\n詳細は http://localhost:8080 でご確認ください")
     
-    logger.info("\nアプリケーションを起動します")
+    logger.info(f"\nアプリケーションを起動します（バージョン: {APP_VERSION}）")
     logger.info("URL: http://localhost:8080")
     
-    app.run(host='0.0.0.0', port=8080, debug=DEBUG)
+    app.run(host='0.0.0.0', port=APP_PORT, debug=DEBUG)

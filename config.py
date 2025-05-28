@@ -1,4 +1,10 @@
 import os
+import json
+
+# アプリケーション情報
+APP_VERSION = '1.0.0'
+APP_PORT = 8080
+DEBUG = True
 
 # ベースディレクトリ
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -8,6 +14,7 @@ STATIC_DIR = os.path.join(BASE_DIR, 'static')
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 UPLOAD_DIR = os.path.join(BASE_DIR, 'uploads')
 MODELS_DIR = os.path.join(BASE_DIR, 'models')
+MODEL_SAVE_DIR = os.path.join(MODELS_DIR, 'saved')
 
 # 学習データ用ディレクトリ（統一）
 TRAINING_DATA_DIR = os.path.join(STATIC_DIR, 'training_data')
@@ -27,16 +34,37 @@ YOLO_DATASET_DIR = os.path.join(DATA_DIR, 'yolo_dataset')
 # メタデータ
 METADATA_FILE = os.path.join(DATA_DIR, 'metadata.json')
 
-# その他の設定
+# ファイル設定
 MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100MB
-DEBUG = True
+ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png'}
+TEMP_FILES_MAX_AGE = 24  # 一時ファイル保持時間（時間）
+CLEANUP_INTERVAL_HOURS = 6  # クリーンアップ間隔
+
+# 学習設定のデフォルト値
+DEFAULT_BATCH_SIZE = 16
+DEFAULT_EPOCHS = 100
+DEFAULT_LEARNING_RATE = 0.01
+MIN_IMAGES_PER_CLASS = 2  # 最小画像数（クラスごと）
+
+# YOLOv5設定
+YOLO_MODEL_WEIGHTS = {
+    'nano': 'yolov5n.pt',
+    'small': 'yolov5s.pt',
+    'medium': 'yolov5m.pt',
+    'large': 'yolov5l.pt'
+}
+DEFAULT_YOLO_MODEL = 'small'
+YOLO_IMG_SIZE = 640
+
+# データセット分割比率
+TRAIN_VAL_SPLIT_RATIO = 0.8  # 訓練データの比率
 
 def ensure_directories():
     """必要なディレクトリを作成"""
     directories = [
         UPLOAD_DIR,
         MODELS_DIR,
-        os.path.join(MODELS_DIR, 'saved'),
+        MODEL_SAVE_DIR,
         TRAINING_DATA_DIR,
         TRAINING_IMAGES_DIR,
         TRAINING_LABELS_DIR,
@@ -45,7 +73,51 @@ def ensure_directories():
         EVALUATION_DATA_DIR,
         DATA_DIR,
         YOLO_DATASET_DIR,
+        'logs'
     ]
     
     for directory in directories:
         os.makedirs(directory, exist_ok=True)
+
+def load_metadata():
+    """メタデータを読み込む"""
+    if os.path.exists(METADATA_FILE):
+        try:
+            with open(METADATA_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_metadata(metadata):
+    """メタデータを保存する"""
+    try:
+        with open(METADATA_FILE, 'w') as f:
+            json.dump(metadata, f, indent=2, ensure_ascii=False)
+        return True
+    except:
+        return False
+
+def get_model_path(model_name='sea_urchin_rf_model.pkl'):
+    """モデルのパスを取得"""
+    return os.path.join(MODEL_SAVE_DIR, model_name)
+
+def get_yolo_weights_path(model_size='small'):
+    """YOLOの重みファイルパスを取得"""
+    weights_file = YOLO_MODEL_WEIGHTS.get(model_size, YOLO_MODEL_WEIGHTS['small'])
+    return weights_file
+
+def get_latest_yolo_model():
+    """最新のYOLOモデルパスを取得"""
+    train_dir = os.path.join('yolov5', 'runs', 'train')
+    if os.path.exists(train_dir):
+        exp_dirs = sorted([d for d in os.listdir(train_dir) if d.startswith('exp')])
+        if exp_dirs:
+            latest_exp = exp_dirs[-1]
+            best_path = os.path.join(train_dir, latest_exp, 'weights', 'best.pt')
+            if os.path.exists(best_path):
+                return best_path
+    return None
+
+# 初期化時にディレクトリを作成
+ensure_directories()

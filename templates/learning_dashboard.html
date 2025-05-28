@@ -170,20 +170,6 @@
                             {% endif %}
                         </div>
                     </div>
-                    <!-- 履歴アイテムに画像プレビューを追加 -->
-                    <div class="history-item">
-                        <div class="row">
-                            <div class="col-md-8">
-                                <!-- 既存の履歴情報 -->
-                            </div>
-                            <div class="col-md-4">
-                                <img src="/static/runs/train/{{ history.experiment }}/val_batch0_pred.jpg" 
-                                     class="img-thumbnail" style="max-height: 100px;"
-                                     alt="予測結果"
-                                     onerror="this.style.display='none';">
-                            </div>
-                        </div>
-                    </div>
                     {% endfor %}
                 </div>
             </div>
