@@ -85,12 +85,18 @@ def list_images():
     if os.path.exists(TRAINING_IMAGES_DIR):
         for image_file in os.listdir(TRAINING_IMAGES_DIR):
             if image_file.lower().endswith(('.png', '.jpg', '.jpeg')):
-                image_info = metadata.get(image_file, {
-                    'id': image_file,
-                    'original_name': image_file,
+                # メタデータから情報を取得、存在しない場合はデフォルト値を設定
+                image_info = metadata.get(image_file, {})
+                
+                # 重要: id フィールドを確実に設定
+                image_data = {
+                    'id': image_file,  # ファイル名をIDとして使用
+                    'filename': image_file,
+                    'original_name': image_info.get('original_name', image_file),
+                    'upload_time': image_info.get('upload_time', ''),
                     'annotated': False,
                     'annotation_count': 0
-                })
+                }
                 
                 # ラベルファイルの存在確認
                 label_path = os.path.join(TRAINING_LABELS_DIR, 
@@ -98,10 +104,10 @@ def list_images():
                 if os.path.exists(label_path):
                     with open(label_path, 'r') as f:
                         annotation_count = len([line for line in f.readlines() if line.strip()])
-                    image_info['annotated'] = annotation_count > 0
-                    image_info['annotation_count'] = annotation_count
+                    image_data['annotated'] = annotation_count > 0
+                    image_data['annotation_count'] = annotation_count
                 
-                all_images.append(image_info)
+                all_images.append(image_data)
     
     # フィルタリング
     if filter_status == 'annotated':

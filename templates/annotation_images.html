@@ -485,26 +485,30 @@ function updateUI(data) {
 }
 
 // 画像カードの作成
+// 画像カードの作成
 function createImageCard(image) {
     const card = document.createElement('div');
     card.className = 'image-card';
-    card.dataset.imageId = image.id;
+    card.dataset.imageId = image.id || image.filename;  // フォールバック追加
     
     const isSelected = selectedImages.has(image.id);
     if (isSelected) {
         card.classList.add('selected');
     }
     
+    // image.idが確実に存在することを確認
+    const imageId = image.id || image.filename;
+    
     card.innerHTML = `
         <input type="checkbox" class="image-checkbox" ${isSelected ? 'checked' : ''}>
         <div class="annotation-status ${image.annotated ? 'annotated' : 'not-annotated'}">
             ${image.annotated ? `${image.annotation_count}個` : '未'}
         </div>
-        <img src="/annotation/images/image/${image.id}" class="image-preview" alt="${image.original_name}">
+        <img src="/annotation/images/image/${imageId}" class="image-preview" alt="${image.original_name || image.filename}">
         <div class="image-info">
-            <h6 class="text-truncate mb-2">${image.original_name}</h6>
+            <h6 class="text-truncate mb-2">${image.original_name || image.filename}</h6>
             <div class="text-center">
-                <button class="btn btn-sm btn-primary" onclick="editAnnotation('${image.id}')">
+                <button class="btn btn-sm btn-primary" onclick="editAnnotation('${imageId}')">
                     <i class="fas fa-edit"></i> 編集
                 </button>
             </div>
@@ -514,17 +518,17 @@ function createImageCard(image) {
     // チェックボックスイベント
     const checkbox = card.querySelector('.image-checkbox');
     checkbox.addEventListener('click', function(e) {
-        e.stopPropagation(); // 親要素へのイベント伝播を停止
+        e.stopPropagation();
     });
     checkbox.addEventListener('change', function(e) {
         e.stopPropagation();
-        toggleSelection(image.id);
+        toggleSelection(imageId);  // image.idではなくimageIdを使用
     });
     
     // 画像クリック（プレビュー）
     card.querySelector('.image-preview').addEventListener('click', function(e) {
-        e.stopPropagation(); // チェックボックスとの競合を防ぐ
-        showPreview(image.id);
+        e.stopPropagation();
+        showPreview(imageId);  // image.idではなくimageIdを使用
     });
     
     return card;

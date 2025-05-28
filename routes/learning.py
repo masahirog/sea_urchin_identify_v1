@@ -39,7 +39,7 @@ def manage_learning_data():
 def upload_learning_data():
     """学習データ用の画像をアップロード（POST処理）"""
     from app import app
-    from config import TRAINING_DATA_DIR, METADATA_FILE
+    from config import TRAINING_IMAGES_DIR, METADATA_FILE  # TRAINING_DATA_DIR → TRAINING_IMAGES_DIR
     
     if 'images' not in request.files:
         return jsonify({"error": "画像ファイルがありません"}), 400
@@ -49,8 +49,8 @@ def upload_learning_data():
     if not files or all(f.filename == '' for f in files):
         return jsonify({"error": "ファイルが選択されていません"}), 400
     
-    # 保存先ディレクトリ
-    target_dir = TRAINING_DATA_DIR
+    # 保存先ディレクトリ（修正）
+    target_dir = TRAINING_IMAGES_DIR  # 正しいディレクトリを使用
     
     # gender パラメータをチェック
     gender = request.form.get('gender', 'unknown')
@@ -80,8 +80,8 @@ def upload_learning_data():
             'original_name': file_info.get('original_name', filename)
         }
         
-        # URLを設定
-        file_info['url'] = f'/annotation/images/image/{filename}'
+        # URLを設定（修正）
+        file_info['url'] = f'/static/training_data/images/{filename}'
     
     # メタデータを保存
     os.makedirs(os.path.dirname(METADATA_FILE), exist_ok=True)
@@ -100,7 +100,7 @@ def upload_learning_data():
     
     if len(uploaded_files) > 0:
         result["message"] = f"{len(uploaded_files)}個のファイルをアップロードしました"
-        current_app.logger.info(f"学習データアップロード: {len(uploaded_files)}ファイル")
+        current_app.logger.info(f"学習データアップロード: {len(uploaded_files)}ファイル to {target_dir}")
     else:
         result["message"] = "アップロードに失敗しました"
         
@@ -128,9 +128,16 @@ def get_learning_data():
             'unknown': []
         }
         
+        # デバッグ出力を追加
+        current_app.logger.info(f"学習画像ディレクトリ: {TRAINING_IMAGES_DIR}")
+        current_app.logger.info(f"ディレクトリ存在確認: {os.path.exists(TRAINING_IMAGES_DIR)}")
+        
         # 画像ファイルをリストアップ
         if os.path.exists(TRAINING_IMAGES_DIR):
-            for filename in os.listdir(TRAINING_IMAGES_DIR):
+            files_in_dir = os.listdir(TRAINING_IMAGES_DIR)
+            current_app.logger.info(f"ディレクトリ内のファイル数: {len(files_in_dir)}")
+            
+            for filename in files_in_dir:
                 if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
                     # メタデータから情報を取得
                     image_info = metadata.get(filename, {'gender': 'unknown'})
@@ -147,7 +154,7 @@ def get_learning_data():
                     sample_info = {
                         'filename': filename,
                         'path': os.path.join(TRAINING_IMAGES_DIR, filename),
-                        'url': f"/annotation/images/image/{filename}",
+                        'url': f"/static/training_data/images/{filename}",  # 修正：正しいURLパス
                         'has_annotation': has_annotation,
                         'category': gender,
                         'metadata': image_info
@@ -158,6 +165,8 @@ def get_learning_data():
                         result[gender].append(sample_info)
                     else:
                         result['unknown'].append(sample_info)
+        else:
+            current_app.logger.warning(f"学習画像ディレクトリが存在しません: {TRAINING_IMAGES_DIR}")
         
         # 総数情報を追加
         result['counts'] = {
@@ -167,10 +176,14 @@ def get_learning_data():
             'total': len(result['male']) + len(result['female']) + len(result['unknown'])
         }
         
+        current_app.logger.info(f"学習データ取得結果: {result['counts']}")
+        
         return jsonify(result)
         
     except Exception as e:
         current_app.logger.error(f"学習データ取得エラー: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": "学習データの取得に失敗しました"}), 500
 
 def delete_learning_data():
