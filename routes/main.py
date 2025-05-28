@@ -97,9 +97,22 @@ def classify_image():
             
             # 判定履歴に記録
             record_classification_history(filename, result)
-            
+
             current_app.logger.info(f"雌雄判定完了: {filename} -> {result.get('gender', 'unknown')}")
-            
+
+            # numpy配列をすべてリストに変換
+            import numpy as np
+            def convert_numpy(obj):
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                elif isinstance(obj, dict):
+                    return {key: convert_numpy(value) for key, value in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_numpy(item) for item in obj]
+                return obj
+
+            result = convert_numpy(result)
+
             return jsonify(result)
         
         except Exception as e:

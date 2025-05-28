@@ -608,7 +608,7 @@ function updateHistoryDisplay() {
     }
     
     // 履歴項目の生成
-    const historyHTML = classificationService.judgmentHistory.map(item => {
+    const historyHTML = classificationService.judgmentHistory.map((item, index) => {
         const date = new Date(item.timestamp).toLocaleString();
         const gender = item.predicted_gender === 'male' ? 'オス' : 'メス';
         const confidence = (item.confidence * 100).toFixed(1);
@@ -624,7 +624,7 @@ function updateHistoryDisplay() {
         }
         
         return `
-            <div class="border-bottom py-2">
+            <div class="history-item border-bottom py-2" onclick="showHistoryDetail(${index})">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <i class="${icon} me-2"></i>
@@ -632,6 +632,16 @@ function updateHistoryDisplay() {
                         ${feedbackBadge}
                     </div>
                     <small class="text-muted">${date}</small>
+                </div>
+                <div id="historyDetail${index}" class="history-detail d-none">
+                    <p class="mb-1"><strong>画像:</strong> ${item.id || 'N/A'}</p>
+                    <p class="mb-1"><strong>検出数:</strong> ${item.papillae_count || 0}個</p>
+                    ${item.feedback ? `
+                        <p class="mb-1"><strong>フィードバック:</strong> 
+                            ${item.feedback.feedback_type === 'correct' ? '正解' : 
+                              `修正（実際は${item.feedback.correct_gender === 'male' ? 'オス' : 'メス'}）`}
+                        </p>
+                    ` : ''}
                 </div>
             </div>
         `;
@@ -642,6 +652,28 @@ function updateHistoryDisplay() {
     // ローカルストレージに保存
     localStorage.setItem('judgmentHistory', JSON.stringify(classificationService.judgmentHistory));
 }
+
+// 履歴詳細の表示/非表示
+window.showHistoryDetail = function(index) {
+    const detailElement = document.getElementById(`historyDetail${index}`);
+    if (detailElement) {
+        detailElement.classList.toggle('d-none');
+    }
+};
+
+// 画像クリックで拡大表示
+document.addEventListener('DOMContentLoaded', function() {
+    // 既存の初期化コードの後に追加
+    
+    // 画像クリックイベント
+    document.addEventListener('click', function(e) {
+        if (e.target.id === 'resultImage' && e.target.src) {
+            const modal = new bootstrap.Modal(document.getElementById('imageZoomModal'));
+            document.getElementById('zoomedImage').src = e.target.src;
+            modal.show();
+        }
+    });
+});
 
 /**
  * フィードバックによる履歴更新

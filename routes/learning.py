@@ -19,7 +19,7 @@ import base64
 from datetime import datetime
 from app_utils.file_handlers import handle_multiple_image_upload
 
-learning_bp = Blueprint('learning', __name__)
+learning_bp = Blueprint('learning', __name__, url_prefix='/learning')
 
 
 # ================================

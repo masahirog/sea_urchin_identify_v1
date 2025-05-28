@@ -1248,3 +1248,51 @@ h1 {
         height: 80px;
     }
 }
+
+/* 判定結果画像のサイズ制限 */
+.result-image {
+    max-width: 100%;
+    max-height: 600px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+    .result-image {
+        max-height: 400px;
+    }
+}
+
+
+/* 画像のホバー効果 */
+.result-image {
+    cursor: zoom-in;
+    transition: transform 0.3s ease;
+}
+
+.result-image:hover {
+    transform: scale(1.05);
+}
+
+/* 判定履歴のアイテム */
+.history-item {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.history-item:hover {
+    background-color: #f8f9fa;
+}
+
+/* 判定履歴の詳細 */
+.history-detail {
+    font-size: 0.9rem;
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+}
