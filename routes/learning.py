@@ -578,19 +578,6 @@ def cancel_task(task_id):
     })
 
 # ================================
-# 学習実行（YOLOのみ）
-# ================================
-
-@learning_bp.route('/train', methods=['POST'])
-def train_models():
-    """YOLO学習へリダイレクト"""
-    return jsonify({
-        "success": False,
-        "message": "YOLOの学習は「機械学習」ページから実行してください",
-        "redirect": "/training"
-    })
-
-# ================================
 # 結果表示
 # ================================
 
@@ -1042,37 +1029,3 @@ def get_total_annotations():
                         pass
     
     return max(total_annotations, yolo_annotations)
-
-# 後方互換性のための個別ルート定義（非推奨）
-@learning_bp.route('/upload-data', methods=['POST'])
-def upload_learning_data_legacy():
-    return upload_learning_data()
-
-@learning_bp.route('/learning-data', methods=['GET'])
-def get_learning_data_legacy():
-    return get_learning_data()
-
-@learning_bp.route('/delete-data', methods=['POST'])
-def delete_learning_data_legacy():
-    return delete_learning_data()
-
-@learning_bp.route('/delete-all-data', methods=['POST'])
-def delete_all_learning_data_legacy():
-    request.json = {'delete_all': True}
-    return delete_learning_data()
-
-@learning_bp.route('/save-annotation', methods=['POST'])
-def save_annotation_legacy():
-    return save_annotation()
-
-@learning_bp.route('/delete-annotation', methods=['POST'])
-def delete_annotation_legacy():
-    return delete_annotation()
-
-@learning_bp.route('/task-status/<task_id>')
-def get_task_status_by_id_legacy(task_id):
-    return get_task_status_by_id(task_id)
-
-@learning_bp.route('/cancel-task/<task_id>', methods=['POST'])
-def cancel_task_legacy(task_id):
-    return cancel_task(task_id)
