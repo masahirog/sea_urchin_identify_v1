@@ -25,6 +25,13 @@ class YoloDetector:
         self.model = None
         self.model_path = model_path
         
+        # クラス情報の定義
+        self.class_info = {
+            0: {'name': '雄の生殖乳頭', 'name_en': 'Male', 'color': (255, 0, 0)},      # 青
+            1: {'name': '雌の生殖乳頭', 'name_en': 'Female', 'color': (0, 0, 255)},    # 赤
+            2: {'name': '多孔板', 'name_en': 'Madreporite', 'color': (0, 255, 0)}       # 緑
+        }
+        
         logger.info(f"YoloDetector: デバイス {self.device} を使用")
         
         # モデルのロード
@@ -82,6 +89,8 @@ class YoloDetector:
                 - detections: 検出結果のリスト
                 - annotated_image: 検出結果を描画した画像
                 - count: 検出数
+                - count_by_class: クラスごとの検出数
+                - gender_result: 雌雄判定結果
         """
         try:
             # 画像読み込み
@@ -104,40 +113,40 @@ class YoloDetector:
             
             # 検出結果の抽出
             detections = []
+            count_by_class = {0: 0, 1: 0, 2: 0}
+            
             for det in results.xyxy[0]:  # バッチの最初の画像の結果
                 x1, y1, x2, y2, conf, cls = det.cpu().numpy()
                 
                 if conf >= self.conf_threshold:
+                    class_id = int(cls)
                     detections.append({
                         'bbox': [int(x1), int(y1), int(x2), int(y2)],
                         'confidence': float(conf),
-                        'class_id': int(cls),
-                        'class_name': 'papillae'
+                        'class_id': class_id,
+                        'class_name': self.class_info.get(class_id, {'name': '不明'})['name'],
+                        'class_name_en': self.class_info.get(class_id, {'name_en': 'Unknown'})['name_en']
                     })
+                    
+                    if class_id in count_by_class:
+                        count_by_class[class_id] += 1
             
             # 結果の描画
-            annotated_image = image.copy()
-            for det in detections:
-                bbox = det['bbox']
-                conf = det['confidence']
-                
-                # 境界ボックスの描画
-                cv2.rectangle(annotated_image, 
-                            (bbox[0], bbox[1]), 
-                            (bbox[2], bbox[3]), 
-                            (0, 255, 0), 4)
-                
-                # 信頼度の表示
-                label = f"Papillae: {conf:.2f}"
-                cv2.putText(annotated_image, label, 
-                          (bbox[0], bbox[1] - 10), 
-                          cv2.FONT_HERSHEY_SIMPLEX, 
-                          0.5, (0, 255, 0), 3)
+            annotated_image = self._draw_detections(image, detections)
+            
+            # 雌雄判定
+            gender_result = self._determine_gender(count_by_class)
             
             return {
                 'detections': detections,
                 'annotated_image': annotated_image,
-                'count': len(detections)
+                'count': len(detections),
+                'count_by_class': {
+                    'male': count_by_class[0],
+                    'female': count_by_class[1],
+                    'madreporite': count_by_class[2]
+                },
+                'gender_result': gender_result
             }
             
         except Exception as e:
@@ -146,7 +155,101 @@ class YoloDetector:
                 'detections': [],
                 'annotated_image': image if 'image' in locals() else None,
                 'count': 0,
+                'count_by_class': {'male': 0, 'female': 0, 'madreporite': 0},
+                'gender_result': {'gender': 'unknown', 'confidence': 0.0, 'error': str(e)},
                 'error': str(e)
+            }
+    
+    def _draw_detections(self, image, detections):
+        """検出結果を画像に描画"""
+        annotated_image = image.copy()
+        
+        for det in detections:
+            bbox = det['bbox']
+            conf = det['confidence']
+            class_id = det['class_id']
+            
+            # クラスに応じた色とラベル
+            info = self.class_info.get(class_id, {'name': '不明', 'color': (128, 128, 128)})
+            color = info['color']
+            class_name = info['name']
+            
+            # 境界ボックスの描画（太い線）
+            cv2.rectangle(annotated_image, 
+                        (bbox[0], bbox[1]), 
+                        (bbox[2], bbox[3]), 
+                        color, 4)
+            
+            # クラス名と信頼度の表示
+            label = f"{class_name}: {conf:.2f}"
+            
+            # ラベルの背景
+            (label_width, label_height), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+            cv2.rectangle(annotated_image, 
+                        (bbox[0], bbox[1] - 30), 
+                        (bbox[0] + label_width + 10, bbox[1]), 
+                        color, -1)
+            
+            # テキスト描画（白文字）
+            cv2.putText(annotated_image, label, 
+                      (bbox[0] + 5, bbox[1] - 10), 
+                      cv2.FONT_HERSHEY_SIMPLEX, 
+                      0.6, (255, 255, 255), 2)
+        
+        return annotated_image
+    
+    def _determine_gender(self, count_by_class):
+        """検出結果から雌雄を判定"""
+        male_count = count_by_class[0]
+        female_count = count_by_class[1]
+        madreporite_count = count_by_class[2]
+        
+        # 判定ロジック
+        if male_count > 0 and female_count == 0:
+            # 雄の生殖乳頭のみ検出
+            confidence = min(0.95, 0.5 + male_count * 0.15)
+            return {
+                'gender': 'male',
+                'confidence': confidence,
+                'male_count': male_count,
+                'female_count': 0,
+                'madreporite_count': madreporite_count,
+                'message': f'{male_count}個の雄の生殖乳頭を検出しました'
+            }
+        
+        elif female_count > 0 and male_count == 0:
+            # 雌の生殖乳頭のみ検出
+            confidence = min(0.95, 0.5 + female_count * 0.15)
+            return {
+                'gender': 'female',
+                'confidence': confidence,
+                'male_count': 0,
+                'female_count': female_count,
+                'madreporite_count': madreporite_count,
+                'message': f'{female_count}個の雌の生殖乳頭を検出しました'
+            }
+        
+        elif male_count > 0 and female_count > 0:
+            # 両方検出（異常）
+            return {
+                'gender': 'error',
+                'confidence': 0.0,
+                'male_count': male_count,
+                'female_count': female_count,
+                'madreporite_count': madreporite_count,
+                'error': '雄雌両方の生殖乳頭が検出されました',
+                'message': 'アノテーションまたは画像に問題がある可能性があります'
+            }
+        
+        else:
+            # 何も検出されない
+            return {
+                'gender': 'unknown',
+                'confidence': 0.0,
+                'male_count': 0,
+                'female_count': 0,
+                'madreporite_count': madreporite_count,
+                'message': '生殖乳頭が検出されませんでした。別の角度から撮影してください'
             }
     
     def batch_detect(self, image_paths):
@@ -172,6 +275,8 @@ class YoloDetector:
                     'image_path': image_path,
                     'detections': [],
                     'count': 0,
+                    'count_by_class': {'male': 0, 'female': 0, 'madreporite': 0},
+                    'gender_result': {'gender': 'unknown', 'confidence': 0.0, 'error': str(e)},
                     'error': str(e)
                 })
         
@@ -187,56 +292,18 @@ class YoloDetector:
         Returns:
             dict: 検出結果
         """
-        try:
-            # グレースケール変換
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
-            
-            # 適応的二値化
-            binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                         cv2.THRESH_BINARY_INV, 11, 2)
-            
-            # 輪郭検出
-            contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
-            detections = []
-            annotated_image = image.copy()
-            
-            for cnt in contours:
-                area = cv2.contourArea(cnt)
-                if 500 < area < 5000:  # 面積フィルタ
-                    x, y, w, h = cv2.boundingRect(cnt)
-                    
-                    # アスペクト比チェック
-                    aspect_ratio = w / h if h > 0 else 0
-                    if 0.5 < aspect_ratio < 2.0:
-                        detections.append({
-                            'bbox': [x, y, x + w, y + h],
-                            'confidence': 0.5,  # フォールバック時の固定信頼度
-                            'class_id': 0,
-                            'class_name': 'papillae'
-                        })
-                        
-                        # 描画
-                        cv2.rectangle(annotated_image, (x, y), (x + w, y + h), (0, 255, 0), 4)
-                        cv2.putText(annotated_image, "Papillae (fallback)", 
-                                  (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 
-                                  0.5, (0, 255, 0), 3)
-            
-            return {
-                'detections': detections,
-                'annotated_image': annotated_image,
-                'count': len(detections),
-                'fallback': True
-            }
-            
-        except Exception as e:
-            logger.error(f"フォールバック検出エラー: {e}")
-            return {
-                'detections': [],
-                'annotated_image': image,
-                'count': 0,
-                'error': str(e)
-            }
+        return {
+            'detections': [],
+            'annotated_image': image,
+            'count': 0,
+            'count_by_class': {'male': 0, 'female': 0, 'madreporite': 0},
+            'gender_result': {
+                'gender': 'unknown',
+                'confidence': 0.0,
+                'error': 'YOLOモデルが利用できません。学習を実行してください。'
+            },
+            'fallback': True
+        }
     
     def update_confidence(self, conf_threshold):
         """信頼度閾値を更新"""
