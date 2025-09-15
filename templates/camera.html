@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+
+{% block title %}リアルタイムカメラ - ウニ雌雄判定{% endblock %}
+
+{% block extra_css %}
+<style>
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            max-width: 1280px;
+            margin: 0 auto;
+        }
+
+        #videoFeed {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .control-panel {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-active {
+            background-color: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        .status-inactive {
+            background-color: #dc3545;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+
+        .camera-info {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+
+        .snapshot-preview {
+            max-width: 200px;
+            border: 2px solid #dee2e6;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+
+        .detection-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+        <h2>リアルタイムカメラ映像 - {% if camera_index == 0 %}PC内蔵{% else %}マイクロスコープ{% endif %}</h2>
+
+        <div class="row">
+            <div class="col-lg-8">
+                <!-- 映像表示エリア -->
+                <div class="video-container">
+                    <img id="videoFeed" src="" alt="カメラ映像">
+                    <canvas id="detectionOverlay" class="detection-overlay"></canvas>
+                </div>
+
+                <!-- カメラ情報 -->
+                <div class="camera-info" id="cameraInfo">
+                    <strong>カメラ情報:</strong>
+                    <span id="infoText">接続待機中...</span>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <!-- コントロールパネル -->
+                <div class="control-panel">
+                    <h5>カメラ制御</h5>
+
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="status-indicator status-inactive" id="statusIndicator"></span>
+                            <span id="statusText">停止中</span>
+                        </div>
+
+                        <button class="btn btn-success me-2" id="startBtn">
+                            <i class="bi bi-play-fill"></i> 開始
+                        </button>
+                        <button class="btn btn-danger me-2" id="stopBtn" disabled>
+                            <i class="bi bi-stop-fill"></i> 停止
+                        </button>
+                        <button class="btn btn-primary" id="snapshotBtn" disabled>
+                            <i class="bi bi-camera"></i> スナップショット
+                        </button>
+                    </div>
+
+                    <hr>
+
+                    <h6>リアルタイム判定</h6>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="detectionToggle">
+                        <label class="form-check-label" for="detectionToggle">
+                            判定を有効化
+                        </label>
+                    </div>
+
+                    <div id="detectionStats" style="display: none;">
+                        <div class="mb-2">
+                            <small>FPS: <span id="fpsValue">0</span></small>
+                        </div>
+                        <div class="mb-2">
+                            <small>検出数: <span id="detectionCount">0</span></small>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <h6>最新スナップショット</h6>
+                    <div id="snapshotPreview">
+                        <p class="text-muted">まだ撮影されていません</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/camera.js') }}"></script>
+{% endblock %}

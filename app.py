@@ -90,13 +90,15 @@ schedule_cleanup(app, interval_hours=CLEANUP_INTERVAL_HOURS)
 # ルートのインポートと登録
 from routes.main import main_bp
 from routes.learning import learning_bp
+from routes.camera import camera_bp
 
 app.register_blueprint(main_bp)
 app.register_blueprint(yolo_bp)
 app.register_blueprint(learning_bp)
-app.register_blueprint(training_bp)  
+app.register_blueprint(training_bp)
 app.register_blueprint(annotation_images_bp)
 app.register_blueprint(annotation_editor_bp)
+app.register_blueprint(camera_bp)
 
 # グローバル処理状態（タスク管理用）
 processing_status = {}
@@ -127,6 +129,13 @@ def serve_runs(filename):
     """YOLOの結果ディレクトリを提供するルート"""
     runs_dir = os.path.join('yolov5', 'runs')
     return send_from_directory(runs_dir, filename)
+
+# スナップショット画像の配信ルート
+@app.route('/uploads/snapshots/<filename>')
+def serve_snapshots(filename):
+    """スナップショット画像を提供するルート"""
+    snapshots_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'snapshots')
+    return send_from_directory(snapshots_dir, filename)
 
 # 学習データ画像の配信ルート
 @app.route('/static/training_data/images/<filename>')

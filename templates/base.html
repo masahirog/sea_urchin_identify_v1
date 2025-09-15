@@ -38,11 +38,28 @@
                 <ul class="navbar-nav ms-auto">
                     <!-- 雌雄判定 -->
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}" 
+                        <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}"
                            href="{{ url_for('main.index') }}" title="単一画像の雌雄判定">
-                            <i class="fas fa-search me-1"></i> 
+                            <i class="fas fa-search me-1"></i>
                             <span class="d-none d-md-inline">判定</span>
                         </a>
+                    </li>
+                    <!-- カメラ -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle {% if request.endpoint == 'camera.camera_page' %}active{% endif %}"
+                           href="#" id="cameraDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false"
+                           title="リアルタイムカメラ">
+                            <i class="fas fa-camera me-1"></i>
+                            <span class="d-none d-md-inline">カメラ</span>
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="cameraDropdown">
+                            <li><a class="dropdown-item" href="{{ url_for('camera.camera_page', camera_index=0) }}">
+                                <i class="fas fa-desktop me-2"></i>Camera 0 (PC内蔵)
+                            </a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('camera.camera_page', camera_index=1) }}">
+                                <i class="fas fa-microscope me-2"></i>Camera 1 (マイクロスコープ)
+                            </a></li>
+                        </ul>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'annotation_images.images_management_page' %}active{% endif %}" href="{{ url_for('annotation_images.images_management_page') }}" title="画像管理">
