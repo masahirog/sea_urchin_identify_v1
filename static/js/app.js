@@ -172,7 +172,7 @@ function showModelTrainingGuide(data) {
         <div class="mt-4">
             <h5>クイックスタートガイド</h5>
             <ol>
-                <li><strong>学習データをアップロード</strong> - オス・メスの画像を各10枚以上アップロード</li>
+                <li><strong>学習データをアップロード</strong> - 各画像を各10枚以上アップロード</li>
                 <li><strong>アノテーション</strong> - 各画像で生殖乳頭の位置をマーク</li>
                 <li><strong>YOLO学習を実行</strong> - 学習完了後、雌雄判定が可能になります</li>
             </ol>

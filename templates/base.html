@@ -24,8 +24,7 @@
         <div class="container">
             <!-- ブランドロゴ -->
             <span class="navbar-brand fw-bold">
-                <i class="fas fa-microscope me-2 text-primary"></i>
-                ウニ雌雄判別
+                ウニ画像解析判別
             </span>
             
             <!-- モバイル用ハンバーガーメニュー -->
@@ -42,7 +41,7 @@
                         <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}" 
                            href="{{ url_for('main.index') }}" title="単一画像の雌雄判定">
                             <i class="fas fa-search me-1"></i> 
-                            <span class="d-none d-md-inline">雌雄</span>判定
+                            <span class="d-none d-md-inline">判定</span>
                         </a>
                     </li>
                     <li class="nav-item">

@@ -102,4 +102,4 @@ Desktop.ini
 # ==================== メタデータ ====================
 /data/metadata.json
 /data/classification_history.json
-/data/annotation_metadata.json
+/data/annotation_metadata.jsonyolov5/
