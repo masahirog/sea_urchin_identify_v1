@@ -33,7 +33,8 @@ export class YoloAnnotator {
         this.classes = [
             { id: 0, name: '雄の生殖乳頭', color: 'rgba(33, 150, 243, 0.8)' },
             { id: 1, name: '雌の生殖乳頭', color: 'rgba(244, 67, 54, 0.8)' },
-            { id: 2, name: '多孔板', color: 'rgba(76, 175, 80, 0.8)' }
+            { id: 2, name: '多孔板', color: 'rgba(76, 175, 80, 0.8)' },
+            { id: 3, name: '肛門', color: 'rgba(255, 152, 0, 0.8)' }
         ];
         this.currentClass = 0;
         

@@ -196,8 +196,9 @@ def get_image(image_id):
             import cv2
             import numpy as np
             from flask import make_response
-            
-            image = cv2.imread(image_path)
+
+            # 日本語パス対応の読み込み
+            image = cv2.imdecode(np.fromfile(image_path, dtype=np.uint8), cv2.IMREAD_COLOR)
             height, width = image.shape[:2]
             
             with open(label_path, 'r') as f:
@@ -226,6 +227,9 @@ def get_image(image_id):
                             elif class_id == 2:
                                 color = (0, 255, 0)  # 緑
                                 label = "Madreporite"
+                            elif class_id == 3:
+                                color = (0, 165, 255)  # オレンジ
+                                label = "Anus"
                             else:
                                 color = (128, 128, 128)
                                 label = f"Class {class_id}"

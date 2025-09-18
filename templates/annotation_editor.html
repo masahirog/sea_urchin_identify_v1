@@ -148,10 +148,16 @@
         background: #dee2e6;
     }
     
-    .class-button {
-        width: 100%;
-        padding: 10px;
+    .class-button-container {
+        display: flex;
+        align-items: center;
         margin-bottom: 10px;
+        gap: 5px;
+    }
+
+    .class-button {
+        flex: 1;
+        padding: 10px;
         display: flex;
         align-items: center;
         justify-content: flex-start;
@@ -161,38 +167,58 @@
         cursor: pointer;
         transition: all 0.2s;
     }
-    
+
     .class-button:hover {
         background: #f8f9fa;
     }
-    
+
     .class-button.active {
         border-color: #007bff;
         background: #e7f3ff;
     }
+
+    .class-clear-btn {
+        width: 35px;
+        height: 35px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #fff;
+        border: 2px solid #dc3545;
+        border-radius: 8px;
+        color: #dc3545;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .class-clear-btn:hover {
+        background: #dc3545;
+        color: white;
+    }
     
     .stats-grid {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 10px;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
         margin-top: 15px;
     }
     
     .stat-item {
         text-align: center;
-        padding: 10px;
+        padding: 8px 5px;
         background: #f8f9fa;
         border-radius: 5px;
     }
-    
+
     .stat-value {
-        font-size: 1.5rem;
+        font-size: 1.2rem;
         font-weight: bold;
         color: #495057;
     }
-    
+
     .stat-label {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         color: #6c757d;
     }
     
@@ -238,6 +264,9 @@
                 </button>
                 <div class="text-center">
                     <span id="currentImageInfo">画像を読み込み中...</span>
+                    <button class="btn btn-outline-danger btn-sm ms-2" id="deleteImageBtn" title="この画像を削除">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
                 </div>
                 <button class="btn btn-outline-secondary" id="nextImageBtn">
                     次の画像 <i class="fas fa-chevron-right"></i>
@@ -280,17 +309,41 @@
             <!-- クラス選択 -->
             <div class="control-panel">
                 <h5>クラス選択</h5>
-                <div class="class-button active" data-class="0">
-                    <i class="fas fa-mars text-primary me-2"></i>
-                    雄の生殖乳頭
+                <div class="class-button-container">
+                    <div class="class-button active" data-class="0">
+                        <i class="fas fa-mars text-primary me-2"></i>
+                        雄の生殖乳頭
+                    </div>
+                    <div class="class-clear-btn" data-clear-class="0" title="雄のアノテーションを削除">
+                        <i class="fas fa-times"></i>
+                    </div>
                 </div>
-                <div class="class-button" data-class="1">
-                    <i class="fas fa-venus text-danger me-2"></i>
-                    雌の生殖乳頭
+                <div class="class-button-container">
+                    <div class="class-button" data-class="1">
+                        <i class="fas fa-venus text-danger me-2"></i>
+                        雌の生殖乳頭
+                    </div>
+                    <div class="class-clear-btn" data-clear-class="1" title="雌のアノテーションを削除">
+                        <i class="fas fa-times"></i>
+                    </div>
                 </div>
-                <div class="class-button" data-class="2">
-                    <i class="fas fa-circle text-success me-2"></i>
-                    多孔板
+                <div class="class-button-container">
+                    <div class="class-button" data-class="2">
+                        <i class="fas fa-circle text-success me-2"></i>
+                        多孔板
+                    </div>
+                    <div class="class-clear-btn" data-clear-class="2" title="多孔板のアノテーションを削除">
+                        <i class="fas fa-times"></i>
+                    </div>
+                </div>
+                <div class="class-button-container">
+                    <div class="class-button" data-class="3">
+                        <i class="fas fa-dot-circle text-warning me-2"></i>
+                        肛門
+                    </div>
+                    <div class="class-clear-btn" data-clear-class="3" title="肛門のアノテーションを削除">
+                        <i class="fas fa-times"></i>
+                    </div>
                 </div>
                 
                 <!-- 統計情報 -->
@@ -306,6 +359,10 @@
                     <div class="stat-item">
                         <div class="stat-value text-success" id="madreporiteCount">0</div>
                         <div class="stat-label">多孔板</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value text-warning" id="anusCount">0</div>
+                        <div class="stat-label">肛門</div>
                     </div>
                 </div>
             </div>
@@ -359,6 +416,14 @@ function setupEventListeners() {
             setClass(parseInt(this.dataset.class));
         });
     });
+
+    // クラス別削除ボタン
+    document.querySelectorAll('.class-clear-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const classId = parseInt(this.dataset.clearClass);
+            clearClassAnnotations(classId);
+        });
+    });
     
     // アクションボタン
     document.getElementById('saveBtn').addEventListener('click', saveAnnotations);
@@ -387,16 +452,19 @@ function setMode(mode) {
 // クラス設定
 function setClass(classId) {
     console.log('setClass called with:', classId);
-    
+
     // UI更新
     document.querySelectorAll('.class-button').forEach(btn => {
         btn.classList.remove('active');
     });
     document.querySelector(`[data-class="${classId}"]`).classList.add('active');
-    
+
     // グローバル変数を更新
     currentClassSelection = classId;
-    
+
+    // 自動的に描画モード（create）に切り替え
+    setMode('create');
+
     // アノテーターに設定
     if (annotator) {
         annotator.setCurrentClass(classId);
@@ -407,29 +475,33 @@ function setClass(classId) {
 // 画像リストの読み込み
 async function loadImageList() {
     try {
-        // URLパラメータから選択されたIDリストを取得
+        // URLパラメータから選択されたIDリストと現在の画像IDを取得
         const urlParams = new URLSearchParams(window.location.search);
         const selectedIds = urlParams.get('selected');
-        
+        const currentImageIdFromUrl = urlParams.get('image_id');
+
         let url = '/annotation/editor/list-for-edit';
         if (selectedIds) {
             url += `?selected=${encodeURIComponent(selectedIds)}`;
         }
-        
+
         const response = await fetch(url);
         const data = await response.json();
-        
+
         allImages = data.images || [];
-        
+
         // 選択モードの場合はヘッダーに表示
         if (data.selected_mode) {
-            document.getElementById('currentImageInfo').textContent = 
+            document.getElementById('currentImageInfo').textContent =
                 `選択された画像: ${allImages.length}枚`;
         }
-        
+
+        // URLのimage_idパラメータを優先的に使用（リロード時の位置復元）
+        const targetImageId = currentImageIdFromUrl || initialImageId;
+
         // 初期画像がある場合、その画像のインデックスを探す
-        if (initialImageId) {
-            const index = allImages.findIndex(img => img.id === initialImageId);
+        if (targetImageId) {
+            const index = allImages.findIndex(img => img.id === targetImageId);
             if (index !== -1) {
                 currentIndex = index;
             }
@@ -607,18 +679,21 @@ function updateStats() {
     let maleCount = 0;
     let femaleCount = 0;
     let madreporiteCount = 0;
-    
+    let anusCount = 0;
+
     annotator.annotations.forEach(ann => {
         switch(ann.class) {
             case 0: maleCount++; break;
             case 1: femaleCount++; break;
             case 2: madreporiteCount++; break;
+            case 3: anusCount++; break;
         }
     });
-    
+
     document.getElementById('maleCount').textContent = maleCount;
     document.getElementById('femaleCount').textContent = femaleCount;
     document.getElementById('madreporiteCount').textContent = madreporiteCount;
+    document.getElementById('anusCount').textContent = anusCount;
 }
 
 // アノテーション保存
@@ -650,9 +725,24 @@ async function saveAnnotations() {
                 allImages[currentIndex].annotation_count = annotator.annotations.length;
             }
             updateImageList();
-            
-            hideLoading();
+
+            // 一時的にローディング表示を維持
             // showSuccessMessage('保存しました');
+
+            // 現在の画像を強制的に再読み込みして、サーバー側のデータと同期
+            // これにより削除されたアノテーションが画面から正しく消える
+
+            // まず既存のアノテーターをクリア
+            if (annotator) {
+                annotator.annotations = [];
+                annotator.redraw();
+            }
+
+            // サーバーから最新データを取得して再描画
+            await loadImage(currentIndex);
+
+            // 再読み込み完了後にローディングを隠す
+            hideLoading();
         } else {
             hideLoading();
             showErrorMessage('保存に失敗しました');
@@ -734,6 +824,95 @@ function handleKeyboardShortcuts(e) {
     }
 }
 
+// 画像削除処理
+async function deleteCurrentImage() {
+    if (!currentImageId) return;
+
+    // 確認ダイアログ
+    const confirmResult = confirm(`画像「${currentImageId}」を削除しますか？\n\nこの操作は取り消せません。`);
+    if (!confirmResult) return;
+
+    try {
+        const response = await fetch('/annotation/images/delete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                image_ids: [currentImageId]
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // 画像リストから削除
+            const deletedIndex = currentIndex;
+            allImages.splice(deletedIndex, 1);
+
+            // 次の画像を表示（削除した画像が最後なら前の画像）
+            if (allImages.length > 0) {
+                if (deletedIndex >= allImages.length) {
+                    currentIndex = allImages.length - 1;
+                } else {
+                    currentIndex = deletedIndex;
+                }
+                updateImageList();
+                loadImage(currentIndex);
+            } else {
+                // 画像がなくなった場合
+                document.getElementById('currentImageInfo').textContent = '画像がありません';
+                const canvas = document.getElementById('annotationCanvas');
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        } else {
+            const errorMsg = result.errors && result.errors.length > 0
+                ? result.errors.map(e => e.error).join(', ')
+                : '不明なエラー';
+            alert('削除に失敗しました: ' + errorMsg);
+        }
+    } catch (error) {
+        console.error('削除エラー:', error);
+        alert('削除処理でエラーが発生しました');
+    }
+}
+
+// 削除ボタンのイベントリスナー
+document.getElementById('deleteImageBtn').addEventListener('click', deleteCurrentImage);
+
+// 特定クラスのアノテーションを削除
+function clearClassAnnotations(classId) {
+    if (!annotator) return;
+
+    // 指定クラスのアノテーションをフィルタリングして削除
+    annotator.annotations = annotator.annotations.filter(ann => ann.class !== classId);
+
+    // 再描画
+    annotator.redraw();
+
+    // 統計情報を更新
+    updateStats();
+
+    // 変更通知
+    if (annotator.onAnnotationsChanged) {
+        annotator.onAnnotationsChanged();
+    }
+
+    // 視覚的フィードバック
+    const btn = document.querySelector(`[data-clear-class="${classId}"]`);
+    if (btn) {
+        btn.style.transform = 'scale(0.9)';
+        btn.style.background = '#dc3545';
+        btn.style.color = 'white';
+        setTimeout(() => {
+            btn.style.transform = '';
+            btn.style.background = '';
+            btn.style.color = '';
+        }, 200);
+    }
+}
+
 // 画像リストのスクロール（グローバル関数として公開）
 window.scrollImageList = function(direction) {
     const displayRange = 20;
@@ -758,6 +937,110 @@ window.addEventListener('popstate', function(event) {
             loadImage(index);
         }
     }
+});
+
+// キーボードショートカット
+document.addEventListener('keydown', function(event) {
+    // 入力フィールドにフォーカスがある場合は無効
+    if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+        return;
+    }
+
+    // Ctrlキーなどが押されている場合は無効
+    if (event.ctrlKey || event.altKey || event.metaKey) {
+        return;
+    }
+
+    const key = event.key.toUpperCase();
+
+    // クラス選択ショートカット (1-4)
+    if (key >= '1' && key <= '4') {
+        const classId = parseInt(key) - 1;
+        setClass(classId);
+        event.preventDefault();
+
+        // 視覚的フィードバック
+        const button = document.querySelector(`[data-class="${classId}"]`);
+        if (button) {
+            button.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+                button.style.transform = '';
+            }, 100);
+        }
+    }
+
+    // モード切替とアクションショートカット
+    switch(key) {
+        case 'A':  // Add/Annotate - 描画モード
+            setMode('create');
+            event.preventDefault();
+            break;
+        case 'S':  // Select - 選択・移動モード
+            setMode('edit');
+            event.preventDefault();
+            break;
+        case 'D':  // Delete - 削除モード
+            setMode('delete');
+            event.preventDefault();
+            break;
+        case 'Q':  // 保存して次へ
+            saveAndNext();
+            event.preventDefault();
+            break;
+        case 'E':  // 保存
+            saveAnnotations();
+            event.preventDefault();
+            break;
+        case 'T':  // 画像の削除
+            deleteCurrentImage();
+            event.preventDefault();
+            break;
+    }
+
+    // ツールボタンの視覚的フィードバック
+    if (['A', 'S', 'D'].includes(key)) {
+        const modeMap = {'A': 'create', 'S': 'edit', 'D': 'delete'};
+        const button = document.querySelector(`[data-mode="${modeMap[key]}"]`);
+        if (button) {
+            button.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+                button.style.transform = '';
+            }, 100);
+        }
+    }
+});
+
+// ショートカットヘルプの表示
+const shortcutHelp = `
+<div style="position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7);
+            color: white; padding: 10px; border-radius: 5px; font-size: 12px; z-index: 1000;">
+    <div style="margin-bottom: 5px;"><strong>ショートカット</strong></div>
+    <div>1-4: クラス選択</div>
+    <div>A: 描画モード</div>
+    <div>S: 選択モード</div>
+    <div>D: 削除モード</div>
+    <div style="margin-top: 5px; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 5px;">
+        <div>Q: 保存して次へ</div>
+        <div>E: 保存</div>
+        <div>T: 画像削除</div>
+    </div>
+</div>
+`;
+
+// ページ読み込み時にヘルプを3秒間表示
+window.addEventListener('load', function() {
+    const helpDiv = document.createElement('div');
+    helpDiv.innerHTML = shortcutHelp;
+    document.body.appendChild(helpDiv.firstElementChild);
+
+    setTimeout(() => {
+        const help = document.querySelector('div[style*="position: fixed"]');
+        if (help) {
+            help.style.transition = 'opacity 0.5s';
+            help.style.opacity = '0';
+            setTimeout(() => help.remove(), 500);
+        }
+    }, 3000);
 });
 
 </script>

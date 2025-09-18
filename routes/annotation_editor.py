@@ -39,7 +39,7 @@ def load_annotation(image_id):
             'original_name': image_info.get('original_name', image_id),
             'annotations': annotations,
             'annotation_count': len([line for line in annotations.split('\n') if line.strip()]),
-            'image_url': f'/annotation/images/image/{image_id}',
+            'image_url': f'/static/training_data/images/{image_id}',
             'redirect_url': f'/annotation/editor/?image_id={image_id}'
         })
         
@@ -66,7 +66,8 @@ def save_annotation(image_id):
         male_count = 0
         female_count = 0
         madreporite_count = 0
-        
+        anus_count = 0
+
         if yolo_annotations:
             for line in yolo_annotations.strip().split('\n'):
                 if line:
@@ -77,16 +78,19 @@ def save_annotation(image_id):
                         female_count += 1
                     elif class_id == 2:
                         madreporite_count += 1
-        
+                    elif class_id == 3:
+                        anus_count += 1
+
         # メタデータを更新
         update_annotation_metadata(image_id, {
             'annotated': annotation_count > 0,
             'annotation_count': annotation_count,
             'annotation_time': datetime.now().isoformat(),
             'classes': {
-                'male': male_count, 
+                'male': male_count,
                 'female': female_count,
-                'madreporite': madreporite_count
+                'madreporite': madreporite_count,
+                'anus': anus_count
             }
         })
         

@@ -29,7 +29,8 @@ class YoloDetector:
         self.class_info = {
             0: {'name': '雄の生殖乳頭', 'name_en': 'Male', 'color': (255, 0, 0)},      # 青
             1: {'name': '雌の生殖乳頭', 'name_en': 'Female', 'color': (0, 0, 255)},    # 赤
-            2: {'name': '多孔板', 'name_en': 'Madreporite', 'color': (0, 255, 0)}       # 緑
+            2: {'name': '多孔板', 'name_en': 'Madreporite', 'color': (0, 255, 0)},      # 緑
+            3: {'name': '肛門', 'name_en': 'Anus', 'color': (0, 165, 255)}              # オレンジ
         }
         
         logger.info(f"YoloDetector: デバイス {self.device} を使用")
@@ -95,7 +96,8 @@ class YoloDetector:
         try:
             # 画像読み込み
             if isinstance(image_path, str):
-                image = cv2.imread(image_path)
+                # 日本語パス対応の読み込み
+                image = cv2.imdecode(np.fromfile(image_path, dtype=np.uint8), cv2.IMREAD_COLOR)
                 if image is None:
                     raise ValueError(f"画像の読み込みに失敗: {image_path}")
             else:
@@ -113,7 +115,7 @@ class YoloDetector:
             
             # 検出結果の抽出
             detections = []
-            count_by_class = {0: 0, 1: 0, 2: 0}
+            count_by_class = {0: 0, 1: 0, 2: 0, 3: 0}
             
             for det in results.xyxy[0]:  # バッチの最初の画像の結果
                 x1, y1, x2, y2, conf, cls = det.cpu().numpy()
