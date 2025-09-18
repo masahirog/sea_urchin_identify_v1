@@ -2,27 +2,38 @@ from flask import Blueprint, request, jsonify, render_template, current_app
 import os
 import json
 from datetime import datetime
-from config import TRAINING_IMAGES_DIR, TRAINING_LABELS_DIR, METADATA_FILE
+from config import METADATA_FILE
 
 annotation_editor_bp = Blueprint('annotation_editor', __name__, url_prefix='/annotation/editor')
 
 @annotation_editor_bp.route('/')
 def editor_page():
     """アノテーションエディタページ"""
-    image_id = request.args.get('image_id')
-    return render_template('annotation_editor.html', initial_image_id=image_id)
+    image_id = request.args.get('image', '')  # imageパラメータから取得
+    folder = request.args.get('folder', 'default')  # folderパラメータから取得
+    return render_template('annotation_editor.html',
+                         initial_image_id=image_id,
+                         folder=folder)
 
 @annotation_editor_bp.route('/load/<image_id>')
 def load_annotation(image_id):
     """特定の画像とアノテーションを読み込み"""
     try:
+        # フォルダパラメータを取得
+        folder = request.args.get('folder', 'default')
+
+        # フォルダごとのパスを構築
+        base_dir = os.path.join('static', 'training_data', 'datasets', folder)
+        images_dir = os.path.join(base_dir, 'images')
+        labels_dir = os.path.join(base_dir, 'labels')
+
         # 画像の存在確認
-        image_path = os.path.join(TRAINING_IMAGES_DIR, image_id)
+        image_path = os.path.join(images_dir, image_id)
         if not os.path.exists(image_path):
             return jsonify({'error': '画像が見つかりません'}), 404
-        
+
         # ラベルファイルの読み込み
-        label_path = os.path.join(TRAINING_LABELS_DIR, 
+        label_path = os.path.join(labels_dir,
                                  os.path.splitext(image_id)[0] + '.txt')
         
         annotations = ''
@@ -39,8 +50,9 @@ def load_annotation(image_id):
             'original_name': image_info.get('original_name', image_id),
             'annotations': annotations,
             'annotation_count': len([line for line in annotations.split('\n') if line.strip()]),
-            'image_url': f'/static/training_data/images/{image_id}',
-            'redirect_url': f'/annotation/editor/?image_id={image_id}'
+            'image_url': f'/static/training_data/datasets/{folder}/images/{image_id}',
+            'redirect_url': f'/annotation/editor/?image={image_id}&folder={folder}',
+            'folder': folder
         })
         
     except Exception as e:
@@ -53,10 +65,15 @@ def save_annotation(image_id):
     data = request.json
     yolo_annotations = data.get('annotations', '')
     annotation_count = data.get('annotation_count', 0)
-    
+    folder = data.get('folder', 'default')  # フォルダ情報を受け取る
+
     try:
+        # フォルダごとのパスを構築
+        base_dir = os.path.join('static', 'training_data', 'datasets', folder)
+        labels_dir = os.path.join(base_dir, 'labels')
+
         # ラベルファイルの保存
-        label_path = os.path.join(TRAINING_LABELS_DIR, 
+        label_path = os.path.join(labels_dir,
                                  os.path.splitext(image_id)[0] + '.txt')
         
         with open(label_path, 'w') as f:
@@ -106,35 +123,41 @@ def save_annotation(image_id):
 @annotation_editor_bp.route('/list-for-edit')
 def list_for_edit():
     """エディタ用の画像リストを取得（選択された画像のみ）"""
-    # URLパラメータから選択された画像IDリストを取得
+    # URLパラメータから選択された画像IDリストとフォルダを取得
     selected_ids = request.args.get('selected', '')
-    
+    folder = request.args.get('folder', 'default')
+
     if selected_ids:
         # カンマ区切りのIDリストを配列に変換
         selected_image_ids = [id.strip() for id in selected_ids.split(',') if id.strip()]
     else:
         selected_image_ids = None
-    
+
     metadata = load_annotation_metadata()
     images = []
-    
-    if os.path.exists(TRAINING_IMAGES_DIR):
+
+    # フォルダごとのパスを構築
+    base_dir = os.path.join('static', 'training_data', 'datasets', folder)
+    images_dir = os.path.join(base_dir, 'images')
+    labels_dir = os.path.join(base_dir, 'labels')
+
+    if os.path.exists(images_dir):
         all_image_files = []
-        for image_file in os.listdir(TRAINING_IMAGES_DIR):
+        for image_file in os.listdir(images_dir):
             if image_file.lower().endswith(('.png', '.jpg', '.jpeg')):
                 # 選択されたIDリストがある場合はフィルタリング
                 if selected_image_ids is None or image_file in selected_image_ids:
                     all_image_files.append(image_file)
-        
+
         # ファイル名でソート（新しい順）
         all_image_files.sort(reverse=True)
-        
+
         # 各画像の情報を構築
         for image_file in all_image_files:
             image_info = metadata.get(image_file, {})
-            
+
             # アノテーション数を確認
-            label_path = os.path.join(TRAINING_LABELS_DIR, 
+            label_path = os.path.join(labels_dir,
                                      os.path.splitext(image_file)[0] + '.txt')
             annotation_count = 0
             if os.path.exists(label_path):
@@ -146,14 +169,15 @@ def list_for_edit():
                 'original_name': image_info.get('original_name', image_file),
                 'annotated': annotation_count > 0,
                 'annotation_count': annotation_count,
-                'thumbnail_url': f'/annotation/images/image/{image_file}',
+                'thumbnail_url': f'/static/training_data/datasets/{folder}/images/{image_file}',
                 'upload_time': image_info.get('upload_time', '')
             })
     
     return jsonify({
         'images': images,
         'total': len(images),
-        'selected_mode': selected_image_ids is not None
+        'selected_mode': selected_image_ids is not None,
+        'folder': folder
     })
 
 # ヘルパー関数

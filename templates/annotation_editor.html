@@ -228,6 +228,24 @@
         align-items: center;
         margin-bottom: 15px;
     }
+
+    .folder-selector {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 5px;
+        margin-bottom: 15px;
+    }
+
+    .folder-selector select {
+        padding: 5px 10px;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        background: white;
+        cursor: pointer;
+    }
     
     /* レスポンシブ対応 */
     @media (max-width: 768px) {
@@ -258,6 +276,14 @@
     <div class="editor-container">
         <!-- キャンバスエリア -->
         <div class="canvas-container">
+            <!-- フォルダ選択 -->
+            <div class="folder-selector">
+                <label for="folderSelect">フォルダ:</label>
+                <select id="folderSelect">
+                    <!-- フォルダリストがここに表示される -->
+                </select>
+                <span id="folderImageCount"></span>
+            </div>
             <div class="navigation-buttons">
                 <button class="btn btn-outline-secondary" id="prevImageBtn">
                     <i class="fas fa-chevron-left"></i> 前の画像
@@ -390,6 +416,7 @@ let currentImageId = null;
 let currentIndex = 0;
 let allImages = [];
 let currentClassSelection = 0; // 現在選択されているクラスを保持
+let currentFolder = 'default';  // フォルダ情報を保持
 
 // 初期画像ID（テンプレートから渡される）
 const initialImageId = {{ initial_image_id|tojson|safe if initial_image_id else 'null' }};
@@ -397,6 +424,13 @@ const initialImageId = {{ initial_image_id|tojson|safe if initial_image_id else 
 // 初期化
 document.addEventListener('DOMContentLoaded', async function() {
     setupEventListeners();
+
+    // URLParameterからフォルダを取得
+    const urlParams = new URLSearchParams(window.location.search);
+    currentFolder = urlParams.get('folder') || 'default';
+
+    // フォルダリストを読み込み
+    await loadFolderList();
     await loadImageList();
 });
 
@@ -409,7 +443,7 @@ function setupEventListeners() {
             setMode(mode);
         });
     });
-    
+
     // クラス選択ボタン
     document.querySelectorAll('.class-button').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -424,15 +458,23 @@ function setupEventListeners() {
             clearClassAnnotations(classId);
         });
     });
-    
+
     // アクションボタン
     document.getElementById('saveBtn').addEventListener('click', saveAnnotations);
     document.getElementById('saveAndNextBtn').addEventListener('click', saveAndNext);
-    
+
     // ナビゲーションボタン
     document.getElementById('prevImageBtn').addEventListener('click', loadPreviousImage);
     document.getElementById('nextImageBtn').addEventListener('click', loadNextImage);
-    
+
+    // フォルダ選択
+    const folderSelect = document.getElementById('folderSelect');
+    if (folderSelect) {
+        folderSelect.addEventListener('change', function() {
+            changeFolder(this.value);
+        });
+    }
+
     // キーボードショートカット
     document.addEventListener('keydown', handleKeyboardShortcuts);
 }
@@ -478,11 +520,18 @@ async function loadImageList() {
         // URLパラメータから選択されたIDリストと現在の画像IDを取得
         const urlParams = new URLSearchParams(window.location.search);
         const selectedIds = urlParams.get('selected');
-        const currentImageIdFromUrl = urlParams.get('image_id');
+        const currentImageIdFromUrl = urlParams.get('image') || urlParams.get('image_id');
 
         let url = '/annotation/editor/list-for-edit';
+        const params = new URLSearchParams();
         if (selectedIds) {
-            url += `?selected=${encodeURIComponent(selectedIds)}`;
+            params.append('selected', selectedIds);
+        }
+        if (currentFolder) {
+            params.append('folder', currentFolder);
+        }
+        if (params.toString()) {
+            url += '?' + params.toString();
         }
 
         const response = await fetch(url);
@@ -494,6 +543,9 @@ async function loadImageList() {
         if (data.selected_mode) {
             document.getElementById('currentImageInfo').textContent =
                 `選択された画像: ${allImages.length}枚`;
+        } else {
+            document.getElementById('folderImageCount').textContent =
+                `画像: ${allImages.length}枚`;
         }
 
         // URLのimage_idパラメータを優先的に使用（リロード時の位置復元）
@@ -531,7 +583,7 @@ async function loadImage(index) {
         currentIndex = index;
         
         // アノテーション情報を取得
-        const response = await fetch(`/annotation/editor/load/${image.id}`);
+        const response = await fetch(`/annotation/editor/load/${image.id}?folder=${encodeURIComponent(currentFolder)}`);
         const data = await response.json();
         
         // 画像を読み込み
@@ -712,7 +764,8 @@ async function saveAnnotations() {
             },
             body: JSON.stringify({
                 annotations: yoloData,
-                annotation_count: annotator.annotations.length
+                annotation_count: annotator.annotations.length,
+                folder: currentFolder
             })
         });
         
@@ -880,6 +933,72 @@ async function deleteCurrentImage() {
 
 // 削除ボタンのイベントリスナー
 document.getElementById('deleteImageBtn').addEventListener('click', deleteCurrentImage);
+
+// フォルダリストを読み込み
+async function loadFolderList() {
+    try {
+        const response = await fetch('/file-manager/api/folders');
+        const data = await response.json();
+
+        const select = document.getElementById('folderSelect');
+        select.innerHTML = '';
+
+        // フォルダを再帰的に追加
+        function addFolders(node, level = 0) {
+            if (node.name === 'datasets') {
+                // datasets自体は表示しない
+                if (node.children) {
+                    node.children.forEach(child => addFolders(child, level));
+                }
+            } else {
+                const option = document.createElement('option');
+                option.value = node.path;
+                option.textContent = '　'.repeat(level) + node.name + ` (${node.image_count || 0}枚)`;
+                select.appendChild(option);
+
+                if (node.children) {
+                    node.children.forEach(child => addFolders(child, level + 1));
+                }
+            }
+        }
+
+        addFolders(data);
+
+        // 現在のフォルダを選択
+        select.value = currentFolder;
+
+    } catch (error) {
+        console.error('フォルダリスト読み込みエラー:', error);
+    }
+}
+
+// フォルダ変更
+async function changeFolder(folderPath) {
+    currentFolder = folderPath;
+    currentIndex = 0;
+    currentImageId = null;
+
+    // URLパラメータを更新
+    const url = new URL(window.location);
+    url.searchParams.set('folder', folderPath);
+    window.history.replaceState({}, '', url);
+
+    // 画像リストを再読み込み
+    await loadImageList();
+
+    // 画像がある場合は最初の画像をロード
+    if (allImages.length > 0) {
+        await loadImage(0);
+    } else {
+        // 画像がない場合はキャンバスをクリア
+        if (annotator) {
+            annotator.clearAnnotations();
+            annotator.image = null;
+            annotator.redraw();
+        }
+        document.getElementById('currentImageInfo').textContent = 'このフォルダには画像がありません';
+    }
+}
 
 // 特定クラスのアノテーションを削除
 function clearClassAnnotations(classId) {

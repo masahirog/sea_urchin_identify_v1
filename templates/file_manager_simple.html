@@ -1,0 +1,991 @@
+{% extends "base.html" %}
+
+{% block title %}ファイルマネージャー - ウニ生殖乳頭分析{% endblock %}
+
+{% block content %}
+<style>
+    .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .file-manager {
+        display: flex;
+        gap: 20px;
+        height: calc(100vh - 150px);
+    }
+
+    /* サイドバー */
+    .sidebar {
+        width: 300px;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        overflow-y: auto;
+    }
+
+    .sidebar h3 {
+        padding: 15px;
+        margin: 0;
+        background: #f5f5f5;
+        border-bottom: 1px solid #ddd;
+        font-size: 1.2em;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .btn-sm {
+        padding: 4px 8px;
+        font-size: 0.85em;
+        border: 1px solid #007bff;
+        background: #007bff;
+        color: white;
+        border-radius: 3px;
+        cursor: pointer;
+    }
+
+    .btn-sm:hover {
+        background: #0056b3;
+    }
+
+    .folder-tree {
+        padding: 15px;
+    }
+
+    .folder-item {
+        padding: 8px;
+        cursor: pointer;
+        border-radius: 3px;
+        margin-bottom: 2px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .folder-item:hover {
+        background: #e8f4ff;
+    }
+
+    .folder-info {
+        flex: 1;
+    }
+
+    .folder-actions {
+        display: none;
+        gap: 5px;
+    }
+
+    .folder-item:hover .folder-actions {
+        display: flex;
+    }
+
+    .btn-icon {
+        padding: 2px 6px;
+        font-size: 0.8em;
+        border: 1px solid #ccc;
+        background: white;
+        color: #333;
+        border-radius: 3px;
+        cursor: pointer;
+    }
+
+    .btn-icon:hover {
+        background: #f0f0f0;
+    }
+
+    .folder-item.selected {
+        background: #007bff;
+        color: white;
+    }
+
+    /* メインコンテンツ */
+    .main-content {
+        flex: 1;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .main-header {
+        padding: 15px;
+        background: #f5f5f5;
+        border-bottom: 1px solid #ddd;
+    }
+
+    .main-header h3 {
+        margin: 0;
+        font-size: 1.2em;
+    }
+
+    .image-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 15px;
+        padding: 20px;
+        flex: 1;
+    }
+
+    .image-card {
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        overflow: hidden;
+        background: white;
+        cursor: pointer;
+        position: relative;
+    }
+
+    .image-card.selected {
+        border-color: #007bff;
+        background: #e7f3ff;
+    }
+
+    .image-checkbox {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        width: 20px;
+        height: 20px;
+        z-index: 10;
+    }
+
+    .image-card img {
+        width: 100%;
+        height: 120px;
+        object-fit: cover;
+        display: block;
+    }
+
+    .image-info {
+        padding: 8px;
+        font-size: 0.85em;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .label-badge {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background: #28a745;
+        color: white;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 0.75em;
+    }
+
+    .loading {
+        text-align: center;
+        padding: 40px;
+        color: #666;
+    }
+
+    .error {
+        text-align: center;
+        padding: 40px;
+        color: #dc3545;
+    }
+
+
+    /* モーダル */
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 2000;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .modal.show {
+        display: flex;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 5px;
+        padding: 20px;
+        min-width: 400px;
+        max-width: 500px;
+    }
+
+    .modal-header {
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .modal-body {
+        margin-bottom: 20px;
+    }
+
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+        font-size: 0.95em;
+    }
+
+    .btn {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 0.95em;
+    }
+
+    .btn-primary {
+        background: #007bff;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #0056b3;
+    }
+
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+
+    .btn-danger {
+        background: #dc3545;
+        color: white;
+    }
+
+    .action-bar {
+        padding: 10px 15px;
+        background: #f5f5f5;
+        border-bottom: 1px solid #ddd;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .selection-info {
+        color: #666;
+    }
+
+    .filter-buttons {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .btn-filter {
+        padding: 6px 12px;
+        border: 1px solid #dee2e6;
+        background: white;
+        color: #495057;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 0.9em;
+    }
+
+    .btn-filter.active {
+        background: #007bff;
+        color: white;
+        border-color: #007bff;
+    }
+
+    .btn-filter:hover:not(.active) {
+        background: #f8f9fa;
+    }
+
+    .image-card.edit-mode:hover {
+        border-color: #28a745;
+        box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.25);
+    }
+</style>
+
+<div class="container">
+    <h2>ファイルマネージャー</h2>
+
+    <div class="file-manager">
+        <!-- サイドバー（フォルダツリー） -->
+        <div class="sidebar">
+            <h3>
+                フォルダ
+                <button class="btn-sm" onclick="showCreateFolderModal()">新規</button>
+            </h3>
+            <div class="folder-tree" id="folderTree">
+                <div class="loading">読み込み中...</div>
+            </div>
+        </div>
+
+        <!-- メインコンテンツ（画像表示） -->
+        <div class="main-content">
+            <div class="main-header">
+                <h3 id="currentFolder">フォルダを選択してください</h3>
+            </div>
+            <!-- アクションバー -->
+            <div class="action-bar" id="actionBar">
+                <div class="filter-buttons">
+                    <button class="btn-filter" id="filterAll" onclick="setFilter('all')">
+                        すべて
+                    </button>
+                    <button class="btn-filter" id="filterLabeled" onclick="setFilter('labeled')">
+                        ラベル済み
+                    </button>
+                    <button class="btn-filter" id="filterUnlabeled" onclick="setFilter('unlabeled')">
+                        未ラベル
+                    </button>
+                    <span style="margin-left: 10px; color: #6c757d;">|</span>
+                    <button class="btn-filter" onclick="toggleEditMode()" id="editModeBtn">
+                        📝 編集モード
+                    </button>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <div class="selection-info">
+                        <span id="selectedCount">0</span>枚選択中
+                    </div>
+                    <button class="btn btn-secondary" id="clearBtn" onclick="clearSelection()" disabled>選択解除</button>
+                    <button class="btn btn-primary" id="moveBtn" onclick="showMoveModal()" disabled>移動</button>
+                    <button class="btn btn-danger" id="deleteBtn" onclick="deleteSelectedImages()" disabled>削除</button>
+                </div>
+            </div>
+            <div class="image-grid" id="imageGrid">
+                <div class="loading">フォルダを選択してください</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- フォルダ作成モーダル -->
+<div id="createFolderModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>新規フォルダ作成</h3>
+        </div>
+        <div class="modal-body">
+            <label>フォルダ名:</label>
+            <input type="text" id="newFolderName" class="form-control" placeholder="例: 2025_01_実験">
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('createFolderModal')">キャンセル</button>
+            <button class="btn btn-primary" onclick="createFolder()">作成</button>
+        </div>
+    </div>
+</div>
+
+<!-- 画像移動モーダル -->
+<div id="moveImagesModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>画像を移動</h3>
+        </div>
+        <div class="modal-body">
+            <p><span id="moveCount">0</span>枚の画像を移動します</p>
+            <label>移動先フォルダ:</label>
+            <select id="targetFolder" class="form-control">
+                <!-- フォルダリストがここに表示される -->
+            </select>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('moveImagesModal')">キャンセル</button>
+            <button class="btn btn-primary" onclick="moveImages()">移動</button>
+        </div>
+    </div>
+</div>
+
+<!-- フォルダ名変更モーダル -->
+<div id="renameFolderModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>フォルダ名変更</h3>
+        </div>
+        <div class="modal-body">
+            <label>新しい名前:</label>
+            <input type="text" id="renameFolderName" class="form-control">
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('renameFolderModal')">キャンセル</button>
+            <button class="btn btn-primary" onclick="confirmRename()">変更</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// グローバル変数
+let currentPath = '';
+let selectedFolderPath = null;
+let selectedFolderName = null;
+let selectedImages = new Set();
+let allFolders = [];
+let currentFilter = 'all';
+let allImages = [];
+let editMode = false;
+
+// 初期化
+document.addEventListener('DOMContentLoaded', function() {
+    loadFolders();
+});
+
+// フォルダ一覧を読み込み
+async function loadFolders() {
+    const treeContainer = document.getElementById('folderTree');
+
+    try {
+        const response = await fetch('/file-manager/api/folders');
+        const data = await response.json();
+
+        treeContainer.innerHTML = '';
+
+        // フォルダツリーを表示
+        allFolders = [];
+        collectFolders(data);
+        displayFolder(data, treeContainer, 0);
+
+    } catch (error) {
+        console.error('フォルダ読み込みエラー:', error);
+        treeContainer.innerHTML = '<div class="error">エラーが発生しました</div>';
+    }
+}
+
+// すべてのフォルダを収集
+function collectFolders(node) {
+    if (!node) return;
+
+    allFolders.push({
+        path: node.path,
+        name: node.name,
+        level: 0
+    });
+
+    if (node.children) {
+        node.children.forEach(child => {
+            collectFoldersRecursive(child, 1);
+        });
+    }
+}
+
+function collectFoldersRecursive(node, level) {
+    allFolders.push({
+        path: node.path,
+        name: node.name,
+        level: level
+    });
+
+    if (node.children) {
+        node.children.forEach(child => {
+            collectFoldersRecursive(child, level + 1);
+        });
+    }
+}
+
+// フォルダを表示（再帰的）
+function displayFolder(node, container, level) {
+    if (!node) return;
+
+    // フォルダ項目を作成
+    const item = document.createElement('div');
+    item.className = 'folder-item';
+    item.style.paddingLeft = (level * 20 + 10) + 'px';
+
+    // フォルダ情報部分
+    const info = document.createElement('div');
+    info.className = 'folder-info';
+    info.innerHTML = `📁 ${node.name} (${node.image_count || 0})`;
+    info.onclick = function() {
+        selectFolder(node.path, item);
+    };
+
+    // アクションボタン（defaultフォルダ以外）
+    const actions = document.createElement('div');
+    actions.className = 'folder-actions';
+
+    if (node.name !== 'default' && node.name !== 'datasets') {
+        // 名前変更ボタン
+        const renameBtn = document.createElement('button');
+        renameBtn.className = 'btn-icon';
+        renameBtn.innerHTML = '✏️';
+        renameBtn.title = '名前変更';
+        renameBtn.onclick = function(e) {
+            e.stopPropagation();
+            selectedFolderPath = node.path;
+            selectedFolderName = node.name;
+            showRenameFolderModal();
+        };
+
+        // 削除ボタン
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn-icon';
+        deleteBtn.innerHTML = '🗑️';
+        deleteBtn.title = '削除';
+        deleteBtn.onclick = function(e) {
+            e.stopPropagation();
+            selectedFolderPath = node.path;
+            selectedFolderName = node.name;
+            deleteFolder();
+        };
+
+        actions.appendChild(renameBtn);
+        actions.appendChild(deleteBtn);
+    }
+
+    item.appendChild(info);
+    item.appendChild(actions);
+
+    container.appendChild(item);
+
+    // 子フォルダを表示
+    if (node.children && node.children.length > 0) {
+        node.children.forEach(child => {
+            displayFolder(child, container, level + 1);
+        });
+    }
+
+    // デフォルトフォルダを自動選択
+    if (node.name === 'default' && level === 1) {
+        setTimeout(() => {
+            selectFolder(node.path, item);
+            setFilter('all');
+        }, 100);
+    }
+}
+
+// フォルダを選択
+function selectFolder(path, element) {
+    currentPath = path;
+
+    // 選択状態を更新
+    document.querySelectorAll('.folder-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+    if (element) {
+        element.classList.add('selected');
+    }
+
+    // フォルダ名を更新
+    document.getElementById('currentFolder').textContent =
+        `フォルダ: ${path || 'ルート'}`;
+
+    // 画像を読み込み
+    loadImages(path);
+}
+
+// 画像を読み込み
+async function loadImages(path) {
+    const grid = document.getElementById('imageGrid');
+    grid.innerHTML = '<div class="loading">読み込み中...</div>';
+
+    try {
+        // APIエンドポイント
+        const url = path
+            ? `/file-manager/api/folder/images/${encodeURIComponent(path)}`
+            : `/file-manager/api/folder/images/`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        // グリッドをクリア
+        grid.innerHTML = '';
+
+        if (!data.images || data.images.length === 0) {
+            grid.innerHTML = '<div class="loading">画像がありません</div>';
+            return;
+        }
+
+        // 全画像を保存
+        allImages = data.images;
+
+        // フィルタ適用
+        applyFilter();
+
+    } catch (error) {
+        console.error('画像読み込みエラー:', error);
+        grid.innerHTML = '<div class="error">エラーが発生しました</div>';
+    }
+}
+
+// フィルタ適用
+function applyFilter() {
+    const grid = document.getElementById('imageGrid');
+    grid.innerHTML = '';
+
+    let filteredImages = allImages;
+
+    if (currentFilter === 'labeled') {
+        filteredImages = allImages.filter(img => img.has_label);
+    } else if (currentFilter === 'unlabeled') {
+        filteredImages = allImages.filter(img => !img.has_label);
+    }
+
+    if (filteredImages.length === 0) {
+        grid.innerHTML = '<div class="loading">該当する画像がありません</div>';
+        return;
+    }
+
+    // 画像を表示
+    filteredImages.forEach(image => {
+            // カードを作成
+            const card = document.createElement('div');
+            card.className = 'image-card';
+            card.dataset.imageId = image.id;
+
+            // チェックボックス
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'image-checkbox';
+            checkbox.onclick = function(e) {
+                e.stopPropagation();
+                toggleImageSelection(card, image.id);
+            };
+
+            // 画像
+            const img = document.createElement('img');
+            img.src = image.url;
+            img.alt = image.name;
+
+            // ファイル名
+            const info = document.createElement('div');
+            info.className = 'image-info';
+            info.textContent = image.name;
+
+            // カードクリック
+            card.onclick = function(e) {
+                if (editMode) {
+                    // 編集モードの場合はアノテーションエディタを開く
+                    e.preventDefault();
+                    window.open(`/annotation/editor?image=${encodeURIComponent(image.name)}&folder=${encodeURIComponent(currentPath)}`, '_blank');
+                } else if (e.target !== checkbox) {
+                    checkbox.checked = !checkbox.checked;
+                    toggleImageSelection(card, image.id);
+                }
+            };
+
+            // カードに追加
+            card.appendChild(checkbox);
+            card.appendChild(img);
+            card.appendChild(info);
+
+            // ラベル済みバッジ
+            if (image.has_label) {
+                const badge = document.createElement('div');
+                badge.className = 'label-badge';
+                badge.textContent = '✓';
+                card.appendChild(badge);
+            }
+
+            // グリッドに追加
+            grid.appendChild(card);
+    });
+}
+
+// フォルダ作成モーダル表示
+function showCreateFolderModal() {
+    document.getElementById('createFolderModal').classList.add('show');
+    document.getElementById('newFolderName').value = '';
+    document.getElementById('newFolderName').focus();
+}
+
+// フォルダ作成
+async function createFolder() {
+    const folderName = document.getElementById('newFolderName').value.trim();
+
+    if (!folderName) {
+        alert('フォルダ名を入力してください');
+        return;
+    }
+
+    try {
+        const response = await fetch('/file-manager/api/folder/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                parent_path: '',
+                folder_name: folderName
+            })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            closeModal('createFolderModal');
+            loadFolders();
+            alert('フォルダを作成しました');
+        } else {
+            alert(result.error || 'フォルダ作成に失敗しました');
+        }
+    } catch (error) {
+        console.error(error);
+        alert('エラーが発生しました');
+    }
+}
+
+// フォルダ名変更モーダル表示
+function showRenameFolderModal() {
+    document.getElementById('renameFolderModal').classList.add('show');
+    document.getElementById('renameFolderName').value = selectedFolderName;
+    document.getElementById('renameFolderName').focus();
+}
+
+async function confirmRename() {
+    const newName = document.getElementById('renameFolderName').value.trim();
+
+    if (!newName) {
+        alert('新しい名前を入力してください');
+        return;
+    }
+
+    try {
+        const response = await fetch('/file-manager/api/folder/rename', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                folder_path: selectedFolderPath,
+                new_name: newName
+            })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            closeModal('renameFolderModal');
+            loadFolders();
+            alert('フォルダ名を変更しました');
+        } else {
+            alert(result.error || '名前変更に失敗しました');
+        }
+    } catch (error) {
+        console.error(error);
+        alert('エラーが発生しました');
+    }
+}
+
+// フォルダ削除
+async function deleteFolder() {
+    if (!selectedFolderPath) return;
+
+    if (!confirm(`フォルダ「${selectedFolderName}」を削除しますか？`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/file-manager/api/folder/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                folder_path: selectedFolderPath
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.confirm_required) {
+            if (confirm(result.warning + '\n本当に削除しますか？')) {
+                // 再度削除リクエスト
+                await deleteFolder();
+            }
+        } else if (response.ok) {
+            loadFolders();
+            alert('フォルダを削除しました');
+        } else {
+            alert(result.error || 'フォルダ削除に失敗しました');
+        }
+    } catch (error) {
+        console.error(error);
+        alert('エラーが発生しました');
+    }
+}
+
+// モーダルを閉じる
+function closeModal(modalId) {
+    document.getElementById(modalId).classList.remove('show');
+}
+
+// 画像選択
+function toggleImageSelection(card, imageId) {
+    if (selectedImages.has(imageId)) {
+        selectedImages.delete(imageId);
+        card.classList.remove('selected');
+    } else {
+        selectedImages.add(imageId);
+        card.classList.add('selected');
+    }
+
+    updateActionBar();
+}
+
+// アクションバー更新
+function updateActionBar() {
+    const selectedCount = document.getElementById('selectedCount');
+    const clearBtn = document.getElementById('clearBtn');
+    const moveBtn = document.getElementById('moveBtn');
+    const deleteBtn = document.getElementById('deleteBtn');
+
+    selectedCount.textContent = selectedImages.size;
+
+    if (selectedImages.size > 0) {
+        clearBtn.disabled = false;
+        moveBtn.disabled = false;
+        deleteBtn.disabled = false;
+    } else {
+        clearBtn.disabled = true;
+        moveBtn.disabled = true;
+        deleteBtn.disabled = true;
+    }
+}
+
+// 選択解除
+function clearSelection() {
+    selectedImages.clear();
+    document.querySelectorAll('.image-card').forEach(card => {
+        card.classList.remove('selected');
+        const checkbox = card.querySelector('.image-checkbox');
+        if (checkbox) checkbox.checked = false;
+    });
+    updateActionBar();
+}
+
+// 画像移動モーダル表示
+function showMoveModal() {
+    if (selectedImages.size === 0) return;
+
+    document.getElementById('moveCount').textContent = selectedImages.size;
+
+    // フォルダリスト作成
+    const select = document.getElementById('targetFolder');
+    select.innerHTML = '';
+
+    allFolders.forEach(folder => {
+        if (folder.path !== currentPath) {
+            const option = document.createElement('option');
+            option.value = folder.path;
+            option.textContent = '　'.repeat(folder.level) + folder.name;
+            select.appendChild(option);
+        }
+    });
+
+    document.getElementById('moveImagesModal').classList.add('show');
+}
+
+// 画像移動
+async function moveImages() {
+    const targetFolder = document.getElementById('targetFolder').value;
+    if (!targetFolder) {
+        alert('移動先フォルダを選択してください');
+        return;
+    }
+
+    try {
+        const response = await fetch('/file-manager/api/images/move', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                source_folder: currentPath,
+                target_folder: targetFolder,
+                image_ids: Array.from(selectedImages)
+            })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            closeModal('moveImagesModal');
+            clearSelection();
+            loadImages(currentPath);
+            alert(`${result.moved_count}枚の画像を移動しました`);
+        } else {
+            alert(result.error || '画像移動に失敗しました');
+        }
+    } catch (error) {
+        console.error(error);
+        alert('エラーが発生しました');
+    }
+}
+
+// フィルタ設定
+function setFilter(filter) {
+    currentFilter = filter;
+
+    // ボタンのアクティブ状態を更新
+    document.querySelectorAll('.btn-filter').forEach(btn => {
+        btn.classList.remove('active');
+    });
+
+    if (filter === 'all') {
+        document.getElementById('filterAll').classList.add('active');
+    } else if (filter === 'labeled') {
+        document.getElementById('filterLabeled').classList.add('active');
+    } else if (filter === 'unlabeled') {
+        document.getElementById('filterUnlabeled').classList.add('active');
+    }
+
+    // フィルタ適用
+    applyFilter();
+}
+
+// 編集モード切り替え
+function toggleEditMode() {
+    editMode = !editMode;
+    const btn = document.getElementById('editModeBtn');
+
+    if (editMode) {
+        btn.classList.add('active');
+        // 選択解除
+        clearSelection();
+        // カードにクラス追加
+        document.querySelectorAll('.image-card').forEach(card => {
+            card.classList.add('edit-mode');
+        });
+    } else {
+        btn.classList.remove('active');
+        // カードからクラス削除
+        document.querySelectorAll('.image-card').forEach(card => {
+            card.classList.remove('edit-mode');
+        });
+    }
+}
+
+// 画像削除
+async function deleteSelectedImages() {
+    if (selectedImages.size === 0) return;
+
+    if (!confirm(`選択した${selectedImages.size}枚の画像を削除しますか？`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/file-manager/api/images/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                folder_path: currentPath,
+                image_ids: Array.from(selectedImages)
+            })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            clearSelection();
+            loadImages(currentPath);
+            alert(`${result.deleted_count}枚の画像を削除しました`);
+        } else {
+            alert(result.error || '画像削除に失敗しました');
+        }
+    } catch (error) {
+        console.error(error);
+        alert('エラーが発生しました');
+    }
+}
+</script>
+
+{% endblock %}

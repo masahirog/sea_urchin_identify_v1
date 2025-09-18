@@ -2,7 +2,7 @@ import os
 import json
 import logging
 from logging.handlers import RotatingFileHandler
-from flask import Flask, send_from_directory, jsonify, abort
+from flask import Flask, send_from_directory, jsonify, abort, render_template
 import threading
 import queue
 import sys
@@ -10,7 +10,6 @@ from app_utils.file_cleanup import cleanup_temp_files, schedule_cleanup
 from config import *  # 設定は全てconfig.pyから取得
 from routes.yolo import yolo_bp
 from routes.training import training_bp
-from routes.annotation_images import annotation_images_bp
 from routes.annotation_editor import annotation_editor_bp
 
 # ログディレクトリ作成
@@ -91,14 +90,15 @@ schedule_cleanup(app, interval_hours=CLEANUP_INTERVAL_HOURS)
 from routes.main import main_bp
 from routes.learning import learning_bp
 from routes.camera import camera_bp
+from routes.file_manager import file_manager_bp
 
 app.register_blueprint(main_bp)
 app.register_blueprint(yolo_bp)
 app.register_blueprint(learning_bp)
 app.register_blueprint(training_bp)
-app.register_blueprint(annotation_images_bp)
 app.register_blueprint(annotation_editor_bp)
 app.register_blueprint(camera_bp)
+app.register_blueprint(file_manager_bp, url_prefix='/file-manager')
 
 # グローバル処理状態（タスク管理用）
 processing_status = {}
@@ -142,6 +142,14 @@ def serve_snapshots(filename):
 def serve_training_images(filename):
     """学習データ画像を提供するルート"""
     return send_from_directory(TRAINING_IMAGES_DIR, filename)
+
+# ファイルマネージャー用の画像配信ルート（datasetsフォルダ対応）
+@app.route('/static/training_data/datasets/<path:filepath>')
+def serve_datasets_files(filepath):
+    """datasetsディレクトリ内のファイルを提供するルート"""
+    datasets_dir = os.path.join('static', 'training_data', 'datasets')
+    return send_from_directory(datasets_dir, filepath)
+
 
 # 検出結果画像の配信ルート
 @app.route('/static/detection_results/<path:filename>')

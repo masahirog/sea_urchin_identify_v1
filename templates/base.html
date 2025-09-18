@@ -36,7 +36,8 @@
             <!-- メイン機能ナビゲーション -->
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
-                    <!-- 雌雄判定 -->
+                    <!-- 雌雄判定 (一時的に非表示) -->
+                    <!--
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}"
                            href="{{ url_for('main.index') }}" title="単一画像の雌雄判定">
@@ -44,6 +45,7 @@
                             <span class="d-none d-md-inline">判定</span>
                         </a>
                     </li>
+                    -->
                     <!-- カメラ -->
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle {% if request.endpoint == 'camera.camera_page' %}active{% endif %}"
@@ -62,7 +64,7 @@
                         </ul>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'annotation_images.images_management_page' %}active{% endif %}" href="{{ url_for('annotation_images.images_management_page') }}" title="画像管理">
+                        <a class="nav-link {% if 'file_manager' in request.endpoint %}active{% endif %}" href="{{ url_for('file_manager.index') }}" title="画像管理">
                             <i class="fas fa-images me-1"></i> 学習データ
                         </a>
                     </li>
