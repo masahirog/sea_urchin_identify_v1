@@ -713,14 +713,17 @@ function updateImageList() {
 // 画像選択（確認なしで移動）
 async function selectImage(index) {
     if (index < 0 || index >= allImages.length) return;
-    
+
     currentIndex = index;
     const image = allImages[index];
-    
-    // URLを更新（ページリロードなし）
-    const newUrl = `/annotation/editor/?image_id=${image.id}`;
-    window.history.pushState({imageId: image.id}, '', newUrl);
-    
+
+    // URLを更新（ページリロードなし）- フォルダ情報も含める
+    let newUrl = `/annotation/editor/?image=${image.id}`;
+    if (currentFolder) {
+        newUrl += `&folder=${encodeURIComponent(currentFolder)}`;
+    }
+    window.history.pushState({imageId: image.id, folder: currentFolder}, '', newUrl);
+
     await loadImage(index);
 }
 
@@ -886,13 +889,19 @@ async function deleteCurrentImage() {
     if (!confirmResult) return;
 
     try {
+        console.log('削除リクエスト送信:', {
+            image_ids: [currentImageId],
+            folder: currentFolder
+        });
+
         const response = await fetch('/annotation/images/delete', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                image_ids: [currentImageId]
+                image_ids: [currentImageId],
+                folder: currentFolder  // フォルダ情報を追加
             })
         });
 

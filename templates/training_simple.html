@@ -2,185 +2,724 @@
 
 {% block title %}機械学習 - ウニ生殖乳頭分析{% endblock %}
 
-{% block content %}
-<div class="container">
-    <h2 class="text-center mb-4">
-        <i class="fas fa-brain me-2"></i>機械学習
-    </h2>
-    
-    <!-- ステータス表示 -->
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-info-circle"></i> システム状態</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row text-center">
-                        <div class="col-md-3">
-                            <div class="metric">
-                                <h3 id="totalImages">0</h3>
-                                <p>総画像数</p>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="metric">
-                                <h3 id="annotatedImages">0</h3>
-                                <p>アノテーション済み</p>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="metric">
-                                <h3 id="modelStatus">未学習</h3>
-                                <p>YOLOモデル</p>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="metric">
-                                <h3 id="readyStatus">-</h3>
-                                <p>学習準備</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 学習フロー -->
-    <div class="card">
-        <div class="card-header">
-            <h5><i class="fas fa-route"></i> 学習フロー</h5>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-4 text-center mb-3">
-                    <div class="step-card">
-                        <div class="step-number">1</div>
-                        <h6>画像をアップロード</h6>
-                        <p class="small text-muted">各10枚以上</p>
-                        <a href="/annotation/images" class="btn btn-primary btn-sm">
-                            <i class="fas fa-upload"></i> アップロード
-                        </a>
-                    </div>
-                </div>
-                <div class="col-md-4 text-center mb-3">
-                    <div class="step-card">
-                        <div class="step-number">2</div>
-                        <h6>アノテーション</h6>
-                        <p class="small text-muted">生殖乳頭の位置をマーク</p>
-                        <a href="/annotation/editor" class="btn btn-warning btn-sm">
-                            <i class="fas fa-edit"></i> アノテーション
-                        </a>
-                    </div>
-                </div>
-                <div class="col-md-4 text-center mb-3">
-                    <div class="step-card">
-                        <div class="step-number">3</div>
-                        <h6>学習実行</h6>
-                        <p class="small text-muted">30分～2時間程度</p>
-                        <a href="/training/advanced" class="btn btn-success btn-sm" id="startTrainingBtn">
-                            <i class="fas fa-rocket"></i> 学習開始
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- ヒント -->
-    <div class="alert alert-info mt-4">
-        <h6><i class="fas fa-lightbulb"></i> ヒント</h6>
-        <ul class="mb-0">
-            <li>精度向上のため、様々な角度・照明条件の画像を使用してください</li>
-            <li>アノテーションは丁寧に行うことで、検出精度が向上します</li>
-            <li>初回学習後も、データを追加して再学習することで精度を改善できます</li>
-        </ul>
-    </div>
-</div>
-
+{% block extra_css %}
 <style>
-.metric {
-    padding: 20px;
-    background: #f8f9fa;
-    border-radius: 10px;
-}
+    .dashboard-card {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
 
-.metric h3 {
-    color: #007bff;
-    margin-bottom: 10px;
-}
+    .metric-value {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #007bff;
+    }
 
-.metric p {
-    margin: 0;
-    color: #6c757d;
-}
+    .metric-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
 
-.step-card {
-    padding: 20px;
-    background: #f8f9fa;
-    border-radius: 10px;
-    height: 100%;
-}
+    .folder-checkbox {
+        padding: 10px;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        margin-bottom: 10px;
+        transition: background 0.2s;
+    }
 
-.step-number {
-    width: 40px;
-    height: 40px;
-    background: #007bff;
-    color: white;
-    border-radius: 50%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    margin-bottom: 15px;
-}
+    .folder-checkbox:hover {
+        background: #f8f9fa;
+    }
+
+    .folder-checkbox.selected {
+        background: #e7f3ff;
+        border-color: #007bff;
+    }
+
+    .status-active {
+        background: #28a745;
+        color: white;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+    }
+
+    .history-item {
+        border-left: 3px solid #007bff;
+        padding-left: 15px;
+        margin-bottom: 15px;
+    }
+
+    .training-params {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 5px;
+    }
 </style>
 {% endblock %}
 
-{% block extra_js %}
-<script type="module">
-import { showLoading, hideLoading } from '/static/js/utilities.js';
+{% block content %}
+<div class="container">
+    <h2 class="text-center mb-4">
+        <i class="fas fa-brain"></i> 機械学習
+    </h2>
 
-// 初期化
-document.addEventListener('DOMContentLoaded', function() {
-    loadSystemStatus();
+    <!-- サマリー情報 -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="dashboard-card text-center">
+                <i class="fas fa-folder fa-2x mb-2 text-primary"></i>
+                <div class="metric-value" id="totalFolders">0</div>
+                <div class="metric-label">フォルダ数</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="dashboard-card text-center">
+                <i class="fas fa-images fa-2x mb-2 text-success"></i>
+                <div class="metric-value" id="totalImages">0</div>
+                <div class="metric-label">総画像数</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="dashboard-card text-center">
+                <i class="fas fa-tags fa-2x mb-2 text-warning"></i>
+                <div class="metric-value" id="totalAnnotations">0</div>
+                <div class="metric-label">アノテーション数</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="dashboard-card text-center">
+                <i class="fas fa-chart-line fa-2x mb-2 text-info"></i>
+                <div class="metric-value" id="bestAccuracy">0%</div>
+                <div class="metric-label">最高精度</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- 左側：学習設定 -->
+        <div class="col-md-6">
+            <!-- フォルダ選択 -->
+            <div class="dashboard-card">
+                <h5><i class="fas fa-folder-open"></i> 学習データ選択</h5>
+                <div class="mb-3">
+                    <button class="btn btn-sm btn-secondary me-2" onclick="selectAllFolders()">全て選択</button>
+                    <button class="btn btn-sm btn-secondary" onclick="deselectAllFolders()">全て解除</button>
+                </div>
+                <div id="folderList" class="mb-3" style="max-height: 300px; overflow-y: auto;">
+                    <!-- フォルダリストが動的に追加される -->
+                </div>
+                <div id="selectionStats" class="alert alert-info" style="display: none;">
+                    選択: <strong><span id="selectedFolders">0</span></strong> フォルダ
+                    / <strong><span id="selectedImages">0</span></strong> 画像
+                    / <strong><span id="selectedAnnotations">0</span></strong> アノテーション
+                </div>
+            </div>
+
+            <!-- 学習パラメータ -->
+            <div class="dashboard-card">
+                <h5><i class="fas fa-cog"></i> 学習設定</h5>
+                <div class="training-params">
+                    <div class="mb-3">
+                        <label class="form-label">学習名称</label>
+                        <input type="text" class="form-control" id="trainingName" placeholder="例: キタムラサキウニ_メス特化">
+                        <small class="text-muted">
+                            未入力の場合は日時（例: 2024-12-19_15-30）が使用されます
+                        </small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">メモ</label>
+                        <textarea class="form-control" id="trainingMemo" rows="3" readonly
+                                  placeholder="学習条件が自動入力されます"></textarea>
+                        <small class="text-muted">
+                            使用フォルダと設定が自動的に記録されます
+                        </small>
+                    </div>
+                    <hr>
+                    <div class="mb-3">
+                        <label class="form-label">エポック数</label>
+                        <input type="number" class="form-control" id="epochs" value="100" min="1" max="1000">
+                        <small class="text-muted">
+                            全画像を繰り返し学習する回数（推奨：100-150）
+                        </small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">バッチサイズ</label>
+                        <select class="form-control" id="batchSize">
+                            <option value="8">8（メモリ節約）</option>
+                            <option value="16" selected>16（推奨）</option>
+                            <option value="32">32（高速・要メモリ）</option>
+                        </select>
+                        <small class="text-muted">
+                            同時に処理する画像枚数。大きいほど高速だがメモリを消費
+                        </small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">学習率</label>
+                        <input type="number" class="form-control" id="learningRate" value="0.01" min="0.0001" max="0.1" step="0.0001">
+                        <small class="text-muted">
+                            1回の更新でどれだけ調整するか（推奨：0.01）<br>
+                            高い→学習が速いが不安定 / 低い→安定だが遅い
+                        </small>
+                    </div>
+                    <button class="btn btn-primary w-100" onclick="startTraining()">
+                        <i class="fas fa-play"></i> 学習開始
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右側：学習状況 -->
+        <div class="col-md-6">
+            <!-- 現在の学習状態 -->
+            <div class="dashboard-card">
+                <h5><i class="fas fa-chart-line"></i> 学習状況</h5>
+                <div id="trainingStatus">
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-info-circle fa-2x"></i>
+                        <p class="mt-2">学習を開始すると、ここに進捗が表示されます</p>
+                    </div>
+                </div>
+                <!-- 簡易ステータス確認ボタン -->
+                <div class="mt-3">
+                    <button class="btn btn-sm btn-info w-100" onclick="checkTrainingStatus()">
+                        <i class="fas fa-sync"></i> 学習状況を確認
+                    </button>
+                </div>
+            </div>
+
+            <!-- 学習履歴 -->
+            <div class="dashboard-card">
+                <h5><i class="fas fa-history"></i> 最近の学習</h5>
+                <div id="trainingHistory">
+                    <!-- 学習履歴が動的に追加される -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 学習進捗モーダル -->
+<div class="modal fade" id="trainingModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">学習実行中</h5>
+            </div>
+            <div class="modal-body">
+                <div class="progress mb-3">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                         id="trainingProgress" style="width: 0%"></div>
+                </div>
+                <div id="trainingMetrics" class="mb-2"></div>
+                <div id="trainingLog" style="height: 300px; overflow-y: auto; background: #f8f9fa; padding: 10px;">
+                    <!-- ログが表示される -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-danger" onclick="stopTraining()">学習停止</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// グローバル変数
+let folderData = {};
+let selectedFolderSet = new Set();
+
+// ページ読み込み時
+document.addEventListener('DOMContentLoaded', async function() {
+    await loadFolderList();
+    await loadTrainingHistory();
+    await loadDashboardStats();
+
+    // 学習状態をチェックしてボタンを制御
+    await checkTrainingStatusAndUpdateUI();
+
+    // 学習パラメータ変更時にメモを更新
+    document.getElementById('epochs').addEventListener('change', updateTrainingMemo);
+    document.getElementById('batchSize').addEventListener('change', updateTrainingMemo);
+    document.getElementById('learningRate').addEventListener('change', updateTrainingMemo);
 });
 
-// システム状態読み込み
-async function loadSystemStatus() {
+// 学習状態をチェックしてUIを更新
+async function checkTrainingStatusAndUpdateUI() {
     try {
-        const response = await fetch('/api/system-status');
-        const data = await response.json();
-        
-        // 画像数更新
-        document.getElementById('totalImages').textContent = data.dataset.total_count;
-        
-        // アノテーション数（簡易計算）
-        // TODO: 実際のアノテーション数を取得するAPIが必要
-        document.getElementById('annotatedImages').textContent = '-';
-        
-        // モデル状態
-        if (data.model.yolo.exists) {
-            document.getElementById('modelStatus').textContent = '学習済み';
-            document.getElementById('modelStatus').style.color = '#28a745';
-        } else {
-            document.getElementById('modelStatus').textContent = '未学習';
-            document.getElementById('modelStatus').style.color = '#dc3545';
+        const response = await fetch('/yolo/training/status');
+        const status = await response.json();
+
+        const startButton = document.querySelector('button[onclick="startTraining()"]');
+        let statusMessageDiv = document.getElementById('trainingStatusMessage');
+
+        if (!statusMessageDiv && startButton) {
+            // ステータスメッセージ表示用のdivを作成
+            const div = document.createElement('div');
+            div.id = 'trainingStatusMessage';
+            div.className = 'mb-3';
+            const buttonContainer = startButton.parentElement;
+            buttonContainer.insertBefore(div, startButton);
+            statusMessageDiv = div;
         }
-        
-        // 準備状態
-        const canTrain = data.dataset.total_count >= 10;
-        if (canTrain) {
-            document.getElementById('readyStatus').textContent = '準備OK';
-            document.getElementById('readyStatus').style.color = '#28a745';
-        } else {
-            document.getElementById('readyStatus').textContent = 'データ不足';
-            document.getElementById('readyStatus').style.color = '#dc3545';
+
+        if (status.status === 'running' && startButton) {
+            // 学習実行中はボタンを無効化
+            startButton.disabled = true;
+            startButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 学習実行中...';
+            startButton.className = 'btn btn-secondary';
+
+            // ステータスメッセージ表示
+            if (statusMessageDiv) {
+                statusMessageDiv.innerHTML = `
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        現在学習が実行中です（エポック ${status.current_epoch}/${status.total_epochs}）
+                        <br>別の学習を開始するには、現在の学習が完了するまでお待ちください。
+                    </div>
+                `;
+            }
+        } else if (startButton) {
+            // 学習が実行中でない場合はボタンを有効化
+            startButton.disabled = false;
+            startButton.innerHTML = '<i class="fas fa-brain"></i> 学習開始';
+            startButton.className = 'btn btn-success';
+            if (statusMessageDiv) {
+                statusMessageDiv.innerHTML = '';
+            }
         }
-        
     } catch (error) {
-        console.error('状態取得エラー:', error);
+        console.error('学習状態チェックエラー:', error);
+    }
+}
+
+// フォルダリスト読み込み
+async function loadFolderList() {
+    try {
+        const response = await fetch('/file-manager/api/folders');
+        const data = await response.json();
+
+        const folderList = document.getElementById('folderList');
+        folderList.innerHTML = '';
+
+        let totalFolders = 0;
+        let totalImages = 0;
+        let totalAnnotations = 0;
+
+        // フォルダを再帰的に処理
+        function processFolders(node, level = 0) {
+            if (node.name === 'datasets' && node.children) {
+                node.children.forEach(child => processFolders(child, level));
+            } else if (node.path) {
+                const folderId = node.path;
+                folderData[folderId] = {
+                    name: node.name,
+                    images: node.image_count || 0,
+                    annotations: node.annotation_count || 0
+                };
+
+                totalFolders++;
+                totalImages += node.image_count || 0;
+                totalAnnotations += node.annotation_count || 0;
+
+                // フォルダチェックボックス作成
+                const item = document.createElement('div');
+                item.className = 'folder-checkbox';
+                item.innerHTML = `
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox"
+                               id="folder_${totalFolders}" value="${folderId}"
+                               onchange="toggleFolder('${folderId}')">
+                        <label class="form-check-label" for="folder_${totalFolders}">
+                            <strong>${node.name}</strong>
+                            <small class="text-muted ms-2">
+                                (${node.image_count || 0}枚 / ${node.annotation_count || 0}アノテーション)
+                            </small>
+                        </label>
+                    </div>
+                `;
+                folderList.appendChild(item);
+
+                if (node.children) {
+                    node.children.forEach(child => processFolders(child, level + 1));
+                }
+            }
+        }
+
+        processFolders(data);
+
+        // サマリー更新
+        document.getElementById('totalFolders').textContent = totalFolders;
+        document.getElementById('totalImages').textContent = totalImages;
+        document.getElementById('totalAnnotations').textContent = totalAnnotations;
+
+    } catch (error) {
+        console.error('フォルダリスト読み込みエラー:', error);
+    }
+}
+
+// フォルダ選択トグル
+function toggleFolder(folderId) {
+    const checkbox = document.querySelector(`input[value="${folderId}"]`);
+    const folderDiv = checkbox.closest('.folder-checkbox');
+
+    if (checkbox.checked) {
+        selectedFolderSet.add(folderId);
+        folderDiv.classList.add('selected');
+    } else {
+        selectedFolderSet.delete(folderId);
+        folderDiv.classList.remove('selected');
+    }
+
+    updateSelectionStats();
+}
+
+// 選択統計更新
+function updateSelectionStats() {
+    let totalImages = 0;
+    let totalAnnotations = 0;
+
+    selectedFolderSet.forEach(folderId => {
+        if (folderData[folderId]) {
+            totalImages += folderData[folderId].images;
+            totalAnnotations += folderData[folderId].annotations;
+        }
+    });
+
+    const statsDiv = document.getElementById('selectionStats');
+    if (selectedFolderSet.size > 0) {
+        statsDiv.style.display = 'block';
+        document.getElementById('selectedFolders').textContent = selectedFolderSet.size;
+        document.getElementById('selectedImages').textContent = totalImages;
+        document.getElementById('selectedAnnotations').textContent = totalAnnotations;
+
+        // メモ欄を自動更新
+        updateTrainingMemo();
+    } else {
+        statsDiv.style.display = 'none';
+        document.getElementById('trainingMemo').value = '';
+    }
+}
+
+// 学習メモを自動生成
+function updateTrainingMemo() {
+    const epochs = document.getElementById('epochs').value;
+    const batchSize = document.getElementById('batchSize').value;
+    const learningRate = document.getElementById('learningRate').value;
+
+    // 選択されたフォルダ名を取得
+    const selectedFolderNames = [];
+    selectedFolderSet.forEach(folderId => {
+        if (folderData[folderId]) {
+            selectedFolderNames.push(folderData[folderId].name);
+        }
+    });
+
+    // メモを生成
+    const memo = `【学習条件】
+エポック数: ${epochs}
+バッチサイズ: ${batchSize}
+学習率: ${learningRate}
+
+【使用フォルダ】
+${selectedFolderNames.join('\n')}
+
+【データ数】
+フォルダ: ${selectedFolderSet.size}個
+画像: ${document.getElementById('selectedImages').textContent}枚
+アノテーション: ${document.getElementById('selectedAnnotations').textContent}枚`;
+
+    document.getElementById('trainingMemo').value = memo;
+}
+
+// 全て選択
+function selectAllFolders() {
+    document.querySelectorAll('.folder-checkbox input[type="checkbox"]').forEach(checkbox => {
+        checkbox.checked = true;
+        selectedFolderSet.add(checkbox.value);
+        checkbox.closest('.folder-checkbox').classList.add('selected');
+    });
+    updateSelectionStats();
+}
+
+// 全て解除
+function deselectAllFolders() {
+    document.querySelectorAll('.folder-checkbox input[type="checkbox"]').forEach(checkbox => {
+        checkbox.checked = false;
+        checkbox.closest('.folder-checkbox').classList.remove('selected');
+    });
+    selectedFolderSet.clear();
+    updateSelectionStats();
+}
+
+// 学習履歴読み込み
+async function loadTrainingHistory() {
+    try {
+        const response = await fetch('/learning/learning-history');
+        const data = await response.json();
+
+        const historyDiv = document.getElementById('trainingHistory');
+
+        if (data.history && data.history.length > 0) {
+            historyDiv.innerHTML = data.history.slice(0, 5).map(item => `
+                <div class="history-item">
+                    <div class="d-flex justify-content-between">
+                        <strong>${item.name}</strong>
+                        <span class="badge bg-success">${(item.accuracy * 100).toFixed(1)}%</span>
+                    </div>
+                    <small class="text-muted">
+                        ${new Date(item.created_at).toLocaleString('ja-JP')}
+                    </small>
+                    <div class="mt-2">
+                        <a href="/learning/results/${item.id}" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-chart-line"></i> 詳細を見る
+                        </a>
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            historyDiv.innerHTML = '<p class="text-muted">学習履歴がありません</p>';
+        }
+    } catch (error) {
+        console.error('学習履歴読み込みエラー:', error);
+    }
+}
+
+// ダッシュボード統計読み込み
+async function loadDashboardStats() {
+    try {
+        const response = await fetch('/learning/learning-history');
+        const data = await response.json();
+
+        if (data.history && data.history.length > 0) {
+            const bestAccuracy = Math.max(...data.history.map(h => h.accuracy)) * 100;
+            document.getElementById('bestAccuracy').textContent = bestAccuracy.toFixed(1) + '%';
+        }
+    } catch (error) {
+        console.error('統計読み込みエラー:', error);
+    }
+}
+
+// 学習開始
+async function startTraining() {
+    if (selectedFolderSet.size === 0) {
+        alert('学習に使用するフォルダを選択してください');
+        return;
+    }
+
+    // 学習名称を設定（空欄の場合はタイムスタンプ）
+    let trainingName = document.getElementById('trainingName').value.trim();
+    if (!trainingName) {
+        const now = new Date();
+        trainingName = now.getFullYear() + '-' +
+                      String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                      String(now.getDate()).padStart(2, '0') + '_' +
+                      String(now.getHours()).padStart(2, '0') + '-' +
+                      String(now.getMinutes()).padStart(2, '0');
+    }
+
+    const epochs = document.getElementById('epochs').value;
+    const batchSize = document.getElementById('batchSize').value;
+    const learningRate = document.getElementById('learningRate').value;
+    const trainingMemo = document.getElementById('trainingMemo').value;
+
+    // 学習パラメータ
+    const params = {
+        name: trainingName,
+        memo: trainingMemo,
+        folders: Array.from(selectedFolderSet),
+        folder_names: Array.from(selectedFolderSet).map(id => folderData[id]?.name || id),
+        epochs: parseInt(epochs),
+        batch_size: parseInt(batchSize),
+        learning_rate: parseFloat(learningRate),
+        model: 'yolov5s'
+    };
+
+    // モーダル表示
+    const modal = new bootstrap.Modal(document.getElementById('trainingModal'));
+    modal.show();
+
+    try {
+        // 学習開始APIを呼ぶ
+        const response = await fetch('/yolo/training/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(params)
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            // 進捗監視開始
+            monitorTrainingProgress();
+        } else {
+            alert('学習開始に失敗しました: ' + (result.message || '不明なエラー'));
+            modal.hide();
+        }
+    } catch (error) {
+        console.error('学習開始エラー:', error);
+        alert('学習開始中にエラーが発生しました');
+        modal.hide();
+    }
+}
+
+// 学習進捗監視
+function monitorTrainingProgress() {
+    let logLines = [];
+    const interval = setInterval(async () => {
+        try {
+            const response = await fetch('/yolo/training/status');
+            const status = await response.json();
+
+            // 進捗率の計算（エポックベース）
+            if (status.current_epoch !== undefined && status.total_epochs) {
+                const progress = Math.round(status.progress * 100) || 0;
+                const progressBar = document.getElementById('trainingProgress');
+                progressBar.style.width = progress + '%';
+                progressBar.textContent = `${progress}% (エポック ${status.current_epoch}/${status.total_epochs})`;
+
+                // メトリクス情報の更新
+                if (status.metrics) {
+                    const metricsDiv = document.getElementById('trainingMetrics');
+                    if (metricsDiv) {
+                        const latestMetrics = {};
+                        for (const [key, values] of Object.entries(status.metrics)) {
+                            if (Array.isArray(values) && values.length > 0) {
+                                latestMetrics[key] = values[values.length - 1];
+                            }
+                        }
+
+                        if (Object.keys(latestMetrics).length > 0) {
+                            metricsDiv.innerHTML = `
+                                <small class="text-muted">
+                                    ${latestMetrics.box_loss ? `Box Loss: ${latestMetrics.box_loss.toFixed(4)} ` : ''}
+                                    ${latestMetrics.mAP50 ? `| mAP50: ${latestMetrics.mAP50.toFixed(4)}` : ''}
+                                </small>
+                            `;
+                        }
+                    }
+                }
+            }
+
+            // 学習状態の確認
+            if (status.status === 'completed') {
+                clearInterval(interval);
+                alert('学習が完了しました！');
+                await loadTrainingHistory();
+            } else if (status.error) {
+                alert('学習でエラーが発生しました: ' + status.error);
+            }
+
+            const modal = bootstrap.Modal.getInstance(document.getElementById('trainingModal'));
+            if (modal) {
+                modal.hide();
+            }
+        } catch (error) {
+            console.error('進捗確認エラー:', error);
+            // エラーが続く場合は監視を停止
+            clearInterval(interval);
+            const modal = bootstrap.Modal.getInstance(document.getElementById('trainingModal'));
+            if (modal) {
+                modal.hide();
+            }
+        }
+    }, 3000); // 3秒ごとに更新
+}
+
+// 学習停止
+async function stopTraining() {
+    if (confirm('学習を停止しますか？')) {
+        // 停止処理を実装
+        const modal = bootstrap.Modal.getInstance(document.getElementById('trainingModal'));
+        modal.hide();
+    }
+}
+
+// 学習状況を簡易確認
+async function checkTrainingStatus() {
+    try {
+        const response = await fetch('/yolo/training/status');
+        const status = await response.json();
+
+        // ボタン状態も更新
+        await checkTrainingStatusAndUpdateUI();
+
+        const statusDiv = document.getElementById('trainingStatus');
+
+        if (status.status === 'running') {
+            // 学習実行中の場合
+            const currentEpoch = status.current_epoch || 0;
+            const totalEpochs = status.total_epochs || 100;
+            const progress = Math.round(status.progress * 100) || 0;
+            const elapsedTime = status.elapsed_time || '00:00:00';
+
+            // メトリクスの最新値を取得
+            const latestMetrics = {};
+            if (status.metrics) {
+                for (const [key, values] of Object.entries(status.metrics)) {
+                    if (Array.isArray(values) && values.length > 0) {
+                        latestMetrics[key] = values[values.length - 1];
+                    }
+                }
+            }
+
+            statusDiv.innerHTML = `
+                <div class="alert alert-info">
+                    <h6><i class="fas fa-spinner fa-pulse"></i> 学習実行中</h6>
+                    <div class="progress mb-2">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                             style="width: ${progress}%">${progress}%</div>
+                    </div>
+                    <small>エポック: ${currentEpoch}/${totalEpochs}</small><br>
+                    <small>経過時間: ${elapsedTime}</small><br>
+                    ${latestMetrics.box_loss ? `
+                        <small>損失 - Box: ${latestMetrics.box_loss?.toFixed(4) || 'N/A'},
+                               Obj: ${latestMetrics.obj_loss?.toFixed(4) || 'N/A'},
+                               Cls: ${latestMetrics.cls_loss?.toFixed(4) || 'N/A'}</small><br>
+                    ` : ''}
+                    ${latestMetrics.mAP50 ? `
+                        <small>精度 - mAP50: ${latestMetrics.mAP50?.toFixed(4) || 'N/A'},
+                               Precision: ${latestMetrics.precision?.toFixed(4) || 'N/A'},
+                               Recall: ${latestMetrics.recall?.toFixed(4) || 'N/A'}</small><br>
+                    ` : ''}
+                    <hr>
+                    <p class="mb-0">
+                        <small>
+                            詳細はターミナルで確認してください。<br>
+                            推定残り時間: ${Math.round((totalEpochs - currentEpoch) * 2.5)}分
+                        </small>
+                    </p>
+                </div>
+            `;
+        } else if (status.status === 'completed') {
+            // 学習完了の場合
+            statusDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <h6><i class="fas fa-check-circle"></i> 学習完了</h6>
+                    <p>学習が正常に完了しました。</p>
+                    ${status.best_model_path ? `<small>モデル保存先: ${status.best_model_path}</small>` : ''}
+                </div>
+            `;
+        } else {
+            // 学習未開始または停止中
+            statusDiv.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="fas fa-info-circle"></i> 現在学習は実行されていません
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('ステータス確認エラー:', error);
+        document.getElementById('trainingStatus').innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i> ステータス確認エラー
+            </div>
+        `;
     }
 }
 </script>

@@ -49,12 +49,12 @@ class RealtimeDetector:
         self.last_process_time = 0
         self.detection_count = 0
 
-        # クラス名（ウニ判定用 - 後で学習データに合わせて変更）
+        # クラス名（学習済みモデルに対応）
         self.class_names = {
-            0: 'sea_urchin',  # ウニ全般
-            1: 'male',        # オス
-            2: 'female',      # メス
-            3: 'unknown'      # 判定不能
+            0: 'male',         # オス
+            1: 'female',       # メス
+            2: 'madreporite',  # 多孔板
+            3: 'anus'          # 肛門
         }
 
     def initialize(self) -> bool:
@@ -84,6 +84,15 @@ class RealtimeDetector:
             # モデルを評価モードに設定
             self.model.eval()
 
+            # 信頼度閾値を設定
+            self.model.conf = 0.25  # 信頼度閾値を25%に設定
+            self.model.iou = 0.45   # NMS IoU閾値
+
+            # モデル情報をログ出力
+            if hasattr(self.model, 'names'):
+                logger.info(f"モデルのクラス名: {self.model.names}")
+            logger.info(f"使用モデル: {self.model_path}")
+
             self.is_initialized = True
             logger.info("YOLOモデル初期化成功")
             return True
@@ -92,7 +101,7 @@ class RealtimeDetector:
             logger.error(f"モデル初期化エラー: {e}")
             return False
 
-    def detect(self, frame: np.ndarray, confidence_threshold: float = 0.5) -> List[DetectionResult]:
+    def detect(self, frame: np.ndarray, confidence_threshold: float = 0.25) -> List[DetectionResult]:
         """
         フレームから物体を検出
         Args:
@@ -109,8 +118,17 @@ class RealtimeDetector:
             try:
                 start_time = time.time()
 
-                # YOLOv5で推論
-                results = self.model(frame)
+                # 画像サイズを確認（YOLOは通常640x640を期待）
+                logger.debug(f"入力画像サイズ: {frame.shape}")
+
+                # YOLOv5で推論（sizeパラメータを明示的に指定）
+                results = self.model(frame, size=640)
+
+                # デバッグ: 結果を確認
+                if hasattr(results, 'pred'):
+                    logger.debug(f"検出結果 pred 形式: {len(results.pred)} items")
+                    if len(results.pred) > 0 and results.pred[0] is not None:
+                        logger.debug(f"検出数: {len(results.pred[0])}")
 
                 # 結果を解析
                 detections = []
@@ -259,9 +277,21 @@ class RealtimeDetector:
 # シングルトンインスタンス
 _detector_instance: Optional[RealtimeDetector] = None
 
-def get_detector_instance(model_path: str = 'yolov5/yolov5s.pt') -> RealtimeDetector:
+def get_detector_instance(model_path: str = None) -> RealtimeDetector:
     """検出器インスタンスを取得（シングルトン）"""
     global _detector_instance
+
+    # デフォルトは学習済みモデルを使用
+    if model_path is None:
+        # 最新の学習済みモデルを探す
+        trained_model = 'yolov5/runs/train/2025-09-19_07-10/weights/best.pt'
+        if os.path.exists(trained_model):
+            model_path = trained_model
+            logger.info(f"学習済みモデルを使用: {model_path}")
+        else:
+            model_path = 'yolov5/yolov5s.pt'
+            logger.warning(f"学習済みモデルが見つからないため、デフォルトモデルを使用: {model_path}")
+
     if _detector_instance is None:
         _detector_instance = RealtimeDetector(model_path=model_path)
         _detector_instance.initialize()

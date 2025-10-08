@@ -4,9 +4,9 @@ import json
 from datetime import datetime
 from config import METADATA_FILE
 
-annotation_editor_bp = Blueprint('annotation_editor', __name__, url_prefix='/annotation/editor')
+annotation_editor_bp = Blueprint('annotation_editor', __name__, url_prefix='/annotation')
 
-@annotation_editor_bp.route('/')
+@annotation_editor_bp.route('/editor/')
 def editor_page():
     """アノテーションエディタページ"""
     image_id = request.args.get('image', '')  # imageパラメータから取得
@@ -15,7 +15,7 @@ def editor_page():
                          initial_image_id=image_id,
                          folder=folder)
 
-@annotation_editor_bp.route('/load/<image_id>')
+@annotation_editor_bp.route('/editor/load/<image_id>')
 def load_annotation(image_id):
     """特定の画像とアノテーションを読み込み"""
     try:
@@ -59,7 +59,7 @@ def load_annotation(image_id):
         current_app.logger.error(f'アノテーション読み込みエラー: {str(e)}')
         return jsonify({'error': str(e)}), 500
 
-@annotation_editor_bp.route('/save/<image_id>', methods=['POST'])
+@annotation_editor_bp.route('/editor/save/<image_id>', methods=['POST'])
 def save_annotation(image_id):
     """アノテーションを保存"""
     data = request.json
@@ -120,7 +120,68 @@ def save_annotation(image_id):
         current_app.logger.error(f'アノテーション保存エラー: {str(e)}')
         return jsonify({'error': str(e)}), 500
 
-@annotation_editor_bp.route('/list-for-edit')
+@annotation_editor_bp.route('/images/delete', methods=['POST'])
+def delete_images():
+    """選択された画像を削除"""
+    data = request.json
+    folder = data.get('folder', 'default')
+    image_ids = data.get('image_ids', [])
+
+    current_app.logger.info(f'削除リクエスト受信: folder={folder}, image_ids={image_ids}')
+
+    if not image_ids:
+        return jsonify({'error': 'パラメータが不足しています'}), 400
+
+    # フォルダごとのパスを構築
+    base_dir = os.path.join('static', 'training_data', 'datasets', folder)
+    images_dir = os.path.join(base_dir, 'images')
+    labels_dir = os.path.join(base_dir, 'labels')
+
+    current_app.logger.info(f'削除対象ディレクトリ: images_dir={images_dir}, labels_dir={labels_dir}')
+
+    if not os.path.exists(base_dir):
+        current_app.logger.error(f'フォルダが見つかりません: {base_dir}')
+        return jsonify({'error': 'フォルダが見つかりません'}), 404
+
+    deleted_count = 0
+    errors = []
+
+    for image_id in image_ids:
+        try:
+            # 画像ファイルを削除
+            image_path = os.path.join(images_dir, image_id)
+            current_app.logger.info(f'削除対象画像: {image_path}, 存在: {os.path.exists(image_path)}')
+
+            if os.path.exists(image_path):
+                os.remove(image_path)
+                current_app.logger.info(f'画像削除成功: {image_path}')
+
+                # 対応するラベルファイルも削除
+                label_name = os.path.splitext(image_id)[0] + '.txt'
+                label_path = os.path.join(labels_dir, label_name)
+                if os.path.exists(label_path):
+                    os.remove(label_path)
+                    current_app.logger.info(f'ラベル削除成功: {label_path}')
+
+                deleted_count += 1
+            else:
+                error_msg = f'{image_id}: ファイルが見つかりません'
+                errors.append(error_msg)
+                current_app.logger.warning(error_msg)
+
+        except Exception as e:
+            errors.append(f'{image_id}: {str(e)}')
+            current_app.logger.error(f'画像削除エラー: {image_id} - {str(e)}')
+
+    current_app.logger.info(f'削除結果: deleted_count={deleted_count}, errors={errors}')
+
+    return jsonify({
+        'success': deleted_count > 0,
+        'deleted_count': deleted_count,
+        'errors': errors
+    })
+
+@annotation_editor_bp.route('/editor/list-for-edit')
 def list_for_edit():
     """エディタ用の画像リストを取得（選択された画像のみ）"""
     # URLパラメータから選択された画像IDリストとフォルダを取得

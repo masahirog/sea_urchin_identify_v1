@@ -66,7 +66,8 @@ def get_folder_structure():
             'type': 'folder',
             'children': [],
             'image_count': 0,
-            'label_count': 0
+            'label_count': 0,
+            'annotation_count': 0  # アノテーション数を追加
         }
 
         try:
@@ -79,8 +80,10 @@ def get_folder_structure():
                                           if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
 
             if os.path.exists(labels_dir):
-                node['label_count'] = len([f for f in os.listdir(labels_dir)
-                                          if f.endswith('.txt')])
+                label_count = len([f for f in os.listdir(labels_dir)
+                                  if f.endswith('.txt')])
+                node['label_count'] = label_count
+                node['annotation_count'] = label_count  # annotation_countも同じ値を設定
 
             # サブフォルダを探索（images/labels以外）
             for item in os.listdir(path):
@@ -93,11 +96,13 @@ def get_folder_structure():
                     if name == 'datasets':
                         node['image_count'] += child_node['image_count']
                         node['label_count'] += child_node['label_count']
+                        node['annotation_count'] += child_node.get('annotation_count', 0)
                         # 子フォルダの子フォルダも含める（再帰的集計）
                         if child_node['children']:
                             for grandchild in child_node['children']:
                                 node['image_count'] += grandchild.get('image_count', 0)
                                 node['label_count'] += grandchild.get('label_count', 0)
+                                node['annotation_count'] += grandchild.get('annotation_count', 0)
 
         except PermissionError:
             pass

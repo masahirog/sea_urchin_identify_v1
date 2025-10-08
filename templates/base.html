@@ -36,59 +36,37 @@
             <!-- メイン機能ナビゲーション -->
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
-                    <!-- 雌雄判定 (一時的に非表示) -->
-                    <!--
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}"
-                           href="{{ url_for('main.index') }}" title="単一画像の雌雄判定">
-                            <i class="fas fa-search me-1"></i>
-                            <span class="d-none d-md-inline">判定</span>
-                        </a>
-                    </li>
-                    -->
                     <!-- カメラ -->
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle {% if request.endpoint == 'camera.camera_page' %}active{% endif %}"
-                           href="#" id="cameraDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false"
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'camera.camera_page' %}active{% endif %}"
+                           href="{{ url_for('camera.camera_page') }}"
                            title="リアルタイムカメラ">
                             <i class="fas fa-camera me-1"></i>
-                            <span class="d-none d-md-inline">カメラ</span>
-                        </a>
-                        <ul class="dropdown-menu" aria-labelledby="cameraDropdown">
-                            <li><a class="dropdown-item" href="{{ url_for('camera.camera_page', camera_index=0) }}">
-                                <i class="fas fa-desktop me-2"></i>Camera 0 (PC内蔵)
-                            </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('camera.camera_page', camera_index=1) }}">
-                                <i class="fas fa-microscope me-2"></i>Camera 1 (マイクロスコープ)
-                            </a></li>
-                        </ul>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'file_manager' in request.endpoint %}active{% endif %}" href="{{ url_for('file_manager.index') }}" title="画像管理">
-                            <i class="fas fa-images me-1"></i> 学習データ
+                            <span>カメラ</span>
                         </a>
                     </li>
+                    <!-- データ管理 -->
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'annotation_editor.editor_page' %}active{% endif %}" 
+                        <a class="nav-link {% if 'file_manager' in request.endpoint %}active{% endif %}"
+                           href="{{ url_for('file_manager.index') }}" title="画像管理">
+                            <i class="fas fa-folder me-1"></i>
+                            <span>データ管理</span>
+                        </a>
+                    </li>
+                    <!-- アノテーション -->
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'annotation_editor.editor_page' %}active{% endif %}"
                            href="{{ url_for('annotation_editor.editor_page') }}" title="アノテーション">
-                           <i class="fas fa-edit me-1"></i> アノテーション
+                           <i class="fas fa-edit me-1"></i>
+                           <span>アノテーション</span>
                         </a>
                     </li>
-                    <!-- YOLO学習実行（新規追加） -->
+                    <!-- 学習（統合） -->
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'training.training_page' %}active{% endif %}" 
+                        <a class="nav-link {% if request.endpoint == 'training.training_page' %}active{% endif %}"
                            href="{{ url_for('training.training_page') }}">
-                            <i class="fas fa-rocket me-1"></i> 
-                            <span class="d-none d-md-inline">機械</span>学習
-                        </a>
-                    </li>
-                    
-                    <!-- 学習ダッシュボード（復活） -->
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'learning.learning_dashboard' %}active{% endif %}" 
-                           href="{{ url_for('learning.learning_dashboard') }}">
-                            <i class="fas fa-tachometer-alt me-1"></i> 
-                            <span class="d-none d-md-inline">学習</span>状況
+                            <i class="fas fa-brain me-1"></i>
+                            <span>学習</span>
                         </a>
                     </li>
                 </ul>

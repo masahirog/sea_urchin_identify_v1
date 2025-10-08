@@ -6,6 +6,7 @@ import os
 import json
 import csv
 import shutil
+import yaml
 from werkzeug.utils import secure_filename
 import cv2
 import numpy as np
@@ -25,16 +26,132 @@ yolo_bp = Blueprint('yolo', __name__, url_prefix='/yolo')
 # YOLOトレーナーのインスタンス
 trainer = YoloTrainer()
 
+def prepare_dataset_from_folders(folders):
+    """選択されたフォルダからYOLOデータセットを準備"""
+    try:
+        # YOLOデータセットディレクトリ
+        dataset_dir = os.path.join('data', 'yolo_dataset')
+        images_train_dir = os.path.join(dataset_dir, 'images', 'train')
+        images_val_dir = os.path.join(dataset_dir, 'images', 'val')
+        labels_train_dir = os.path.join(dataset_dir, 'labels', 'train')
+        labels_val_dir = os.path.join(dataset_dir, 'labels', 'val')
+
+        # ディレクトリをクリーンアップして作成
+        for dir_path in [images_train_dir, images_val_dir, labels_train_dir, labels_val_dir]:
+            if os.path.exists(dir_path):
+                shutil.rmtree(dir_path)
+            os.makedirs(dir_path, exist_ok=True)
+
+        # 各フォルダからデータをコピー
+        total_images = 0
+        total_labels = 0
+
+        for folder_path in folders:
+            # フォルダパス構築
+            base_folder = os.path.join('static', 'training_data', 'datasets', folder_path)
+            images_dir = os.path.join(base_folder, 'images')
+            labels_dir = os.path.join(base_folder, 'labels')
+
+            if not os.path.exists(images_dir):
+                continue
+
+            # 画像とラベルをコピー
+            image_files = [f for f in os.listdir(images_dir)
+                          if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+
+            # 8:2で訓練と検証に分割
+            split_index = int(len(image_files) * 0.8)
+            train_files = image_files[:split_index]
+            val_files = image_files[split_index:]
+
+            # 訓練データをコピー
+            for img_file in train_files:
+                src_img = os.path.join(images_dir, img_file)
+                dst_img = os.path.join(images_train_dir, img_file)
+                shutil.copy2(src_img, dst_img)
+                total_images += 1
+
+                # 対応するラベルファイル
+                label_file = os.path.splitext(img_file)[0] + '.txt'
+                src_label = os.path.join(labels_dir, label_file)
+                if os.path.exists(src_label):
+                    dst_label = os.path.join(labels_train_dir, label_file)
+                    shutil.copy2(src_label, dst_label)
+                    total_labels += 1
+
+            # 検証データをコピー
+            for img_file in val_files:
+                src_img = os.path.join(images_dir, img_file)
+                dst_img = os.path.join(images_val_dir, img_file)
+                shutil.copy2(src_img, dst_img)
+                total_images += 1
+
+                # 対応するラベルファイル
+                label_file = os.path.splitext(img_file)[0] + '.txt'
+                src_label = os.path.join(labels_dir, label_file)
+                if os.path.exists(src_label):
+                    dst_label = os.path.join(labels_val_dir, label_file)
+                    shutil.copy2(src_label, dst_label)
+                    total_labels += 1
+
+        # data.yamlファイルを生成
+        data_yaml_path = os.path.join(dataset_dir, 'data.yaml')
+        data_config = {
+            'path': os.path.abspath(dataset_dir),
+            'train': 'images/train',
+            'val': 'images/val',
+            'nc': 4,  # クラス数
+            'names': ['male', 'female', 'madreporite', 'anus']
+        }
+
+        with open(data_yaml_path, 'w', encoding='utf-8') as f:
+            yaml.dump(data_config, f, default_flow_style=False, allow_unicode=True)
+
+        current_app.logger.info(f'データセット準備完了: 画像{total_images}枚, ラベル{total_labels}枚')
+
+        return {
+            'success': True,
+            'total_images': total_images,
+            'total_labels': total_labels,
+            'message': f'データセット準備完了: 画像{total_images}枚'
+        }
+
+    except Exception as e:
+        current_app.logger.error(f'データセット準備エラー: {str(e)}')
+        return {
+            'success': False,
+            'message': f'データセット準備エラー: {str(e)}'
+        }
+
 
 @yolo_bp.route('/training/start', methods=['POST'])
 def start_training():
     """YOLOのトレーニングを開始"""
     data = request.json or {}
-    
+
+    # フォルダ選択がある場合は、そのデータをYOLO形式に準備
+    folders = data.get('folders', [])
+    if folders:
+        # 選択フォルダのデータをYOLOデータセットに準備
+        prepare_result = prepare_dataset_from_folders(folders)
+        if not prepare_result['success']:
+            return jsonify({
+                'status': 'error',
+                'message': prepare_result.get('message', 'データセット準備に失敗しました')
+            }), 400
+    else:
+        # フォルダ指定がない場合は既存の全データを使用
+        prepare_result = DatasetManager.prepare_yolo_dataset()
+        if prepare_result['status'] != 'success':
+            return jsonify({
+                'status': 'error',
+                'message': 'データセット準備に失敗しました'
+            }), 400
+
     # トレーニングパラメータの取得
     weights = data.get('weights', 'yolov5s.pt')
-    batch_size = int(data.get('batch_size', 4))
-    epochs = int(data.get('epochs', 50))
+    batch_size = int(data.get('batch_size', 16))
+    epochs = int(data.get('epochs', 100))
     img_size = int(data.get('img_size', 640))
     device = data.get('device', '')
     workers = int(data.get('workers', 4))
@@ -83,7 +200,24 @@ def stop_training():
 @yolo_bp.route('/training/status', methods=['GET'])
 def training_status():
     """YOLOのトレーニング状況を取得"""
+    # トレーナーをリフレッシュして最新状態を取得
     status = trainer.get_training_status()
+
+    # 追加の情報を含める
+    import glob
+
+    # 最新のログファイルを確認
+    log_files = glob.glob('logs/yolo_training*.log')
+    if log_files:
+        latest_log = max(log_files, key=os.path.getmtime)
+        # 最後の10行を取得
+        try:
+            with open(latest_log, 'r', encoding='utf-8', errors='ignore') as f:
+                lines = f.readlines()
+                status['latest_log_lines'] = lines[-10:]
+        except:
+            pass
+
     return jsonify(status)
 
 @yolo_bp.route('/detect', methods=['POST'])

@@ -86,10 +86,26 @@ def video_feed():
             return jsonify({'error': 'カメラの初期化に失敗しました'}), 500
         camera.start_capture()
 
-    # 判定モードの確認
+    # 判定モードの確認とパラメータの取得
     detection_mode = request.args.get('detection', 'false').lower() == 'true'
 
     if detection_mode:
+        # パラメータを取得して検出器に設定
+        detector = get_detector_instance()
+
+        # 信頼度閾値
+        confidence = float(request.args.get('confidence', 0.25))
+        detector.model.conf = confidence
+
+        # IoU閾値
+        iou = float(request.args.get('iou', 0.45))
+        detector.model.iou = iou
+
+        # 検出サイズ（将来の実装用）
+        size = int(request.args.get('size', 640))
+
+        logger.info(f"検出パラメータ更新: confidence={confidence}, iou={iou}, size={size}")
+
         # 判定付きストリーミング
         return Response(generate_frames_with_detection(),
                         mimetype='multipart/x-mixed-replace; boundary=frame')
@@ -173,12 +189,102 @@ def detection_stats():
     stats = detector.get_stats()
     return jsonify(stats)
 
+@camera_bp.route('/update_detection_params', methods=['POST'])
+def update_detection_params():
+    """判定パラメータを更新"""
+    try:
+        data = request.json
+        detector = get_detector_instance()
+
+        # パラメータを更新
+        if 'confidence' in data:
+            detector.model.conf = float(data['confidence'])
+
+        if 'iou' in data:
+            detector.model.iou = float(data['iou'])
+
+        logger.info(f"検出パラメータ更新: {data}")
+
+        return jsonify({
+            'success': True,
+            'message': 'パラメータを更新しました'
+        })
+    except Exception as e:
+        logger.error(f"パラメータ更新エラー: {e}")
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
 @camera_bp.route('/detection/reset', methods=['POST'])
 def reset_detection_stats():
     """判定統計をリセット"""
     detector = get_detector_instance()
     detector.reset_stats()
     return jsonify({'status': 'success', 'message': '統計をリセットしました'})
+
+@camera_bp.route('/detect', methods=['GET'])
+def detect_cameras():
+    """利用可能なカメラを検出"""
+    import time
+
+    # 現在のカメラインスタンスを一時停止
+    camera = get_camera_instance()
+    was_running = camera.is_running
+    if was_running:
+        camera.stop_capture()
+        time.sleep(0.5)  # リソースの解放を待つ
+
+    available_cameras = []
+
+    # 最大5つまでカメラを検出
+    for i in range(5):
+        logger.info(f"カメラ {i} を検出中...")
+        cap = cv2.VideoCapture(i)
+
+        if cap.isOpened():
+            # カメラ情報を取得
+            width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+            height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+            fps = cap.get(cv2.CAP_PROP_FPS)
+
+            # テストフレームを取得して確認
+            ret, frame = cap.read()
+            if ret:
+                camera_info = {
+                    'index': i,
+                    'name': f'カメラ {i}',
+                    'width': int(width),
+                    'height': int(height),
+                    'fps': int(fps) if fps > 0 else 30,
+                    'available': True
+                }
+
+                # Windows環境では逆になることが多い
+                # カメラ0がUSB、カメラ1が内蔵の場合がある
+                if i == 0:
+                    camera_info['name'] = 'カメラ 0 (外部/USB)'
+                elif i == 1:
+                    camera_info['name'] = 'カメラ 1 (内蔵)'
+
+                available_cameras.append(camera_info)
+                logger.info(f"カメラ {i} 検出: {width}x{height} @ {fps}fps")
+
+            cap.release()
+
+        # 少し待機してからリソースを解放
+        time.sleep(0.1)
+
+    # 元の状態に戻す
+    if was_running:
+        camera.initialize()
+        camera.start_capture()
+
+    return jsonify({
+        'status': 'success',
+        'cameras': available_cameras,
+        'current_camera': camera.current_camera_index
+    })
 
 @camera_bp.route('/switch', methods=['POST'])
 def switch_camera():

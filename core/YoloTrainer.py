@@ -7,6 +7,8 @@ import threading
 import time
 from datetime import datetime
 import logging
+import yaml
+import csv
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -117,7 +119,7 @@ class YoloTrainer:
         self.start_time = datetime.now()
         self.total_epochs = epochs
         self.current_epoch = 0
-        
+
         # ログファイルの設定
         log_dir = 'logs'
         os.makedirs(log_dir, exist_ok=True)
@@ -131,6 +133,10 @@ class YoloTrainer:
                 except:
                     pass
         self.log_file = os.path.join(log_dir, f'yolo_training_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
+
+        # 状態ファイルの設定
+        self.state_file = os.path.join(log_dir, f'training_state_{self.training_id}.json')
+        self._save_training_state()
         
         logger.info(f"トレーニングプロセス開始: {self.log_file}")
         
@@ -196,6 +202,8 @@ class YoloTrainer:
                                 self.current_epoch = int(current) + 1  # 0ベースなので+1
                                 self.total_epochs = int(total)
                                 logger.info(f"エポック進捗: {self.current_epoch}/{self.total_epochs}")
+                                # 状態を保存
+                                self._save_training_state()
                                 
                                 # メトリクスの更新
                                 if len(parts) >= 7:
@@ -226,6 +234,8 @@ class YoloTrainer:
                                 self.metrics['mAP50'].append(float(parts[5]))
                                 self.metrics['mAP50-95'].append(float(parts[6]))
                                 logger.info(f"評価メトリクス更新: P={parts[3]}, R={parts[4]}, mAP50={parts[5]}")
+                                # 状態を保存
+                                self._save_training_state()
                         except (ValueError, IndexError) as e:
                             logger.debug(f"メトリクス解析エラー: {e}")
                     
@@ -253,8 +263,23 @@ class YoloTrainer:
         finally:
             self.is_training = False
             self.training_process = None
+            # 最終状態を保存
+            self._save_training_state()
             logger.info("トレーニングプロセス終了処理完了")
     
+    def _save_training_state(self):
+        """トレーニング状態をJSONファイルに保存"""
+        try:
+            state = self.get_training_status()
+            state['training_id'] = self.training_id
+            state['config'] = self.training_config if hasattr(self, 'training_config') else {}
+
+            with open(self.state_file, 'w', encoding='utf-8') as f:
+                json.dump(state, f, ensure_ascii=False, indent=2)
+
+        except Exception as e:
+            logger.error(f"状態保存エラー: {e}")
+
     @staticmethod
     def get_latest_training():
         """最新のトレーニング状態を取得"""
@@ -262,45 +287,166 @@ class YoloTrainer:
         state_files = glob.glob('logs/training_state_*.json')
         if not state_files:
             return None
-            
+
         latest_file = max(state_files, key=os.path.getctime)
-        with open(latest_file, 'r') as f:
+        with open(latest_file, 'r', encoding='utf-8') as f:
             return json.load(f)
 
     def get_training_status(self):
         """現在のトレーニング状況を取得する（改善版）"""
-        if not self.is_training and not self.start_time:
+        # 実行中のPythonプロセスでtrain.pyがあるかチェック
+        import subprocess
+        import glob
+
+        # 最新のresults.csvから進捗を取得
+        current_epoch = 0
+        total_epochs = 100
+        metrics = {
+            'box_loss': [],
+            'obj_loss': [],
+            'cls_loss': [],
+            'precision': [],
+            'recall': [],
+            'mAP50': [],
+            'mAP50-95': []
+        }
+
+        # YOLO実行状態の確認
+        is_training_running = False
+        yolo_runs_dir = os.path.join(self.yolo_dir, 'runs/train')
+
+        # 最新のrun ディレクトリを検出
+        if os.path.exists(yolo_runs_dir):
+            run_dirs = [d for d in os.listdir(yolo_runs_dir) if os.path.isdir(os.path.join(yolo_runs_dir, d))]
+            if run_dirs:
+                # 作成時刻で降順ソート
+                run_dirs.sort(key=lambda x: os.path.getctime(os.path.join(yolo_runs_dir, x)), reverse=True)
+                latest_run = run_dirs[0]
+
+                # opt.yamlからtotal_epochsを先に取得
+                opt_yaml = os.path.join(yolo_runs_dir, latest_run, 'opt.yaml')
+                if os.path.exists(opt_yaml):
+                    try:
+                        with open(opt_yaml, 'r') as f:
+                            opt_data = yaml.safe_load(f)
+                            total_epochs = opt_data.get('epochs', 100)
+                    except:
+                        pass
+
+                # results.csvから最新のエポック情報を取得
+                results_csv = os.path.join(yolo_runs_dir, latest_run, 'results.csv')
+                if os.path.exists(results_csv):
+                    try:
+                        with open(results_csv, 'r') as f:
+                            reader = csv.DictReader(f)
+                            rows = list(reader)
+                            if rows:
+                                last_row = rows[-1]
+                                # 完了したエポック + 1 = 現在実行中のエポック
+                                # カラム名にスペースが含まれている可能性があるため処理
+                                epoch_key = None
+                                for key in last_row.keys():
+                                    if 'epoch' in key.lower():
+                                        epoch_key = key
+                                        break
+                                if epoch_key:
+                                    completed_epoch = int(float(last_row[epoch_key].strip()))
+                                    current_epoch = completed_epoch + 1  # 完了したエポック番号（0ベース）
+
+                                    # ファイルが最近更新されているかチェック（5分以内）
+                                    # または、すべてのエポックが完了しているかチェック
+                                    if time.time() - os.path.getmtime(results_csv) < 300:
+                                        is_training_running = True
+                                        self.is_training = True
+                                    elif current_epoch >= total_epochs:  # 学習完了
+                                        is_training_running = False
+                                        self.is_training = False
+                                        current_epoch = completed_epoch + 1  # 最終エポック番号を表示
+
+                                # メトリクスを更新（カラム名のスペースを考慮）
+                                for key, value in last_row.items():
+                                    key_clean = key.strip().lower()
+                                    if 'train/box_loss' in key_clean:
+                                        metrics['box_loss'] = [float(value.strip())]
+                                    elif 'train/obj_loss' in key_clean:
+                                        metrics['obj_loss'] = [float(value.strip())]
+                                    elif 'train/cls_loss' in key_clean:
+                                        metrics['cls_loss'] = [float(value.strip())]
+                                    elif 'metrics/precision' in key_clean:
+                                        metrics['precision'] = [float(value.strip())]
+                                    elif 'metrics/recall' in key_clean:
+                                        metrics['recall'] = [float(value.strip())]
+                                    elif 'metrics/map_0.5' in key_clean and '0.95' not in key_clean:
+                                        metrics['mAP50'] = [float(value.strip())]
+                                    elif 'metrics/map_0.5:0.95' in key_clean:
+                                        metrics['mAP50-95'] = [float(value.strip())]
+                    except Exception as e:
+                        logger.debug(f"results.csv読み取りエラー: {e}")
+
+        # ログファイルも確認
+        log_files = glob.glob('logs/yolo_training*.log')
+        if log_files:
+            latest_log = max(log_files, key=os.path.getmtime)
+            self.log_file = latest_log
+
+        # 学習が実行中でなく、かつエポック情報もない場合のみ "not_started" を返す
+        if not is_training_running and current_epoch == 0:
             return {
                 'status': 'not_started',
                 'message': 'トレーニングはまだ開始されていません'
             }
         
-        # 経過時間の計算
-        elapsed = (datetime.now() - self.start_time).total_seconds() if self.start_time else 0
+
+        # 経過時間の計算（学習が開始されてからの推定時間）
+        if is_training_running and current_epoch > 0:
+            # 1エポックあたり約2.5分と仮定して経過時間を推定
+            elapsed = current_epoch * 150  # 秒
+        else:
+            elapsed = (datetime.now() - self.start_time).total_seconds() if self.start_time else 0
+
         hours, remainder = divmod(elapsed, 3600)
         minutes, seconds = divmod(remainder, 60)
-        
+
         # 進捗率の計算（エポックベース）
-        if self.total_epochs > 0:
-            progress = (self.current_epoch / self.total_epochs)
+        if total_epochs > 0:
+            progress = (current_epoch / total_epochs)
         else:
             progress = 0
         
+        # ステータスの決定
+        if is_training_running:
+            status_text = 'running'
+            message = f'エポック {current_epoch}/{total_epochs} を実行中...'
+        elif current_epoch >= total_epochs:
+            status_text = 'completed'
+            message = 'トレーニング完了'
+        else:
+            status_text = 'interrupted'
+            message = 'トレーニングが中断されました'
+
         status = {
-            'status': 'running' if self.is_training else 'completed',
+            'status': status_text,
             'start_time': self.start_time.strftime('%Y-%m-%d %H:%M:%S') if self.start_time else None,
             'elapsed_time': f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}",
-            'current_epoch': self.current_epoch,
-            'total_epochs': self.total_epochs,
+            'current_epoch': current_epoch,
+            'total_epochs': total_epochs,
             'progress': progress,
-            'metrics': self.metrics,
-            'message': f'エポック {self.current_epoch}/{self.total_epochs} を実行中...' if self.is_training else 'トレーニング完了'
+            'metrics': metrics,
+            'message': message,
+            'log_file': self.log_file if hasattr(self, 'log_file') else None
         }
         
-        # 最新の実験ディレクトリを取得
+        # 最新の実験ディレクトリを取得（日付形式も対応）
         if os.path.exists(os.path.join(self.yolo_dir, 'runs/train')):
-            exp_dirs = sorted([d for d in os.listdir(os.path.join(self.yolo_dir, 'runs/train')) 
-                              if d.startswith('exp')])
+            # exp* または 日付形式（2025-09-19_07-10）のディレクトリを検索
+            train_dir = os.path.join(self.yolo_dir, 'runs/train')
+            all_dirs = [d for d in os.listdir(train_dir)
+                       if os.path.isdir(os.path.join(train_dir, d))]
+
+            # ディレクトリを更新時刻でソート
+            exp_dirs = sorted(all_dirs,
+                            key=lambda x: os.path.getmtime(os.path.join(train_dir, x)))
+
             if exp_dirs:
                 latest_exp = exp_dirs[-1]
                 exp_dir = os.path.join(self.yolo_dir, 'runs/train', latest_exp)

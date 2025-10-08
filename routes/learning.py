@@ -599,10 +599,14 @@ def view_results(exp=None):
             if exp and os.path.exists(os.path.join(train_dir, exp)):
                 target_exp = exp
             else:
-                # 最新の実験ディレクトリを取得
-                exp_dirs = sorted([d for d in os.listdir(train_dir) if d.startswith('exp')])
-                if not exp_dirs:
+                # 最新の実験ディレクトリを取得（日付形式も含む）
+                all_dirs = [d for d in os.listdir(train_dir)
+                           if os.path.isdir(os.path.join(train_dir, d))]
+                if not all_dirs:
                     return render_template('learning_results.html', error='学習結果が見つかりません')
+                # 作成時刻でソートして最新を取得
+                exp_dirs = sorted(all_dirs,
+                                key=lambda x: os.path.getctime(os.path.join(train_dir, x)))
                 target_exp = exp_dirs[-1]
             
             # 実験に含まれる画像ファイルのリストを生成
@@ -894,10 +898,11 @@ def get_learning_history():
         
         if os.path.exists(train_dir):
             for exp_dir in os.listdir(train_dir):
-                if not exp_dir.startswith('exp'):
-                    continue
-                    
                 exp_path = os.path.join(train_dir, exp_dir)
+
+                # ディレクトリでない場合はスキップ
+                if not os.path.isdir(exp_path):
+                    continue
                 results_csv = os.path.join(exp_path, 'results.csv')
                 
                 if os.path.exists(results_csv):
@@ -919,9 +924,16 @@ def get_learning_history():
                     except:
                         map50 = 0
                     
+                    # ディレクトリ名から実験名を生成
+                    if exp_dir.startswith('exp'):
+                        display_name = f'実験 {exp_dir}'
+                    else:
+                        # 日付形式のディレクトリ名（例：2025-09-19_07-10）
+                        display_name = f'学習 {exp_dir}'
+
                     history.append({
                         'id': exp_dir,
-                        'name': f'実験 {exp_dir}',
+                        'name': display_name,
                         'created_at': datetime.fromtimestamp(created_time).isoformat(),
                         'updated_at': datetime.fromtimestamp(modified_time).isoformat(),
                         'status': 'completed',
